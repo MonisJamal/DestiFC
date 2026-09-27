@@ -98,15 +98,25 @@ class SquadCog(commands.Cog):
         if not player_row:
             await interaction.response.send_message(f"❌ You don't have a player with ID `{inventory_id}` in your inventory.", ephemeral=True)
             return
+        # Prevent Duplicates
+        new_name = player_row['player_name']
+        for pos, active_p in players.items():
+            if active_p and pos != position:
+                if active_p['inv_id'] == inventory_id:
+                    await interaction.response.send_message(f"❌ That exact card is already equipped at **{pos}**! Remove it first.", ephemeral=True)
+                    return
+                if active_p['name'] == new_name:
+                    await interaction.response.send_message(f"❌ You already have **{new_name}** equipped at **{pos}**! You cannot have duplicate players.", ephemeral=True)
+                    return
             
         squad["players"][position] = {
             "inv_id": inventory_id,
-            "name": player_row['player_name'],
+            "name": new_name,
             "ovr": player_row['ovr']
         }
         
         await database.update_squad(interaction.user.id, squad)
-        await interaction.response.send_message(f"✅ Set **{player_row['player_name']} ({player_row['ovr']})** as your starting {position}!")
+        await interaction.response.send_message(f"✅ Set **{new_name} ({player_row['ovr']})** as your starting {position}!")
 
     @app_commands.command(name="inventory", description="View all players in your club")
     async def inventory(self, interaction: discord.Interaction, page: int = 1):
