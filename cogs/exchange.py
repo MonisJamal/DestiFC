@@ -42,7 +42,7 @@ class ExchangeCog(commands.Cog):
         
         await database.remove_players_from_inventory(user_id, consumed_ids)
         
-        msg = await interaction.followup.send("🔄 **SUBMITTING EXCHANGE...**\n*Consuming 13 players...*")
+        msg = await interaction.followup.send("🔄 **SUBMITTING EXCHANGE...**\n*Consuming 25 players...*")
         
         import asyncio
         await asyncio.sleep(2)
@@ -74,7 +74,8 @@ class ExchangeCog(commands.Cog):
             106: "🇸🇳 Senegal", 111: "🇪🇬 Egypt", 13: "🇩🇰 Denmark", 104: "🇲🇦 Morocco",
             9: "🇧🇬 Bulgaria", 42: "🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland", 49: "🇺🇦 Ukraine", 133: "🇳🇬 Nigeria",
             39: "🇷🇴 Romania", 59: "🇵🇪 Peru", 70: "🇨🇦 Canada", 103: "🇨🇲 Cameroon",
-            117: "🇬🇭 Ghana", 129: "🇲🇦 Morocco", 167: "🇰🇷 Korea Republic", 191: "🇺🇿 Uzbekistan"
+            117: "🇬🇭 Ghana", 129: "🇲🇦 Morocco", 167: "🇰🇷 Korea Republic", 191: "🇺🇿 Uzbekistan",
+            12: "🇨🇿 Czech Republic", 47: "🇨🇭 Switzerland", 20: "🇬🇪 Georgia", 48: "🇹🇷 Turkey"
         }
         
         club_map = {
@@ -87,7 +88,8 @@ class ExchangeCog(commands.Cog):
             1318: "🛡️ England (INT)", 1325: "🛡️ Belgium (INT)", 1352: "🛡️ Norway (INT)", 
             1354: "🛡️ Portugal (INT)", 1364: "🛡️ Switzerland (INT)", 1369: "🛡️ Argentina (INT)",
             22: "🛡️ Borussia Dortmund", 327: "🛡️ VfB Stuttgart", 112606: "🛡️ Atletico Madrid",
-            114640: "🛡️ Fulham", 111111: "🛡️ PSV", 18: "🛡️ Europe", 689: "🛡️ NY Red Bulls"
+            114640: "🛡️ Charlotte FC", 111111: "🛡️ PSV", 18: "🛡️ RB Leipzig", 689: "🛡️ NY Red Bulls",
+            101014: "🛡️ CSKA Moscow", 111130: "🛡️ Liverpool", 1370: "🛡️ Brazil (INT)", 1328: "🛡️ Croatia (INT)"
         }
         
         n_id = player_data.get('nation', {}).get('id')
