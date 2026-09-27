@@ -122,16 +122,29 @@ class MatchCog(commands.Cog):
             goals_b = random.randint(1, 4)
             goals_a = random.randint(0, goals_b - 1)
             
-        # Extract player names for dynamic commentary
-        names_a = [p['name'] for p in squad_a.get('players', {}).values() if p]
-        names_b = [p['name'] for p in squad_b.get('players', {}).values() if p]
-        if not names_a: names_a = ["Team A Player"]
-        if not names_b: names_b = ["Team B Player"]
+        # Extract players by position for realistic commentary
+        def categorize_players(squad):
+            atk, mid, defn, gk = [], [], [], []
+            for pos, p in squad.get('players', {}).items():
+                if not p: continue
+                name = p['name']
+                if pos in ['ST', 'LW', 'RW', 'CF']: atk.append(name)
+                elif pos in ['CAM', 'CM', 'CDM', 'LM', 'RM']: mid.append(name)
+                elif pos in ['CB', 'LB', 'RB', 'LWB', 'RWB']: defn.append(name)
+                elif pos == 'GK': gk.append(name)
+            
+            # Fallbacks just in case
+            if not atk: atk = ["Attacker"]
+            if not mid: mid = atk
+            if not defn: defn = mid
+            if not gk: gk = ["Goalkeeper"]
+            return atk, mid, defn, gk
+            
+        atk_a, mid_a, def_a, gk_a = categorize_players(squad_a)
+        atk_b, mid_b, def_b, gk_b = categorize_players(squad_b)
         
         # We need to distribute these goals across 90 virtual minutes.
-        # We will loop 9 times (each representing 10 in-game minutes)
         # 9 loops * 5 seconds real-time sleep = 45 seconds total match time!
-        
         all_goals = []
         for _ in range(goals_a): all_goals.append((player_a, random.randint(5, 89)))
         for _ in range(goals_b): all_goals.append((player_b, random.randint(5, 89)))
@@ -149,30 +162,35 @@ class MatchCog(commands.Cog):
                 if current_minute - 10 < g[1] <= current_minute:
                     if g[0] == player_a:
                         current_score_a += 1
-                        scorer = random.choice(names_a)
-                        events.append(f"⚽ **GOAL! {scorer} scores for {player_a.display_name}!** ({g[1]}')")
+                        scorer = random.choice(atk_a + mid_a)
+                        events.append(f"⚽ **GOAL! A stunning strike by {scorer} puts {player_a.display_name} ahead!** ({g[1]}')")
                     else:
                         current_score_b += 1
-                        scorer = random.choice(names_b)
-                        events.append(f"⚽ **GOAL! {scorer} scores for {player_b.display_name}!** ({g[1]}')")
+                        scorer = random.choice(atk_b + mid_b)
+                        events.append(f"⚽ **GOAL! {scorer} finds the back of the net for {player_b.display_name}!** ({g[1]}')")
                         
             if not events:
                 # Randomize who has possession for the commentary
                 if random.choice([True, False]):
-                    att, defn = random.choice(names_a), random.choice(names_b)
+                    t_atk, t_mid, t_def, t_gk = atk_a, mid_a, def_b, gk_b
                 else:
-                    att, defn = random.choice(names_b), random.choice(names_a)
+                    t_atk, t_mid, t_def, t_gk = atk_b, mid_b, def_a, gk_a
                     
+                a = random.choice(t_atk)
+                m = random.choice(t_mid)
+                d = random.choice(t_def)
+                g = random.choice(t_gk)
+                
                 general_commentary = [
-                    f"Great possession play in the midfield by {att}...",
-                    f"A dangerous through ball from {att}, but the offside flag goes up!",
-                    f"Tough tackle there by {defn}! The referee says play on.",
-                    f"A brilliant cross into the box by {att}, headed just wide!",
-                    f"{att} drives forward, but {defn} intercepts beautifully.",
-                    f"A long range shot from {att}! Comfortable save.",
-                    f"Corner kick whipped in by {att}... cleared by {defn}.",
-                    f"Foul given in a dangerous area. {att} takes the free kick... it hits the wall.",
-                    f"End-to-end action! {att} is looking for an opening."
+                    f"Great possession play in the midfield controlled by {m}...",
+                    f"A dangerous through ball to {a}, but the offside flag goes up!",
+                    f"Tough sliding tackle by {d}! The referee says play on.",
+                    f"A brilliant cross into the box by {m}, but {a} heads it just wide!",
+                    f"{a} drives forward with pace, but {d} intercepts beautifully.",
+                    f"A long range rocket from {m}! What a diving save by {g}!",
+                    f"Corner kick whipped in towards {a}... cleared out by {d}.",
+                    f"Foul given in a dangerous area. {a} takes the free kick... it hits the wall.",
+                    f"{a} goes 1-on-1 with the keeper... but {g} makes a crucial block!"
                 ]
                 events.append(f"🎙️ *{random.choice(general_commentary)}*")
                 
