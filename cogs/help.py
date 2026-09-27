@@ -38,7 +38,12 @@ class HelpCog(commands.Cog):
 `> /player <name>` - Search the FIFARenderZ database
         """, inline=False)
         
-        embed.set_footer(text="Developed for FC Mobile Fans | DestiFC")
+        embed.add_field(name="💬 Community & Support", value="""
+Join the official DestiFC Support Server for updates, pack flex, giveaways, and reporting issues:
+🔗 [Join DestiFC Support Server](https://discord.gg/wSMWDyscQY)
+        """, inline=False)
+        
+        embed.set_footer(text="Developed for FC Mobile Fans | Support: https://discord.gg/wSMWDyscQY")
         
         await interaction.response.send_message(embed=embed)
 
