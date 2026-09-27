@@ -29,6 +29,7 @@ class DestiFC(commands.Bot):
     async def on_ready(self):
         print(f'Logged in as {self.user} (ID: {self.user.id})')
         print('------')
+        await self.change_presence(activity=discord.Game(name="FC Mobile 27"))
 
 if __name__ == '__main__':
     if not TOKEN or TOKEN == "your_token_here":
