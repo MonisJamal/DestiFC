@@ -37,21 +37,26 @@ class DraftCog(commands.Cog):
         if needs_refresh:
             print("[Draft] Rotating and generating new Draft Pools...")
             
-            # Helper to fetch more than 24 players by paginating
-            def fetch_pool(min_r, max_r, target):
+            # Fetch across the entire catalog (both old and new events/programs)
+            def fetch_all(min_r, max_r, max_target=100):
                 all_p = []
-                for offset in range(0, target, 24):
+                # Fetch newest first
+                for offset in range(0, max_target, 24):
                     batch = query_players_by_program("", min_rating=min_r, max_rating=max_r, size=24, from_offset=offset)
                     if not batch: break
                     all_p.extend(batch)
-                    if len(all_p) >= target: break
+                # Also sample from deeper/older pages so older promo cards appear
+                for offset in [100, 200, 300, 500, 800]:
+                    batch = query_players_by_program("", min_rating=min_r, max_rating=max_r, size=24, from_offset=offset)
+                    if batch:
+                        all_p.extend(batch)
                 return all_p
             
-            pool_122 = fetch_pool(122, 122, 24)
-            pool_121 = fetch_pool(121, 121, 24)
-            pool_120 = fetch_pool(120, 120, 24)
-            pool_117 = fetch_pool(117, 119, 100)
-            pool_112 = fetch_pool(112, 116, 200)
+            pool_122 = fetch_all(122, 122, max_target=80)
+            pool_121 = fetch_all(121, 121, max_target=80)
+            pool_120 = fetch_all(120, 120, max_target=150)
+            pool_117 = fetch_all(117, 119, max_target=150)
+            pool_112 = fetch_all(112, 116, max_target=150)
             
             if not pool_122 or not pool_121 or not pool_120:
                 print("[Draft] Not enough 120+ players fetched, skipping rotation.")
