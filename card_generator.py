@@ -33,6 +33,8 @@ def generate_card(player: dict, output_path: str = None) -> Image.Image:
     """
     Generates a RenderZ-style card for a given player dictionary.
     """
+    SCALE = 2  # High Quality Output Multiplier
+
     images = player.get("images", {})
     anim = player.get("animation", {})
     colors = anim.get("colors", {})
@@ -47,10 +49,11 @@ def generate_card(player: dict, output_path: str = None) -> Image.Image:
         raise ValueError("Player data is missing essential image URLs")
 
     # Fetch Images
-    card = get_image_from_url(bg_url, size=(256, 256))
+    card = get_image_from_url(bg_url, size=(256 * SCALE, 256 * SCALE))
     
     try:
         player_img = get_image_from_url(player_url)
+        player_img = player_img.resize((256 * SCALE, 256 * SCALE), Image.Resampling.LANCZOS)
         card.alpha_composite(player_img, (0, 0))
     except Exception as e:
         print(f"Failed to fetch player image: {e}")
@@ -60,8 +63,12 @@ def generate_card(player: dict, output_path: str = None) -> Image.Image:
         if url and layout_key in layout:
             l = layout[layout_key]
             try:
-                img = get_image_from_url(url, size=(int(l["sizeX"]), int(l["sizeY"])))
-                card.alpha_composite(img, (int(l["posX"]), int(l["posY"])))
+                img_size = (int(l["sizeX"]) * SCALE, int(l["sizeY"]) * SCALE)
+                img = get_image_from_url(url, size=img_size)
+                # Lanczos filter for better downscaling
+                if img.size != img_size:
+                    img = img.resize(img_size, Image.Resampling.LANCZOS)
+                card.alpha_composite(img, (int(l["posX"]) * SCALE, int(l["posY"]) * SCALE))
             except Exception as e:
                 print(f"Failed to fetch {layout_key}: {e}")
 
@@ -81,9 +88,9 @@ def generate_card(player: dict, output_path: str = None) -> Image.Image:
     def draw_centered_text(text, layout_key, color, y_offset=0):
         if layout_key in layout:
             l = layout[layout_key]
-            x = int(l["posX"]) + (int(l["sizeX"]) / 2)
-            y = int(l["posY"]) + (int(l["sizeY"]) / 2) + y_offset
-            font = font_bold(int(l.get("fontSize", 24)))
+            x = (int(l["posX"]) + (int(l["sizeX"]) / 2)) * SCALE
+            y = (int(l["posY"]) + (int(l["sizeY"]) / 2) + y_offset) * SCALE
+            font = font_bold(int(l.get("fontSize", 24)) * SCALE)
             draw.text((x, y), str(text), fill=color, font=font, anchor='mm')
 
     # CSS vertical centering often requires a slight visual bump downwards in Pillow
@@ -94,9 +101,11 @@ def generate_card(player: dict, output_path: str = None) -> Image.Image:
     name_layout = layout.get("name", {})
     if name_layout:
         name = player.get("cardName") or player.get("lastName", "?")
-        font = font_bold(int(name_layout.get("fontSize", 22)))
+        font = font_bold(int(name_layout.get("fontSize", 22)) * SCALE)
+        x = int(name_layout.get("posX", 128)) * SCALE
+        y = int(name_layout.get("posY", 178)) * SCALE
         draw.text(
-            (int(name_layout.get("posX", 128)), int(name_layout.get("posY", 178))),
+            (x, y),
             name.upper(),
             fill=name_color,
             font=font,
