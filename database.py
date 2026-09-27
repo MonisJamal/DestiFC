@@ -149,3 +149,30 @@ async def get_player_by_inv_id(user_id: int, inv_id: int):
             if row:
                 return dict(row)
             return None
+
+async def get_active_drafts():
+    async with aiosqlite.connect(DB_FILE) as db:
+        async with db.execute("SELECT draft_number, pool_a, pool_b, pool_c, expires_at FROM global_drafts") as cursor:
+            rows = await cursor.fetchall()
+            if not rows: return None
+            import json
+            drafts = {}
+            for row in rows:
+                drafts[row[0]] = {
+                    "pool_a": json.loads(row[1]),
+                    "pool_b": json.loads(row[2]),
+                    "pool_c": json.loads(row[3]),
+                    "expires_at": row[4]
+                }
+            return drafts
+
+async def set_active_drafts(drafts_dict):
+    async with aiosqlite.connect(DB_FILE) as db:
+        import json
+        await db.execute("DELETE FROM global_drafts")
+        for d_num, data in drafts_dict.items():
+            await db.execute(
+                "INSERT INTO global_drafts (draft_number, pool_a, pool_b, pool_c, expires_at) VALUES (?, ?, ?, ?, ?)",
+                (d_num, json.dumps(data["pool_a"]), json.dumps(data["pool_b"]), json.dumps(data["pool_c"]), data["expires_at"])
+            )
+        await db.commit()

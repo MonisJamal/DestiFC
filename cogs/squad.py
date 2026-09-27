@@ -118,6 +118,66 @@ class SquadCog(commands.Cog):
         await database.update_squad(interaction.user.id, squad)
         await interaction.response.send_message(f"✅ Set **{new_name} ({player_row['ovr']})** as your starting {position}!")
 
+    @squad_group.command(name="autobuild", description="Auto-fill your squad with your highest OVR players")
+    async def autobuild(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        
+        squad = await database.get_squad(interaction.user.id)
+        positions = list(squad.get("players", {}).keys())
+        inventory = await database.get_inventory(interaction.user.id)
+        
+        if not inventory:
+            await interaction.followup.send("❌ Your club is empty! Open some packs with `/draft` first.", ephemeral=True)
+            return
+        
+        # Sort inventory by OVR descending so we always pick the best card
+        sorted_inv = sorted(inventory, key=lambda x: x['ovr'], reverse=True)
+        
+        new_players = {}
+        used_names = set()
+        
+        for pos in positions:
+            best = None
+            for p in sorted_inv:
+                name = p['player_name']
+                if name not in used_names:
+                    best = p
+                    break
+            
+            if best:
+                used_names.add(best['player_name'])
+                sorted_inv.remove(best)  # Don't reuse the same card
+                new_players[pos] = {
+                    "inv_id": best['id'],
+                    "name": best['player_name'],
+                    "ovr": best['ovr']
+                }
+            else:
+                new_players[pos] = None
+        
+        squad["players"] = new_players
+        await database.update_squad(interaction.user.id, squad)
+        
+        filled = sum(1 for v in new_players.values() if v)
+        total_ovr = sum(v['ovr'] for v in new_players.values() if v)
+        team_ovr = round(total_ovr / 11) if filled > 0 else 0
+        
+        lines = []
+        for pos, p in new_players.items():
+            if p:
+                lines.append(f"**{pos}** → {p['name']} ({p['ovr']})")
+            else:
+                lines.append(f"**{pos}** → ❌ Empty")
+        
+        embed = discord.Embed(
+            title="⚡ Squad Auto-Built!",
+            description="\n".join(lines),
+            color=discord.Color.green()
+        )
+        embed.set_footer(text=f"Team OVR: {team_ovr} | {filled}/11 Positions Filled")
+        
+        await interaction.followup.send(embed=embed)
+
     @app_commands.command(name="inventory", description="View all players in your club")
     async def inventory(self, interaction: discord.Interaction, page: int = 1):
         await interaction.response.defer(ephemeral=False)

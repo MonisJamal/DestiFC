@@ -14,22 +14,22 @@ class HelpCog(commands.Cog):
             color=0x1E90FF
         )
         
-        embed.set_thumbnail(url="https://i.imgur.com/example.png") # We will skip thumbnail or use a football emoji
-        
-        embed.add_field(name="📦 Packs & Economy", value="""
+        embed.add_field(name="📦 Packs & Drafts", value="""
+`> /draft` - Open one of the 3 active Draft Packs (rotates every 3 days!)
+`> /draft_info` - See which players are featured in each draft
+`> /exchange` - Trade 25 unwanted cards for a Guaranteed 120+ Walkout!
 `> /quests` - View ways to earn Draft Vouchers
 `> /quest_daily` - Claim your free daily Vouchers
 `> /quest_skill_game` - Play a minigame for Vouchers
-`> /draft` - Spend Vouchers to open Anniversary Packs! (Pity Timer at 70 packs guarantees a 120+ OVR)
-`> /exchange` - Trade 25 unwanted cards for a Guaranteed 120+ Walkout!
 `> /balance` - Check your Vouchers and Coins
         """, inline=False)
         
         embed.add_field(name="🛡️ Squad Building", value="""
-`> /inventory` - View all players you own
+`> /squad autobuild` - ⚡ Auto-fill your squad with your best players!
+`> /squad set` - Manually equip a player into a position
 `> /squad formation` - Change your team's tactical formation
-`> /squad set` - Equip a player from your inventory into a position
 `> /squad view` - Generate a visual image of your Starting 11!
+`> /inventory` - View all players you own
         """, inline=False)
         
         embed.add_field(name="🏆 Matches & Ranked", value="""
