@@ -1,0 +1,280 @@
+{
+  "assetId": 24050896,
+  "playerId": 20801,
+  "firstName": "C. Ronaldo",
+  "lastName": "dos Santos Aveiro",
+  "commonName": "C. Ronaldo",
+  "cardName": "C. Ronaldo",
+  "position": "ST",
+  "rating": 122,
+  "weakFoot": 4,
+  "foot": 1,
+  "source": "PROGRAM_ANN27",
+  "workRateAtt": 2,
+  "workRateDef": 1,
+  "weight": 85,
+  "height": 187,
+  "birthday": "1985-02-05T00:00:00Z",
+  "bio": "biotxt_24050805",
+  "bindingXml": "PlayerCardUI_Anniversary27_Live",
+  "animation": {
+    "cardData": [
+      "background",
+      "player",
+      "rating",
+      "position",
+      "nation",
+      "league",
+      "club",
+      "name",
+      "level",
+      "rank"
+    ],
+    "colors": {
+      "rating": "#FFFFFF",
+      "position": "#FFFFFF",
+      "name": "#FFFFFF",
+      "level": "#FFFFFF"
+    },
+    "layout": {
+      "player": {
+        "sizeX": 256,
+        "sizeY": 256,
+        "posX": 0,
+        "posY": 0
+      },
+      "rating": {
+        "sizeX": 80,
+        "sizeY": 80,
+        "posX": 36,
+        "posY": 4,
+        "fontSize": 36
+      },
+      "position": {
+        "sizeX": 40,
+        "sizeY": 20,
+        "posX": 56,
+        "posY": 64,
+        "fontSize": 24
+      },
+      "nation": {
+        "sizeX": 24,
+        "sizeY": 24,
+        "posX": 64,
+        "posY": 188
+      },
+      "club": {
+        "sizeX": 24,
+        "sizeY": 24,
+        "posX": 168,
+        "posY": 188
+      },
+      "league": {
+        "sizeX": 24,
+        "sizeY": 24,
+        "posX": 116,
+        "posY": 188
+      },
+      "name": {
+        "sizeX": 0,
+        "sizeY": 0,
+        "posX": 128,
+        "posY": 178,
+        "fontSize": 22
+      },
+      "level": {
+        "sizeX": 64,
+        "sizeY": 32,
+        "posX": 128,
+        "posY": 233,
+        "fontSize": 23
+      },
+      "rank": {
+        "sizeX": 32,
+        "sizeY": 32,
+        "posX": 128,
+        "posY": 232
+      }
+    },
+    "animations": [
+      {
+        "animations": [
+          {
+            "id": "0GxfAP",
+            "image": "https://images-v2.renderz.app/sprite_23_anniversary27_ANNIVERSARY27_LIVE_LOOP?verify=1790489618-M9f9xPupPyA0FLSQydfnRCL3qWQmDN0T8o6Jj%2Bxf2qw%3D",
+            "imageName": "anniversary27_ANNIVERSARY27_LIVE_LOOP",
+            "imageHeight": 0,
+            "imageWidth": 0,
+            "maxFrames": 45
+          }
+        ],
+        "when": "(#cardSize == ~Constants.CARD_PICTURE_BIG_SIZE || (#cardSize == ~Constants.CARD_PICTURE_MEDIUM_SIZE && #UILevel != 0))"
+      }
+    ]
+  },
+  "tags": "ANN27,ANN27_LIVE,PHASE_3,ANN27_ALL,ANN27_BADGE,PHASE_3_A,ANN27_2,S_26,BASEOVR_122,CLUB,RANK_ATT,GC281001,no_auction,24050896,ZEROWEIGHTEDPLAYER",
+  "skillStyleId": 461,
+  "skillStyleSkills": [
+    {
+      "id": 37031,
+      "name": "NAME_SKILL_37030",
+      "image": "https://images-v2.renderz.app/skill_S10_POACHER_3?verify=1790460671-566JIcIFuXORYbwZa%2BNpZGNCprrX6WbtQXoaMXJ8deU%3D"
+    },
+    {
+      "id": 39010,
+      "name": "NAME_SKILL_39010",
+      "image": "https://images-v2.renderz.app/skill_S10_SHOOTING_3?verify=1790460671-g0unT9ypiMVaB5HKp%2FjzOl1cvCojEHHTKXLtTSC0yRM%3D"
+    },
+    {
+      "id": 39011,
+      "name": "NAME_SKILL_39011",
+      "image": "https://images-v2.renderz.app/skill_S10_PASSING_3?verify=1790460671-EOTj2UY6aKTKtlUahHGtXkSIK5%2BL1FsAbtdhnH1na8A%3D"
+    },
+    {
+      "id": 39012,
+      "name": "NAME_SKILL_39012",
+      "image": "https://images-v2.renderz.app/skill_S10_DRIBBLING_3?verify=1790460671-JK5k9kr2xu9y3sQqkJwpZ%2Fb0lr6QxKqddwA07%2FkeDqk%3D"
+    },
+    {
+      "id": 39013,
+      "name": "NAME_SKILL_39013",
+      "image": "https://images-v2.renderz.app/skill_S10_DEFENDING_3?verify=1790460671-zjBEypC02hm7c53pMYhnyGXZL197AMR93bUz2ntMpds%3D"
+    },
+    {
+      "id": 39014,
+      "name": "NAME_SKILL_39014",
+      "image": "https://images-v2.renderz.app/skill_S10_PHYSICAL_3?verify=1790460671-%2Fh1S2%2FPSrhUBJono6ROFeLINtIXvwHrQqqMgjoUy2hU%3D"
+    }
+  ],
+  "playStyles": [
+    {
+      "id": -448784202,
+      "name": "PLAYSTYLE_POWER_SHOT",
+      "titleKey": "Title_PlayStyle_Finishing_Power_Shot",
+      "descriptionKey": "Desc_PlayStyle_Finishing_Power_Shot",
+      "image": "https://images-v2.renderz.app/playstyle_64_PLAYSTYLE_POWER_SHOT_0?verify=1790460671-ZYsHKCpVvCsBr0seqXA3LzfAcM2Uu6qCyUtvj1Vr9Aw%3D",
+      "level": 2,
+      "levelName": "PLAYSTYLE_POWER_SHOT_2",
+      "levelImage": "https://images-v2.renderz.app/playstyle_256_PLAYSTYLE_POWER_SHOT_2?verify=1790460671-ZXJ5ytclz6uUlj5K9fECHC0I3A%2B%2FLv%2BBwHDVrAFdXK0%3D"
+    },
+    {
+      "id": 1880083842,
+      "name": "PLAYSTYLE_INTIMIDATOR",
+      "titleKey": "Title_PlayStyle_Physical_Intimidator",
+      "descriptionKey": "Desc_PlayStyle_Physical_Intimidator",
+      "image": "https://images-v2.renderz.app/playstyle_64_PLAYSTYLE_INTIMIDATOR_0?verify=1790460671-hXYAkphpBPtegQYt0FvvZ6rwO5R%2BQCxV0iphRRdKTL0%3D",
+      "level": 1,
+      "levelName": "PLAYSTYLE_INTIMIDATOR_1",
+      "levelImage": "https://images-v2.renderz.app/playstyle_256_PLAYSTYLE_INTIMIDATOR_1?verify=1790460671-jsppnwcHnXRD6alylOdmwmlr4LAR12s0VPZEkraXQHs%3D"
+    }
+  ],
+  "playStyleSlotMaxLevels": "2,1",
+  "images": {
+    "playerCardImage": "https://images-v2.renderz.app/player_26_20801_ANN27_LIVE_0811374b9f913a55?verify=1790460671-rC8oplN6IbY5g9tXsyapCiuk%2FJAFtV1m7KRaf2sH30c%3D",
+    "playerCardBackground": "https://images-v2.renderz.app/bg_23_backgrounds_27_ANNIVERSARY27_LIVE_STATIC?verify=1790460671-o5JMjSyK7X8dgE7XpVm38d1bc4o32HkJKNdoZKfPwKM%3D",
+    "flagImage": "https://images-v2.renderz.app/flags_23_128x128_38?verify=1790460671-SPip%2FNQSiim6lVXi8BQoVraS%2FyRg24z3myeYlcj1cMo%3D",
+    "clubImage": "https://images-v2.renderz.app/club_23_112139?verify=1790460671-WIPvHYPzL6Iba0m7ZxIDN0ybmfHa7%2FU7E18ojKIHo4Y%3D",
+    "leagueImage": "https://images-v2.renderz.app/league_23_350?verify=1790460671-cnaEfEvpitHIypPJ1EeeDYPD0a1Kkmq5nZyYNjj7B44%3D"
+  },
+  "skillMoves": {
+    "id": 13,
+    "title": "skillmove_name_13",
+    "description": "skillmove_desc_13",
+    "image": "https://images-v2.renderz.app/skillmovelogo_23_0?verify=1790460671-fMpTBJ64h7Z9FS%2BNlQHzCpkS1LV6EGb6vV8TRndfktc%3D"
+  },
+  "skillMovesLevel": 5,
+  "celebration": {
+    "id": 50,
+    "title": "celebration_name_50",
+    "description": "celebration_desc_0",
+    "image": "https://images-v2.renderz.app/celebrationlogo_23_0?verify=1790460671-1PREIyymxt1UBl%2F1gkqadJJVvGkQEjvAE1AdK%2FcJg5M%3D"
+  },
+  "traits": [
+    {
+      "id": 2,
+      "title": "trait_name_2",
+      "description": "trait_desc_2",
+      "image": "https://images-v2.renderz.app/traitlogo_23_2?verify=1790460671-jztVc6CaRHuXdEcHTc3W1otEMbYSGdiatQ7P05ske70%3D"
+    },
+    {
+      "id": 16,
+      "title": "trait_name_16",
+      "description": "trait_desc_16",
+      "image": "https://images-v2.renderz.app/traitlogo_23_16?verify=1790460671-PjnGwGXB4wAXOVfwhR2Y9wcQkxJyon%2FJxniwlygtNRU%3D"
+    }
+  ],
+  "club": {
+    "id": 112139,
+    "name": "TeamName_112139"
+  },
+  "league": {
+    "id": 350,
+    "name": "LeagueName_350"
+  },
+  "nation": {
+    "id": 38,
+    "name": "NationName_38"
+  },
+  "avgStats": {
+    "avg1": 154,
+    "avg2": 157,
+    "avg3": 135,
+    "avg4": 152,
+    "avg5": 88,
+    "avg6": 148
+  },
+  "avgGkStats": {
+    "avg1": 8,
+    "avg2": 8,
+    "avg3": 8,
+    "avg4": 8,
+    "avg5": 8,
+    "avg6": 155
+  },
+  "stats": {
+    "acc": 155,
+    "agg": 137,
+    "agi": 150,
+    "awr": 71,
+    "bac": 153,
+    "bal": 142,
+    "cro": 130,
+    "cur": 148,
+    "dri": 154,
+    "fin": 160,
+    "frk": 146,
+    "gkd": 8,
+    "gkk": 8,
+    "gkp": 8,
+    "han": 8,
+    "hea": 158,
+    "jmp": 160,
+    "lpa": 134,
+    "lsa": 154,
+    "mrk": 71,
+    "pen": 156,
+    "pos": 155,
+    "rea": 158,
+    "ref": 8,
+    "sho": 158,
+    "slt": 71,
+    "spa": 139,
+    "spd": 154,
+    "str": 150,
+    "stt": 92,
+    "vis": 132,
+    "vol": 157,
+    "sta": 85,
+    "total": 3870
+  },
+  "liveOvr": {
+    "ovrUpgrade": 0
+  },
+  "priceData": {},
+  "auctionable": false,
+  "hash": "1eb3ab79bd4bf2f49725b6a6a0d9fb2e04955f16729ea0e9ef51e9e7b658eef6",
+  "rank": 0,
+  "likes": 0,
+  "added": "2026-09-26T22:11:11Z",
+  "revealOn": "2026-09-26T22:30:00Z"
+}
