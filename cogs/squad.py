@@ -130,30 +130,60 @@ class SquadCog(commands.Cog):
             await interaction.followup.send("❌ Your club is empty! Open some packs with `/draft` first.", ephemeral=True)
             return
         
-        # Sort inventory by OVR descending so we always pick the best card
-        sorted_inv = sorted(inventory, key=lambda x: x['ovr'], reverse=True)
+        # FC Mobile position compatibility: squad slot -> which player positions can fill it
+        pos_compat = {
+            "ST": ["ST", "CF"],       "ST1": ["ST", "CF"],      "ST2": ["ST", "CF"],
+            "CF": ["CF", "ST", "CAM"],
+            "LW": ["LW", "LM", "LF"], "RW": ["RW", "RM", "RF"],
+            "LF": ["LF", "LW"],       "RF": ["RF", "RW"],
+            "CAM": ["CAM", "CF", "CM"],
+            "CM": ["CM", "CAM", "CDM"], "CM1": ["CM", "CAM", "CDM"], "CM2": ["CM", "CAM", "CDM"], "CM3": ["CM", "CAM", "CDM"],
+            "CDM": ["CDM", "CM"],      "CDM1": ["CDM", "CM"],     "CDM2": ["CDM", "CM"],
+            "LM": ["LM", "LW"],       "RM": ["RM", "RW"],
+            "LB": ["LB", "LWB"],      "RB": ["RB", "RWB"],
+            "LWB": ["LWB", "LB"],     "RWB": ["RWB", "RB"],
+            "CB": ["CB"],             "CB1": ["CB"],             "CB2": ["CB"],  "CB3": ["CB"],
+            "GK": ["GK"]
+        }
+        
+        # Parse each inventory card's position from player_data JSON
+        import json
+        enriched = []
+        for p in inventory:
+            player_pos = "ST"  # fallback
+            try:
+                pd = json.loads(p['player_data']) if isinstance(p['player_data'], str) else p['player_data']
+                player_pos = pd.get('position', 'ST')
+            except: pass
+            enriched.append({**p, 'pos': player_pos})
+        
+        # Sort by OVR descending
+        enriched.sort(key=lambda x: x['ovr'], reverse=True)
         
         new_players = {}
+        used_ids = set()
         used_names = set()
         
-        for pos in positions:
+        for slot in positions:
+            allowed = pos_compat.get(slot, [slot])
             best = None
-            for p in sorted_inv:
-                name = p['player_name']
-                if name not in used_names:
+            for p in enriched:
+                if p['id'] in used_ids: continue
+                if p['player_name'] in used_names: continue
+                if p['pos'] in allowed:
                     best = p
                     break
             
             if best:
+                used_ids.add(best['id'])
                 used_names.add(best['player_name'])
-                sorted_inv.remove(best)  # Don't reuse the same card
-                new_players[pos] = {
+                new_players[slot] = {
                     "inv_id": best['id'],
                     "name": best['player_name'],
                     "ovr": best['ovr']
                 }
             else:
-                new_players[pos] = None
+                new_players[slot] = None
         
         squad["players"] = new_players
         await database.update_squad(interaction.user.id, squad)
@@ -167,7 +197,7 @@ class SquadCog(commands.Cog):
             if p:
                 lines.append(f"**{pos}** → {p['name']} ({p['ovr']})")
             else:
-                lines.append(f"**{pos}** → ❌ Empty")
+                lines.append(f"**{pos}** → ❌ No compatible player")
         
         embed = discord.Embed(
             title="⚡ Squad Auto-Built!",
