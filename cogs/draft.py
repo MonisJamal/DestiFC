@@ -36,12 +36,26 @@ class DraftCog(commands.Cog):
                     
         if needs_refresh:
             print("[Draft] Rotating and generating new Draft Pools...")
-            # Fetch players from database
-            pool_120 = query_players_by_program("", min_rating=120, max_rating=122, size=30)
-            pool_117 = query_players_by_program("", min_rating=117, max_rating=119, size=150)
-            pool_112 = query_players_by_program("", min_rating=112, max_rating=116, size=400)
             
-            if not pool_120 or len(pool_120) < 9: return # Wait for network
+            # Helper to fetch more than 24 players by paginating
+            def fetch_pool(min_r, max_r, target):
+                all_p = []
+                for offset in range(0, target, 24):
+                    batch = query_players_by_program("", min_rating=min_r, max_rating=max_r, size=24, from_offset=offset)
+                    if not batch: break
+                    all_p.extend(batch)
+                    if len(all_p) >= target: break
+                return all_p
+            
+            pool_120 = fetch_pool(120, 122, 50)
+            pool_117 = fetch_pool(117, 119, 100)
+            pool_112 = fetch_pool(112, 116, 200)
+            
+            if not pool_120 or len(pool_120) < 9:
+                print("[Draft] Not enough 120+ players fetched, skipping rotation.")
+                return
+            if not pool_117: pool_117 = pool_120  # fallback
+            if not pool_112: pool_112 = pool_117  # fallback
             
             new_drafts = {}
             expires = (datetime.datetime.now() + datetime.timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
@@ -105,11 +119,18 @@ class DraftCog(commands.Cog):
             return
 
         drafts = await database.get_active_drafts()
-        if not drafts or str(pack) not in drafts and pack not in drafts:
+        if not drafts or (str(pack) not in drafts and pack not in drafts):
             await interaction.response.send_message("❌ Drafts are currently rotating. Please wait a minute.", ephemeral=True)
             return
             
         d = drafts.get(pack) or drafts.get(str(pack))
+        
+        # Validate pools aren't empty
+        if not d.get('pool_a') or not d.get('pool_b') or not d.get('pool_c'):
+            await interaction.response.send_message("❌ This draft pack has empty pools. The bot will refresh them shortly!", ephemeral=True)
+            return
+
+        await interaction.response.defer()
         
         # Deduct vouchers
         await database.add_vouchers(user_id, -amount)
@@ -158,8 +179,7 @@ class DraftCog(commands.Cog):
 
         await database.increment_drafts(user_id, amount)
 
-        msg = await interaction.response.send_message(f"🚨 **{interaction.user.display_name} IS OPENING {amount}x PACKS...** 🚨")
-        msg = await interaction.original_response()
+        msg = await interaction.followup.send(f"🚨 **{interaction.user.display_name} IS OPENING {amount}x PACKS...** 🚨")
         await asyncio.sleep(1)
         
         pos = highest_player.get('position', '??')
