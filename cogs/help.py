@@ -35,7 +35,6 @@ class HelpCog(commands.Cog):
         embed.add_field(name="🏆 Matches & Ranked", value="""
 `> /play <user>` - Challenge a friend to a 45-second Live H2H Match!
 `> /leaderboard` - View the Global Division Rivals Fan leaderboard
-`> /player <name>` - Search the FIFARenderZ database
         """, inline=False)
         
         embed.add_field(name="💬 Community & Support", value="""
