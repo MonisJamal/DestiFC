@@ -19,7 +19,7 @@ class DraftCog(commands.Cog):
     def cog_unload(self):
         self.draft_rotator.cancel()
 
-    @tasks.loop(hours=1)
+    @tasks.loop(minutes=15)
     async def draft_rotator(self):
         drafts = await database.get_active_drafts()
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -65,7 +65,7 @@ class DraftCog(commands.Cog):
             if not pool_112: pool_112 = pool_117  # fallback
             
             new_drafts = {}
-            expires = (datetime.datetime.now() + datetime.timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
+            expires = (datetime.datetime.now() + datetime.timedelta(hours=12)).strftime("%Y-%m-%d %H:%M:%S")
             
             for i in range(1, 4):
                 # Each draft gets exactly 1x 122, 1x 121, 1x 120

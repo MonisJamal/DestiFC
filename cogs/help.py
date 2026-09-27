@@ -15,7 +15,7 @@ class HelpCog(commands.Cog):
         )
         
         embed.add_field(name="📦 Packs & Drafts", value="""
-`> /draft` - Open one of the 3 active Draft Packs (rotates every 3 days!)
+`> /draft` - Open one of the 3 active Draft Packs (rotates every 12 hours!)
 `> /draft_info` - See which players are featured in each draft
 `> /exchange` - Trade 25 unwanted cards for a Guaranteed 120+ Walkout!
 `> /quests` - View ways to earn Draft Vouchers
