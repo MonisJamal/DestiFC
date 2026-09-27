@@ -47,11 +47,13 @@ class DraftCog(commands.Cog):
                     if len(all_p) >= target: break
                 return all_p
             
-            pool_120 = fetch_pool(120, 122, 50)
+            pool_122 = fetch_pool(122, 122, 24)
+            pool_121 = fetch_pool(121, 121, 24)
+            pool_120 = fetch_pool(120, 120, 24)
             pool_117 = fetch_pool(117, 119, 100)
             pool_112 = fetch_pool(112, 116, 200)
             
-            if not pool_120 or len(pool_120) < 9:
+            if not pool_122 or not pool_121 or not pool_120:
                 print("[Draft] Not enough 120+ players fetched, skipping rotation.")
                 return
             if not pool_117: pool_117 = pool_120  # fallback
@@ -61,8 +63,14 @@ class DraftCog(commands.Cog):
             expires = (datetime.datetime.now() + datetime.timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
             
             for i in range(1, 4):
+                # Each draft gets exactly 1x 122, 1x 121, 1x 120
+                featured_a = [
+                    random.choice(pool_122),
+                    random.choice(pool_121),
+                    random.choice(pool_120)
+                ]
                 new_drafts[i] = {
-                    "pool_a": random.sample(pool_120, min(3, len(pool_120))),
+                    "pool_a": featured_a,
                     "pool_b": random.sample(pool_117, min(10, len(pool_117))),
                     "pool_c": random.sample(pool_112, min(30, len(pool_112))),
                     "expires_at": expires
