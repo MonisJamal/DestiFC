@@ -15,7 +15,9 @@ async def setup():
                 user_id INTEGER PRIMARY KEY,
                 coins INTEGER DEFAULT 0,
                 vouchers INTEGER DEFAULT 0,
-                gems INTEGER DEFAULT 0
+                gems INTEGER DEFAULT 0,
+                fans INTEGER DEFAULT 0,
+                drafts_opened INTEGER DEFAULT 0
             )
         ''')
         # Inventory table (users' collected players)
@@ -36,6 +38,17 @@ async def setup():
                 user_id INTEGER PRIMARY KEY,
                 active_squad TEXT, -- JSON array of inventory IDs
                 FOREIGN KEY(user_id) REFERENCES users(user_id)
+            )
+        ''')
+        # Global rotating drafts table
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS global_drafts (
+                id INTEGER PRIMARY KEY,
+                draft_number INTEGER,
+                pool_a TEXT,
+                pool_b TEXT,
+                pool_c TEXT,
+                expires_at TIMESTAMP
             )
         ''')
         await db.commit()
