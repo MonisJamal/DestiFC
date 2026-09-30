@@ -308,17 +308,19 @@ class DraftCog(commands.Cog):
         if amount < 1 or amount > 10:
             return await interaction.followup.send("❌ You can only open between 1 and 10 packs at a time.", ephemeral=True)
 
-        inv_size = await database.get_inventory_size(interaction.user.id)
+        user_id = interaction.user.id
+        inv_size, user, drafts = await asyncio.gather(
+            database.get_inventory_size(user_id),
+            database.get_user(user_id),
+            database.get_active_drafts()
+        )
+
         if inv_size + amount > 1000:
             return await interaction.followup.send(f"❌ **Inventory Full!**\nYou currently have {inv_size}/1000 cards. Please `/market sell` or `/exchange` some players before opening more packs.", ephemeral=True)
-
-        user_id = interaction.user.id
-        user = await database.get_user(user_id)
         
         if user.get('vouchers', 0) < amount:
             return await interaction.followup.send(f"❌ You need {amount} Draft Vouchers to open this pack!\nPlay `/quest_skill_game` or `/quest_h2h` to earn some.", ephemeral=True)
 
-        drafts = await database.get_active_drafts()
         if not drafts or (str(pack) not in drafts and pack not in drafts):
             return await interaction.followup.send("❌ Drafts are currently rotating. Please wait a minute.", ephemeral=True)
             
@@ -385,57 +387,63 @@ class DraftCog(commands.Cog):
                 is_walkout_pack = is_walkout
                 pack_tier_name = tier_name
 
-        # Parallel ultra-fast database operations
-        await asyncio.gather(
+        # Parallelize database updates and card image generation concurrently
+        db_task = asyncio.gather(
             database.add_vouchers(user_id, -amount),
             database.add_players_to_inventory_batch(user_id, pulled_players),
             database.increment_drafts(user_id, amount),
             database.set_drafts_since_walkout(user_id, pity_counter)
         )
+        card_gen_task = asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, False)
 
-        # Check supply for pulled custom cards and immediately refresh drafts with matching timers if supply exhausted
-        exhausted_cards = []
-        for p in pulled_players:
-            res = await database.decrement_custom_card_supply(p)
-            if res.get('exhausted'):
-                exhausted_cards.append(res.get('card'))
+        image_result, _ = await asyncio.gather(card_gen_task, db_task)
+        image_binary, filename = image_result
+        file = discord.File(fp=image_binary, filename=filename or 'card.png') if image_binary else None
 
-        if exhausted_cards:
-            active_drafts = await database.get_active_drafts()
-            if active_drafts:
-                for d_num, d_data in list(active_drafts.items()):
-                    card_found = False
-                    for ex in exhausted_cards:
-                        ex_id = str(ex.get('id') or ex.get('custom_id') or ex.get('assetId') or ex.get('cardName', ''))
-                        for pool_key in ['pool_a', 'pool_b', 'pool_c']:
-                            for card_in_pool in d_data.get(pool_key, []):
-                                pool_card_id = str(card_in_pool.get('id') or card_in_pool.get('custom_id') or card_in_pool.get('assetId') or card_in_pool.get('cardName', ''))
-                                if pool_card_id and pool_card_id == ex_id:
-                                    card_found = True
-                                    break
-                            if card_found:
-                                break
-                        if card_found:
-                            break
-                    
-                    # Refresh draft if it held the card or if it's the draft pack pulled from
-                    if card_found or int(d_num) == int(pack):
-                        await self.refresh_single_draft(int(d_num))
+        # Check supply asynchronously in background so command response is instantaneous
+        async def _check_supply_bg():
+            custom_pulled = [p for p in pulled_players if 'custom_' in str(p.get('id', '')) or p.get('supply') is not None]
+            if not custom_pulled: return
+            exhausted_cards = []
+            for p in custom_pulled:
+                res = await database.decrement_custom_card_supply(p)
+                if res.get('exhausted'):
+                    exhausted_cards.append(res.get('card'))
+            if exhausted_cards:
+                active_drafts = await database.get_active_drafts()
+                if active_drafts:
+                    for d_num, d_data in list(active_drafts.items()):
+                        card_found = False
+                        for ex in exhausted_cards:
+                            ex_id = str(ex.get('id') or ex.get('custom_id') or ex.get('assetId') or ex.get('cardName', ''))
+                            for pool_key in ['pool_a', 'pool_b', 'pool_c']:
+                                for card_in_pool in d_data.get(pool_key, []):
+                                    pool_card_id = str(card_in_pool.get('id') or card_in_pool.get('custom_id') or card_in_pool.get('assetId') or card_in_pool.get('cardName', ''))
+                                    if pool_card_id and pool_card_id == ex_id:
+                                        card_found = True
+                                        break
+                                if card_found: break
+                            if card_found: break
+                        if card_found or int(d_num) == int(pack):
+                            await self.refresh_single_draft(int(d_num))
+        asyncio.create_task(_check_supply_bg())
         
-        # --- Achievement & Season XP hooks ---
-        try:
-            from cogs.achievements import increment_stat, check_and_award
-            if is_walkout_pack:
-                await increment_stat(user_id, "walkouts_pulled")
-                if highest_ovr >= 122:
-                    from cogs.achievements import try_award
-                    await try_award(user_id, "legendary_pull")
-            await check_and_award(user_id)
-        except Exception: pass
-        try:
-            from cogs.season import add_season_xp
-            await add_season_xp(user_id, 50 * amount)
-        except Exception: pass
+        # --- Achievement & Season XP hooks (Non-blocking background) ---
+        async def _award_stats_bg():
+            try:
+                from cogs.achievements import increment_stat, check_and_award
+                if is_walkout_pack:
+                    await increment_stat(user_id, "walkouts_pulled")
+                    if highest_ovr >= 122:
+                        from cogs.achievements import try_award
+                        await try_award(user_id, "legendary_pull")
+                await check_and_award(user_id)
+            except Exception: pass
+            try:
+                from cogs.season import add_season_xp
+                await add_season_xp(user_id, 50 * amount)
+            except Exception: pass
+        asyncio.create_task(_award_stats_bg())
 
         pos = extract_pos(highest_player)
         nation_str = get_nation_display(highest_player)
@@ -446,33 +454,6 @@ class DraftCog(commands.Cog):
             is_anim = (isinstance(highest_ovr, int) and highest_ovr >= 120)
             is_walkout = is_walkout_pack or is_anim
             
-            # Start image generation task concurrently with walkout sequence
-            card_gen_task = asyncio.create_task(asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, False))
-            
-            if is_walkout and amount == 1:
-                # Step 1: Flag / Nation
-                msg = await interaction.followup.send(
-                    f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n\n*(Walking onto the stage...)*"
-                )
-                await asyncio.sleep(0.5)
-                
-                # Step 2: Position
-                await interaction.followup.edit_message(
-                    msg.id,
-                    content=f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n# 🏃 **`{pos}`**\n\n*(Entering the stadium tunnel...)*"
-                )
-                await asyncio.sleep(0.5)
-                
-                # Step 3: Club
-                await interaction.followup.edit_message(
-                    msg.id,
-                    content=f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n# 🏃 **`{pos}`**\n# {club_str.upper()}\n\n🔥 **PYROTECHNICS EXPLODING!**"
-                )
-                await asyncio.sleep(0.5)
-
-            image_binary, filename = await card_gen_task
-            file = discord.File(fp=image_binary, filename=filename or 'card.png') if image_binary else None
-                
             walkout_prefix = f"🔥 **{nation_str}** | 🏃 **`{pos}`** | **{club_str}**\n\n" if is_walkout else ""
             desc = f"{walkout_prefix}🌟 **Featured Walkout:** **{best_name}** `({pos})` ({highest_ovr} OVR)\n\n"
             
@@ -501,16 +482,10 @@ class DraftCog(commands.Cog):
             pity_a = max(0, 70 - pity_counter)
             embed.set_footer(text=f"Drafts to Guaranteed Pool B: {pity_b} | Drafts to Guaranteed Pool A: {pity_a}")
             
-            if is_walkout and amount == 1:
-                if file:
-                    await interaction.followup.edit_message(msg.id, content=None, embed=embed, attachments=[file])
-                else:
-                    await interaction.followup.edit_message(msg.id, content=None, embed=embed)
+            if file:
+                await interaction.followup.send(embed=embed, file=file)
             else:
-                if file:
-                    await interaction.followup.send(embed=embed, file=file)
-                else:
-                    await interaction.followup.send(embed=embed)
+                await interaction.followup.send(embed=embed)
             
         except Exception as e:
             print(f"[Draft] Error presenting pack: {e}")
