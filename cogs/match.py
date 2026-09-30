@@ -530,13 +530,24 @@ class MatchCog(commands.Cog):
             # Background task: Database saves & rewards
             async def _bg_save_and_ai():
                 try:
+                    gp_cfg = await database.get_gameplay_config()
+                    win_coins = gp_cfg.get('match_win_coins', 25_000_000)
+                    draw_coins = gp_cfg.get('match_draw_coins', 10_000_000)
+                    loss_coins = gp_cfg.get('match_loss_coins', 5_000_000)
+                    win_fans = gp_cfg.get('match_win_fans', 25)
+                    draw_fans = gp_cfg.get('match_draw_fans', 0)
+                    loss_fans = gp_cfg.get('match_loss_fans', -15)
+
                     if winner is None:
-                        await database.add_fans(player_a.id, 2000)
-                        await database.add_fans(player_b.id, 2000)
+                        await database.add_fans(player_a.id, draw_fans)
+                        await database.add_fans(player_b.id, draw_fans)
+                        await database.add_coins(player_a.id, draw_coins)
+                        await database.add_coins(player_b.id, draw_coins)
                     elif winner == player_a:
-                        await database.add_fans(player_a.id, 10000)
-                        await database.add_fans(player_b.id, -8000)
-                        await database.add_coins(player_a.id, 10_000_000)
+                        await database.add_fans(player_a.id, win_fans)
+                        await database.add_fans(player_b.id, loss_fans)
+                        await database.add_coins(player_a.id, win_coins)
+                        await database.add_coins(player_b.id, loss_coins)
                         await database.add_vouchers(player_a.id, 1)
                         try:
                             from cogs.achievements import increment_stat, check_and_award
@@ -546,9 +557,10 @@ class MatchCog(commands.Cog):
                             await add_season_xp(player_a.id, 75)
                         except Exception: pass
                     else:
-                        await database.add_fans(player_b.id, 10000)
-                        await database.add_fans(player_a.id, -8000)
-                        await database.add_coins(player_b.id, 10_000_000)
+                        await database.add_fans(player_b.id, win_fans)
+                        await database.add_fans(player_a.id, loss_fans)
+                        await database.add_coins(player_b.id, win_coins)
+                        await database.add_coins(player_a.id, loss_coins)
                         await database.add_vouchers(player_b.id, 1)
                         try:
                             from cogs.achievements import increment_stat, check_and_award

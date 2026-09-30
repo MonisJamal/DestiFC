@@ -1526,6 +1526,209 @@ async def save_ovr_price_settings(prices_dict: dict) -> bool:
         print(f"[Database] Error in save_ovr_price_settings: {e}")
         return False
 
+# ================= Global Economy Settings =================
+
+DEFAULT_ECONOMY_CONFIG = {
+    "daily_coins_min": 5_000_000,
+    "daily_coins_max": 20_000_000,
+    "daily_vouchers": 2,
+    "daily_streak_multiplier": 0.10,
+    "daily_walkout_chance": 0.15,
+    "work_coins_min": 2_000_000,
+    "work_coins_max": 10_000_000,
+    "work_cooldown_mins": 30,
+    "voucher_coin_price": 10_000_000,
+    "voucher_daily_limit": 70,
+    "market_tax_percent": 10.0,
+    "trade_tax_percent": 5.0,
+    "max_market_listings": 10,
+    "starter_coins": 50_000_000,
+    "starter_vouchers": 10
+}
+
+_ECONOMY_CACHE = None
+_ECONOMY_CACHE_EXP = 0
+
+async def get_economy_config() -> dict:
+    global _ECONOMY_CACHE, _ECONOMY_CACHE_EXP
+    now = time.time()
+    if _ECONOMY_CACHE and now - _ECONOMY_CACHE_EXP < 30:
+        return _ECONOMY_CACHE
+
+    p = await get_db()
+    try:
+        row = await p.fetchrow("SELECT value FROM system_settings WHERE key = 'economy_config'")
+        if not row:
+            await p.execute("INSERT INTO system_settings (key, value) VALUES ('economy_config', $1) ON CONFLICT (key) DO NOTHING", json.dumps(DEFAULT_ECONOMY_CONFIG))
+            _ECONOMY_CACHE = DEFAULT_ECONOMY_CONFIG
+            _ECONOMY_CACHE_EXP = now
+            return DEFAULT_ECONOMY_CONFIG
+        val = row['value']
+        if isinstance(val, str):
+            try: val = json.loads(val)
+            except Exception: val = {}
+        merged = {**DEFAULT_ECONOMY_CONFIG, **(val or {})}
+        _ECONOMY_CACHE = merged
+        _ECONOMY_CACHE_EXP = now
+        return merged
+    except Exception as e:
+        print(f"[Database] Error in get_economy_config: {e}")
+        return DEFAULT_ECONOMY_CONFIG
+
+async def save_economy_config(config_dict: dict) -> bool:
+    global _ECONOMY_CACHE, _ECONOMY_CACHE_EXP
+    p = await get_db()
+    try:
+        merged = {**DEFAULT_ECONOMY_CONFIG, **config_dict}
+        await p.execute('''
+            INSERT INTO system_settings (key, value, updated_at)
+            VALUES ('economy_config', $1, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET
+                value = EXCLUDED.value,
+                updated_at = CURRENT_TIMESTAMP
+        ''', json.dumps(merged))
+        _ECONOMY_CACHE = merged
+        _ECONOMY_CACHE_EXP = time.time()
+        return True
+    except Exception as e:
+        print(f"[Database] Error in save_economy_config: {e}")
+        return False
+
+# ================= Global Gameplay & Match Settings =================
+
+DEFAULT_GAMEPLAY_CONFIG = {
+    "match_win_coins": 25_000_000,
+    "match_draw_coins": 10_000_000,
+    "match_loss_coins": 5_000_000,
+    "match_win_fans": 25,
+    "match_draw_fans": 0,
+    "match_loss_fans": -15,
+    "draft_battle_entry_fee": 0,
+    "draft_battle_winner_coins": 50_000_000,
+    "draft_battle_winner_vouchers": 5,
+    "custom_card_match_boost": 1.15,
+    "penalty_shootout_enabled": True
+}
+
+_GAMEPLAY_CACHE = None
+_GAMEPLAY_CACHE_EXP = 0
+
+async def get_gameplay_config() -> dict:
+    global _GAMEPLAY_CACHE, _GAMEPLAY_CACHE_EXP
+    now = time.time()
+    if _GAMEPLAY_CACHE and now - _GAMEPLAY_CACHE_EXP < 30:
+        return _GAMEPLAY_CACHE
+
+    p = await get_db()
+    try:
+        row = await p.fetchrow("SELECT value FROM system_settings WHERE key = 'gameplay_config'")
+        if not row:
+            await p.execute("INSERT INTO system_settings (key, value) VALUES ('gameplay_config', $1) ON CONFLICT (key) DO NOTHING", json.dumps(DEFAULT_GAMEPLAY_CONFIG))
+            _GAMEPLAY_CACHE = DEFAULT_GAMEPLAY_CONFIG
+            _GAMEPLAY_CACHE_EXP = now
+            return DEFAULT_GAMEPLAY_CONFIG
+        val = row['value']
+        if isinstance(val, str):
+            try: val = json.loads(val)
+            except Exception: val = {}
+        merged = {**DEFAULT_GAMEPLAY_CONFIG, **(val or {})}
+        _GAMEPLAY_CACHE = merged
+        _GAMEPLAY_CACHE_EXP = now
+        return merged
+    except Exception as e:
+        print(f"[Database] Error in get_gameplay_config: {e}")
+        return DEFAULT_GAMEPLAY_CONFIG
+
+async def save_gameplay_config(config_dict: dict) -> bool:
+    global _GAMEPLAY_CACHE, _GAMEPLAY_CACHE_EXP
+    p = await get_db()
+    try:
+        merged = {**DEFAULT_GAMEPLAY_CONFIG, **config_dict}
+        await p.execute('''
+            INSERT INTO system_settings (key, value, updated_at)
+            VALUES ('gameplay_config', $1, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET
+                value = EXCLUDED.value,
+                updated_at = CURRENT_TIMESTAMP
+        ''', json.dumps(merged))
+        _GAMEPLAY_CACHE = merged
+        _GAMEPLAY_CACHE_EXP = time.time()
+        return True
+    except Exception as e:
+        print(f"[Database] Error in save_gameplay_config: {e}")
+        return False
+
+# ================= Bot System & Presence Config =================
+
+DEFAULT_BOT_CONFIG = {
+    "presence_activity_type": "Playing",
+    "presence_status_text": "FC Mobile 27",
+    "presence_status_state": "online",
+    "maintenance_mode": False,
+    "maintenance_message": "🛠️ DestiFC is currently undergoing scheduled maintenance. Commands are temporarily paused!",
+    "commands_enabled": {
+        "draft": True,
+        "market": True,
+        "draft_battle": True,
+        "exchange": True,
+        "trade": True,
+        "squad": True,
+        "sbc": True,
+        "signature_box": True,
+        "daily": True,
+        "work": True,
+        "match": True
+    }
+}
+
+_BOT_CONFIG_CACHE = None
+_BOT_CONFIG_CACHE_EXP = 0
+
+async def get_bot_config() -> dict:
+    global _BOT_CONFIG_CACHE, _BOT_CONFIG_CACHE_EXP
+    now = time.time()
+    if _BOT_CONFIG_CACHE and now - _BOT_CONFIG_CACHE_EXP < 15:
+        return _BOT_CONFIG_CACHE
+
+    p = await get_db()
+    try:
+        row = await p.fetchrow("SELECT value FROM system_settings WHERE key = 'bot_config'")
+        if not row:
+            await p.execute("INSERT INTO system_settings (key, value) VALUES ('bot_config', $1) ON CONFLICT (key) DO NOTHING", json.dumps(DEFAULT_BOT_CONFIG))
+            _BOT_CONFIG_CACHE = DEFAULT_BOT_CONFIG
+            _BOT_CONFIG_CACHE_EXP = now
+            return DEFAULT_BOT_CONFIG
+        val = row['value']
+        if isinstance(val, str):
+            try: val = json.loads(val)
+            except Exception: val = {}
+        merged = {**DEFAULT_BOT_CONFIG, **(val or {})}
+        _BOT_CONFIG_CACHE = merged
+        _BOT_CONFIG_CACHE_EXP = now
+        return merged
+    except Exception as e:
+        print(f"[Database] Error in get_bot_config: {e}")
+        return DEFAULT_BOT_CONFIG
+
+async def save_bot_config(config_dict: dict) -> bool:
+    global _BOT_CONFIG_CACHE, _BOT_CONFIG_CACHE_EXP
+    p = await get_db()
+    try:
+        merged = {**DEFAULT_BOT_CONFIG, **config_dict}
+        await p.execute('''
+            INSERT INTO system_settings (key, value, updated_at)
+            VALUES ('bot_config', $1, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET
+                value = EXCLUDED.value,
+                updated_at = CURRENT_TIMESTAMP
+        ''', json.dumps(merged))
+        _BOT_CONFIG_CACHE = merged
+        _BOT_CONFIG_CACHE_EXP = time.time()
+        return True
+    except Exception as e:
+        print(f"[Database] Error in save_bot_config: {e}")
+        return False
+
 
 
 

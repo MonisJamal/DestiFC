@@ -530,9 +530,13 @@ class EconomyCog(commands.Cog):
             return await interaction.followup.send("❌ You have already claimed your starter pack!")
             
         import renderz_api
+        eco_cfg = await database.get_economy_config()
+        st_coins = eco_cfg.get('starter_coins', 50_000_000)
+        st_vouchers = eco_cfg.get('starter_vouchers', 10)
+
         await database.set_starter_claimed(interaction.user.id)
-        await database.add_coins(interaction.user.id, 300_000_000)
-        await database.add_vouchers(interaction.user.id, 5)
+        await database.add_coins(interaction.user.id, st_coins)
+        await database.add_vouchers(interaction.user.id, st_vouchers)
         
         page = random.randint(1, 5)
         offset = (page - 1) * 15
@@ -547,9 +551,51 @@ class EconomyCog(commands.Cog):
             name = p.get('cardName') or p.get('lastName', 'Unknown')
             given_players.append(f"**{name}** ({p.get('rating', '?')})")
             
-        desc = "💰 **+300,000,000 Coins (300M)**\n🎫 **+5x Draft Vouchers**\n\n**Your Starter Players:**\n" + "\n".join(given_players)
+        from cogs.market import format_price_short
+        desc = f"💰 **+{st_coins:,} Coins ({format_price_short(st_coins)})**\n🎫 **+{st_vouchers}x Draft Vouchers**\n\n**Your Starter Players:**\n" + "\n".join(given_players)
         embed = discord.Embed(title="🎉 Starter Pack Claimed!", description=desc, color=discord.Color.green())
-        embed.set_footer(text="Use /squad autobuild to equip your new players!")
+        embed.set_footer(text="Use /squad autofill to equip your new players!")
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="work", description="Work a football management shift to earn coins!")
+    async def work_command(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        user_id = interaction.user.id
+        eco_cfg = await database.get_economy_config()
+        cooldown_mins = eco_cfg.get('work_cooldown_mins', 30)
+        cooldown_secs = cooldown_mins * 60
+
+        p = await database.get_db()
+        last_work = await p.fetchval('SELECT last_work FROM users WHERE user_id = $1', user_id) or 0
+        now_ts = int(time.time())
+
+        if last_work and (now_ts - last_work < cooldown_secs):
+            rem = cooldown_secs - (now_ts - last_work)
+            mins, secs = divmod(rem, 60)
+            return await interaction.followup.send(f"⏳ Your shift is on break! You can work again in **{int(mins)}m {int(secs)}s**.")
+
+        min_w = eco_cfg.get('work_coins_min', 2_000_000)
+        max_w = eco_cfg.get('work_coins_max', 10_000_000)
+        earned = random.randint(min_w, max_w)
+
+        await p.execute('UPDATE users SET coins = COALESCE(coins, 0) + $1, last_work = $2 WHERE user_id = $3', earned, now_ts, user_id)
+
+        jobs = [
+            ("Scouting Young Talents", "🔍"),
+            ("Analyzing Match Film", "📹"),
+            ("Organizing Training Drills", "⚽"),
+            ("Negotiating Sponsorship Deals", "💼"),
+            ("Managing Team Press Conference", "🎙️"),
+            ("Upgrading Training Facilities", "🏟️")
+        ]
+        job_name, job_icon = random.choice(jobs)
+
+        embed = discord.Embed(
+            title=f"{job_icon} Shift Complete: {job_name}",
+            description=f"You completed your football duties and earned **🪙 {earned:,} Coins**!",
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text=f"DestiFC Economy • Shift cooldown: {cooldown_mins} minutes")
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="balance", description="Check your or another user's balance")
@@ -627,7 +673,7 @@ class EconomyCog(commands.Cog):
         except Exception:
             pass
 
-    @app_commands.command(name="daily", description="Claim your massive daily reward (Coins & chance at a Walkout)!")
+    @app_commands.command(name="daily", description="Claim your massive daily reward (Coins, Vouchers & chance at a Walkout)!")
     async def daily_reward(self, interaction: discord.Interaction):
         await interaction.response.defer()
         user_id = interaction.user.id
@@ -647,17 +693,21 @@ class EconomyCog(commands.Cog):
                 mins, secs = divmod(rem, 60)
                 return await interaction.followup.send(f"⏳ You already claimed your daily reward! Come back in **{int(hours)}h {int(mins)}m**.")
                 
-        # Calculate rewards
-        coins_won = random.randint(2_000_000, 10_000_000)
+        eco_cfg = await database.get_economy_config()
+        min_c = eco_cfg.get('daily_coins_min', 5_000_000)
+        max_c = eco_cfg.get('daily_coins_max', 20_000_000)
+        coins_won = random.randint(min_c, max_c)
+        vouchers_won = eco_cfg.get('daily_vouchers', 2)
+        walkout_chance = eco_cfg.get('daily_walkout_chance', 0.15)
         
         p = await database.get_db()
-        await p.execute('UPDATE users SET coins = COALESCE(coins, 0) + $1, last_daily = $2 WHERE user_id = $3', coins_won, current_time, user_id)
+        await p.execute('UPDATE users SET coins = COALESCE(coins, 0) + $1, vouchers = COALESCE(vouchers, 0) + $2, last_daily = $3 WHERE user_id = $4', coins_won, vouchers_won, current_time, user_id)
             
-        desc = f"🪙 You received **{coins_won:,} Coins**!"
+        desc = f"🪙 You received **{coins_won:,} Coins**\n🎫 You received **+{vouchers_won}x Draft Vouchers**!"
         embed = discord.Embed(title="🎁 Daily Reward Claimed!", description=desc, color=discord.Color.green())
         
-        # 15% chance to drop a random top 100 player
-        if random.random() < 0.15:
+        # Dynamic chance to drop a random top 100 player
+        if random.random() < walkout_chance:
             from renderz_api import query_players_by_program
             lucky_pool = query_players_by_program("", min_rating=120, max_rating=120, size=50)
             lucky_player = random.choice(lucky_pool) if lucky_pool else None

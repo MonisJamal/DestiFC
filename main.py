@@ -1,8 +1,10 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import os
+import asyncio
 from dotenv import load_dotenv
 import database
+from auth import is_team_admin_or_owner
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -14,10 +16,10 @@ class DestiFC(commands.Bot):
             intents=discord.Intents.all(),
             help_command=commands.DefaultHelpCommand()
         )
+        self.last_presence_state = None
 
     async def setup_hook(self):
         await database.setup()
-        import asyncio
         asyncio.create_task(database.preload_official_cards_cache())
         
         # Load cogs
@@ -25,13 +27,85 @@ class DestiFC(commands.Bot):
             if filename.endswith('.py') and not filename.startswith('__'):
                 await self.load_extension(f'cogs.{filename[:-3]}')
         
+        # Global interaction check for maintenance mode and command permissions
+        @self.tree.interaction_check
+        async def global_permission_and_maintenance_check(interaction: discord.Interaction) -> bool:
+            # Always allow admins and owners full bypass
+            is_admin = await is_team_admin_or_owner(self, interaction.user)
+            if is_admin:
+                return True
+
+            try:
+                bot_cfg = await database.get_bot_config()
+                if bot_cfg.get('maintenance_mode', False):
+                    msg = bot_cfg.get(
+                        'maintenance_message',
+                        "🛠️ DestiFC is currently undergoing scheduled maintenance. Commands are temporarily paused!"
+                    )
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(f"🔒 **Maintenance Mode Active**\n{msg}", ephemeral=True)
+                    return False
+
+                cmd_name = (interaction.command.name if interaction.command else "").lower()
+                commands_enabled = bot_cfg.get('commands_enabled', {})
+                if cmd_name in commands_enabled and not commands_enabled[cmd_name]:
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(
+                            f"⚠️ The `/{cmd_name}` command is temporarily disabled by administrators for tuning. Please check back shortly!",
+                            ephemeral=True
+                        )
+                    return False
+            except Exception as e:
+                print(f"[Maintenance Check Error] {e}")
+
+            return True
+
         # Sync slash commands
         await self.tree.sync()
+
+        # Start dynamic presence sync loop
+        self.sync_presence_loop.start()
+
+    @tasks.loop(seconds=30)
+    async def sync_presence_loop(self):
+        try:
+            cfg = await database.get_bot_config()
+            act_type = cfg.get('presence_activity_type', 'Playing')
+            text = cfg.get('presence_status_text', 'FC Mobile 27')
+            state = cfg.get('presence_status_state', 'online').lower()
+
+            status_map = {
+                'online': discord.Status.online,
+                'idle': discord.Status.idle,
+                'dnd': discord.Status.dnd
+            }
+            d_status = status_map.get(state, discord.Status.online)
+
+            if act_type == 'Streaming':
+                activity = discord.Streaming(name=text, url="https://twitch.tv/destifc")
+            elif act_type == 'Watching':
+                activity = discord.Activity(type=discord.ActivityType.watching, name=text)
+            elif act_type == 'Listening':
+                activity = discord.Activity(type=discord.ActivityType.listening, name=text)
+            elif act_type == 'Competing':
+                activity = discord.Activity(type=discord.ActivityType.competing, name=text)
+            else:
+                activity = discord.Game(name=text)
+
+            current_key = f"{act_type}_{text}_{state}"
+            if self.last_presence_state != current_key:
+                await self.change_presence(activity=activity, status=d_status)
+                self.last_presence_state = current_key
+        except Exception as e:
+            print(f"[Presence Sync Loop Error] {e}")
+
+    @sync_presence_loop.before_loop
+    async def before_presence_loop(self):
+        await self.wait_until_ready()
 
     async def on_ready(self):
         print(f'Logged in as {self.user} (ID: {self.user.id})')
         print('------')
-        await self.change_presence(activity=discord.Game(name="FC Mobile 27"))
 
 if __name__ == '__main__':
     if not TOKEN or TOKEN == "your_token_here":
