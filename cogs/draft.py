@@ -130,6 +130,83 @@ class DraftCog(commands.Cog):
         except Exception as e:
             print(f"[Draft] Error in draft rotator: {e}")
 
+    async def refresh_single_draft(self, draft_num: int):
+        """
+        Refreshes a specific draft pack (e.g. Draft 1) immediately with new cards,
+        while strictly preserving the active expiration timestamp matching the other drafts.
+        """
+        try:
+            drafts = await database.get_active_drafts()
+            if not drafts:
+                return
+            
+            # Synchronize with current active draft expiry
+            current_expiry = None
+            for d in drafts.values():
+                if d.get("expires_at"):
+                    current_expiry = d.get("expires_at")
+                    break
+                    
+            if not current_expiry:
+                current_expiry = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
+
+            pool_122 = await database.get_official_cards_by_rating(122, 122, 100)
+            pool_121 = await database.get_official_cards_by_rating(121, 121, 100)
+            pool_120 = await database.get_official_cards_by_rating(120, 120, 100)
+            if not pool_122: pool_122 = await asyncio.to_thread(fetch_all_players_by_rating, 122, True)
+            if not pool_121: pool_121 = await asyncio.to_thread(fetch_all_players_by_rating, 121, True)
+            if not pool_120: pool_120 = await asyncio.to_thread(fetch_all_players_by_rating, 120, True)
+
+            def split_promo_icons(lst):
+                ev = [p for p in lst if 'ICON' not in p.get('source', '') and 'HERO' not in p.get('source', '')]
+                ic = [p for p in lst if 'ICON' in p.get('source', '') or 'HERO' in p.get('source', '')]
+                return ev, ic
+
+            ev122, ic122 = split_promo_icons(pool_122)
+            ev121, ic121 = split_promo_icons(pool_121)
+            ev120, ic120 = split_promo_icons(pool_120)
+            
+            pool_117 = await database.get_official_cards_by_rating(117, 119, 100)
+            pool_112 = await database.get_official_cards_by_rating(112, 116, 100)
+            if not pool_117: pool_117 = pool_120
+            if not pool_112: pool_112 = pool_117
+
+            # Avoid duplicating walkouts featured in the other active drafts
+            used_featured_ids = set()
+            for k, other_d in drafts.items():
+                if str(k) != str(draft_num):
+                    for p in other_d.get("pool_a", []):
+                        used_featured_ids.add(p.get('assetId') or p.get('id'))
+
+            def pick_unique(candidates, fallback_pool):
+                pool_to_use = candidates if candidates else fallback_pool
+                avail = [p for p in pool_to_use if (p.get('assetId') or p.get('id')) not in used_featured_ids]
+                if not avail: avail = pool_to_use
+                chosen = random.choice(avail)
+                used_featured_ids.add(chosen.get('assetId') or chosen.get('id'))
+                return chosen
+
+            featured_a = [
+                pick_unique(ev122, pool_122),
+                pick_unique(ic122, pool_122),
+                pick_unique(ev121, pool_121),
+                pick_unique(ic121, pool_121),
+                pick_unique(ev120, pool_120),
+                pick_unique(ic120, pool_120),
+            ]
+
+            refreshed_draft = {
+                "pool_a": featured_a,
+                "pool_b": random.sample(pool_117, min(10, len(pool_117))),
+                "pool_c": random.sample(pool_112, min(30, len(pool_112))),
+                "expires_at": current_expiry  # Kept in exact sync with other drafts!
+            }
+
+            await database.update_single_draft(draft_num, refreshed_draft)
+            print(f"[Draft] Refreshed Draft {draft_num} immediately! Rotation timer synchronized at: {current_expiry}")
+        except Exception as e:
+            print(f"[Draft] Error refreshing single draft {draft_num}: {e}")
+
     @draft_rotator.before_loop
     async def before_rotator(self):
         await self.bot.wait_until_ready()
@@ -278,6 +355,35 @@ class DraftCog(commands.Cog):
             database.increment_drafts(user_id, amount),
             database.set_drafts_since_walkout(user_id, pity_counter)
         )
+
+        # Check supply for pulled custom cards and immediately refresh drafts with matching timers if supply exhausted
+        exhausted_cards = []
+        for p in pulled_players:
+            res = await database.decrement_custom_card_supply(p)
+            if res.get('exhausted'):
+                exhausted_cards.append(res.get('card'))
+
+        if exhausted_cards:
+            active_drafts = await database.get_active_drafts()
+            if active_drafts:
+                for d_num, d_data in list(active_drafts.items()):
+                    card_found = False
+                    for ex in exhausted_cards:
+                        ex_id = str(ex.get('id') or ex.get('custom_id') or ex.get('assetId') or ex.get('cardName', ''))
+                        for pool_key in ['pool_a', 'pool_b', 'pool_c']:
+                            for card_in_pool in d_data.get(pool_key, []):
+                                pool_card_id = str(card_in_pool.get('id') or card_in_pool.get('custom_id') or card_in_pool.get('assetId') or card_in_pool.get('cardName', ''))
+                                if pool_card_id and pool_card_id == ex_id:
+                                    card_found = True
+                                    break
+                            if card_found:
+                                break
+                        if card_found:
+                            break
+                    
+                    # Refresh draft if it held the card or if it's the draft pack pulled from
+                    if card_found or int(d_num) == int(pack):
+                        await self.refresh_single_draft(int(d_num))
         
         # --- Achievement & Season XP hooks ---
         try:

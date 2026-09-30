@@ -442,6 +442,88 @@ async def add_custom_draft_card(player_data):
     p = await get_db()
     await p.execute('INSERT INTO custom_draft_cards (player_data) VALUES ($1)', json.dumps(player_data))
 
+async def update_single_draft(draft_number: int, draft_data: dict):
+    global _DRAFTS_CACHE
+    p = await get_db()
+    exp = _parse_timestamp(draft_data.get("expires_at"))
+    pool_a_json = json.dumps(draft_data.get("pool_a", []))
+    pool_b_json = json.dumps(draft_data.get("pool_b", []))
+    pool_c_json = json.dumps(draft_data.get("pool_c", []))
+    
+    await p.execute('''
+        INSERT INTO global_drafts (draft_number, draft_data, pool_a, pool_b, pool_c, expires_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (draft_number) DO UPDATE SET
+            draft_data = $2,
+            pool_a = $3,
+            pool_b = $4,
+            pool_c = $5,
+            expires_at = $6
+    ''', int(draft_number), pool_a_json, pool_a_json, pool_b_json, pool_c_json, exp)
+    
+    if _DRAFTS_CACHE is not None:
+        _DRAFTS_CACHE[int(draft_number)] = draft_data
+        _DRAFTS_CACHE[str(draft_number)] = draft_data
+
+async def decrement_custom_card_supply(card_data: dict) -> dict:
+    """
+    Decrements the available supply of a custom card when pulled.
+    If supply drops to 0 or less, deletes the card from custom_draft_cards and flags as exhausted.
+    """
+    if not isinstance(card_data, dict):
+        return {"exhausted": False, "card": card_data}
+
+    card_id = str(card_data.get('id') or card_data.get('custom_id') or card_data.get('assetId') or '')
+    card_name = card_data.get('cardName') or card_data.get('player_name') or ''
+    
+    p = await get_db()
+    try:
+        rows = await p.fetch('SELECT id, player_data FROM custom_draft_cards')
+        for r in rows:
+            try:
+                pd = json.loads(r['player_data']) if isinstance(r['player_data'], str) else r['player_data']
+            except Exception:
+                continue
+                
+            r_id = str(r['id'])
+            p_id = str(pd.get('id') or '')
+            p_name = pd.get('cardName') or pd.get('player_name') or ''
+            
+            # Match card
+            is_match = False
+            if card_id and (card_id == r_id or card_id == p_id):
+                is_match = True
+            elif card_name and card_name == p_name:
+                is_match = True
+
+            if is_match:
+                supply = pd.get('supply')
+                if supply is not None:
+                    try:
+                        cur_supply = int(supply)
+                    except (ValueError, TypeError):
+                        continue
+                        
+                    new_supply = cur_supply - 1
+                    global _CUSTOM_DRAFT_CARDS_CACHE
+                    _CUSTOM_DRAFT_CARDS_CACHE = None
+                    
+                    if new_supply <= 0:
+                        # Supply finished! Remove completely so it can no longer be pulled or rolled
+                        await p.execute('DELETE FROM custom_draft_cards WHERE id = $1', r['id'])
+                        pd['supply'] = 0
+                        print(f"[Database] Custom Card '{p_name}' supply EXHAUSTED (0 remaining). Deleted from active pool.")
+                        return {"exhausted": True, "card": pd, "db_id": r['id']}
+                    else:
+                        pd['supply'] = new_supply
+                        await p.execute('UPDATE custom_draft_cards SET player_data = $1 WHERE id = $2', json.dumps(pd), r['id'])
+                        print(f"[Database] Custom Card '{p_name}' supply decremented -> {new_supply} remaining.")
+                        return {"exhausted": False, "card": pd, "remaining_supply": new_supply, "db_id": r['id']}
+    except Exception as e:
+        print(f"[Database] Error in decrement_custom_card_supply: {e}")
+
+    return {"exhausted": False, "card": card_data}
+
 async def get_all_custom_draft_cards():
     global _CUSTOM_DRAFT_CARDS_CACHE, _CUSTOM_DRAFT_CARDS_EXP
     now = time.time()
