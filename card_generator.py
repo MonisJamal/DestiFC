@@ -1,7 +1,7 @@
 import os
 import hashlib
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont, ImageChops
+from PIL import Image, ImageDraw, ImageFont, ImageChops, ImageFilter
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -259,8 +259,13 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                 capped_frames = min(max_frames or 30, 30)
                 step = 2 if capped_frames > 18 else 1
                 frames = []
-                # Discord embed dark background color #2B2D31 (43, 45, 49)
-                discord_dark_bg = (43, 45, 49, 255)
+                
+                # Sleek dark stadium walkout backdrop to prevent alpha distortion
+                backdrop = Image.new("RGBA", target_size, (18, 20, 26, 255))
+                d_back = ImageDraw.Draw(backdrop)
+                d_back.ellipse([int(target_size[0]*0.12), int(target_size[1]*0.15), int(target_size[0]*0.88), int(target_size[1]*0.92)], fill=(38, 48, 72, 160))
+                backdrop = backdrop.filter(ImageFilter.GaussianBlur(radius=int(14 * SCALE)))
+
                 card_alpha = card.split()[3] if len(card.split()) == 4 else None
 
                 for frame_idx in range(0, capped_frames, step):
@@ -272,7 +277,7 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                         frame_sprite = frame_sprite.resize(target_size, Image.Resampling.BILINEAR)
                     
                     if card_alpha:
-                        # Mask sprite alpha to strictly follow the card silhouette to prevent outside glow/edge distortion
+                        # Strictly mask sprite alpha to card silhouette to completely eliminate outside noise/bleeding
                         sp_r, sp_g, sp_b, sp_a = frame_sprite.split()
                         sp_a = ImageChops.multiply(sp_a, card_alpha)
                         frame_sprite = Image.merge("RGBA", (sp_r, sp_g, sp_b, sp_a))
@@ -281,10 +286,10 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                     frame_card.alpha_composite(frame_sprite)
                     frame_card.alpha_composite(overlay)
                     
-                    # Composite onto clean Discord embed canvas
-                    solid_canvas = Image.new("RGBA", target_size, discord_dark_bg)
-                    solid_canvas.alpha_composite(frame_card)
-                    frames.append(solid_canvas.convert("RGB"))
+                    # Composite cleanly onto the sleek spotlight backdrop
+                    final_frame = backdrop.copy()
+                    final_frame.alpha_composite(frame_card)
+                    frames.append(final_frame.convert("RGB"))
                     
                 if frames:
                     if len(_MEMORY_CARD_CACHE) < 500:
@@ -307,11 +312,28 @@ def save_card_to_bytes(card_result):
     import io
     binary = io.BytesIO()
     if isinstance(card_result, list) and len(card_result) > 0:
-        card_result[0].save(
+        first_frame = card_result[0]
+        w, h = first_frame.size
+        
+        # Build global adaptive palette from sample frames to prevent flickering & color distortion
+        sample_step = max(1, len(card_result) // 8)
+        sample_frames = card_result[::sample_step]
+        palette_strip = Image.new('RGB', (w, h * len(sample_frames)))
+        for idx, fr in enumerate(sample_frames):
+            palette_strip.paste(fr, (0, idx * h))
+            
+        global_palette = palette_strip.quantize(colors=255, method=Image.Quantize.MAXCOVERAGE, dither=Image.Dither.NONE)
+        
+        quantized_frames = [
+            fr.quantize(palette=global_palette, dither=Image.Dither.NONE)
+            for fr in card_result
+        ]
+        
+        quantized_frames[0].save(
             binary,
             format='GIF',
             save_all=True,
-            append_images=card_result[1:],
+            append_images=quantized_frames[1:],
             duration=80,
             loop=0,
             optimize=True
