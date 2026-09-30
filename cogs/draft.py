@@ -445,11 +445,17 @@ class DraftCog(commands.Cog):
         best_name = highest_player.get('cardName') or highest_player.get('lastName', 'Unknown')
             
         try:
-            is_anim = (isinstance(highest_ovr, int) and highest_ovr >= 120)
-            is_walkout = is_walkout_pack or is_anim
+            is_walkout = bool(is_walkout_pack or (isinstance(highest_ovr, int) and highest_ovr >= 120))
             
-            walkout_prefix = f"🔥 **{nation_str}** | 🏃 **`{pos}`** | **{club_str}**\n\n" if is_walkout else ""
-            desc = f"{walkout_prefix}🌟 **Featured Walkout:** **{best_name}** `({pos})` ({highest_ovr} OVR)\n\n"
+            if is_walkout:
+                walkout_prefix = f"🔥 **{nation_str}** ➔ 🏃 **`{pos}`** ➔ **{club_str}**\n\n"
+                desc = f"{walkout_prefix}🌟 **Featured Walkout:** **{best_name}** `({pos})` ({highest_ovr} OVR)\n\n"
+                embed_title = f"🌟 WALKOUT REVEAL! ({amount}x Pack)" if amount > 1 else f"🌟 WALKOUT REVEAL! ({highest_ovr} OVR)"
+                embed_color = discord.Color.gold()
+            else:
+                desc = f"✨ **Best Pull:** **{best_name}** `({pos})` ({highest_ovr} OVR)\n\n"
+                embed_title = f"🎉 {pack_tier_name} Pack Opened! ({amount}x)"
+                embed_color = discord.Color.blue()
             
             if amount > 1:
                 desc += "📋 **Other Pack Pulls:**\n"
@@ -464,9 +470,9 @@ class DraftCog(commands.Cog):
                     desc += f"*...and {len(others) - 9} more cards added to your club!*"
             
             embed = discord.Embed(
-                title=f"🎉 {pack_tier_name} Pack Opened! ({amount}x)",
+                title=embed_title,
                 description=desc,
-                color=discord.Color.gold() if is_walkout else discord.Color.blue()
+                color=embed_color
             )
             embed.set_author(name=f"{interaction.user.display_name}'s Pack", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
             if file and filename:

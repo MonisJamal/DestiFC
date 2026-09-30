@@ -1,7 +1,7 @@
 import os
 import hashlib
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageChops
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -259,7 +259,10 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                 capped_frames = min(max_frames or 30, 30)
                 step = 2 if capped_frames > 18 else 1
                 frames = []
-                discord_dark_bg = (30, 31, 34, 255)  # Discord dark theme (#1E1F22)
+                # Discord embed dark background color #2B2D31 (43, 45, 49)
+                discord_dark_bg = (43, 45, 49, 255)
+                card_alpha = card.split()[3] if len(card.split()) == 4 else None
+
                 for frame_idx in range(0, capped_frames, step):
                     col = frame_idx % cols
                     row = frame_idx // cols
@@ -268,11 +271,17 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                     if SCALE != 1.0:
                         frame_sprite = frame_sprite.resize(target_size, Image.Resampling.BILINEAR)
                     
+                    if card_alpha:
+                        # Mask sprite alpha to strictly follow the card silhouette to prevent outside glow/edge distortion
+                        sp_r, sp_g, sp_b, sp_a = frame_sprite.split()
+                        sp_a = ImageChops.multiply(sp_a, card_alpha)
+                        frame_sprite = Image.merge("RGBA", (sp_r, sp_g, sp_b, sp_a))
+
                     frame_card = card.copy()
                     frame_card.alpha_composite(frame_sprite)
                     frame_card.alpha_composite(overlay)
                     
-                    # Composite onto clean dark canvas to eliminate transparent edge pixel distortion
+                    # Composite onto clean Discord embed canvas
                     solid_canvas = Image.new("RGBA", target_size, discord_dark_bg)
                     solid_canvas.alpha_composite(frame_card)
                     frames.append(solid_canvas.convert("RGB"))
