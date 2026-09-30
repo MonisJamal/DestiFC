@@ -432,9 +432,45 @@ async def set_store_player_shop(items: list):
     for item in items:
         exp = _parse_timestamp(item.get("expires_at"))
         await p.execute(
-            "INSERT INTO store_player_shop (slot, player_data, price, expires_at) VALUES ($1, $2, $3, $4)",
-            int(item["slot"]), json.dumps(item["player"]), int(item["price"]), exp
-        )
+_EXCHANGE_POOL_CACHE = None
+
+async def get_active_exchange_pool():
+    global _EXCHANGE_POOL_CACHE
+    if _EXCHANGE_POOL_CACHE is not None:
+        return _EXCHANGE_POOL_CACHE
+    p = await get_db()
+    try:
+        row = await p.fetchrow("SELECT pool_data, expires_at FROM global_exchange_pool WHERE id = 1")
+        if not row or not row['pool_data']:
+            return None
+        data = json.loads(row['pool_data'])
+        data['expires_at'] = _format_timestamp(row['expires_at'])
+        _EXCHANGE_POOL_CACHE = data
+        return data
+    except Exception:
+        return None
+
+async def set_active_exchange_pool(pool_dict: dict):
+    global _EXCHANGE_POOL_CACHE
+    _EXCHANGE_POOL_CACHE = pool_dict
+    p = await get_db()
+    try:
+        exp = _parse_timestamp(pool_dict.get("expires_at"))
+        pool_json = json.dumps(pool_dict)
+        await p.execute('''
+            CREATE TABLE IF NOT EXISTS global_exchange_pool (
+                id INTEGER PRIMARY KEY DEFAULT 1,
+                pool_data TEXT,
+                expires_at TIMESTAMP
+            );
+            INSERT INTO global_exchange_pool (id, pool_data, expires_at)
+            VALUES (1, $1, $2)
+            ON CONFLICT (id) DO UPDATE SET
+                pool_data = $1,
+                expires_at = $2
+        ''', pool_json, exp)
+    except Exception as e:
+        print(f"[Database] Error setting active exchange pool: {e}")
 
 async def add_custom_draft_card(player_data):
     global _CUSTOM_DRAFT_CARDS_CACHE
