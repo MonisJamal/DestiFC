@@ -88,15 +88,16 @@ def get_nation_display(player_data: dict) -> str:
         except (ValueError, TypeError):
             pass
 
-    if n_id and n_id in nation_map:
-        return nation_map[n_id]
-
+    # Check explicit name first
     if n_name:
         clean_name = str(n_name).strip()
         flag = COUNTRY_FLAGS.get(clean_name.lower())
         if flag:
             return f"{flag} {clean_name}"
         return f"🌍 {clean_name}"
+
+    if n_id and n_id in nation_map:
+        return nation_map[n_id]
 
     return "🌍 World"
 
@@ -134,9 +135,7 @@ def get_club_display(player_data: dict) -> str:
         except (ValueError, TypeError):
             pass
 
-    if c_id and c_id in club_map:
-        return club_map[c_id]
-
+    # Check explicit name first
     if c_name:
         clean_name = str(c_name).strip()
         if clean_name.lower() in ("icons", "icon"):
@@ -146,6 +145,9 @@ def get_club_display(player_data: dict) -> str:
         if clean_name.startswith("🛡️"):
             return clean_name
         return f"🛡️ {clean_name}"
+
+    if c_id and c_id in club_map:
+        return club_map[c_id]
 
     return "🛡️ Club"
 

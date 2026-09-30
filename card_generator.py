@@ -190,7 +190,8 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
 
     card = fetched_images.get("bg")
     if not card:
-        card = Image.new("RGBA", target_size, (25, 30, 45, 255))
+        # Preserve full transparent alpha for standalone / custom card renders
+        card = Image.new("RGBA", target_size, (0, 0, 0, 0))
     
     overlay = Image.new("RGBA", target_size, (0,0,0,0))
     
@@ -241,8 +242,8 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
             font=font,
             anchor='mm'
         )
-    else:
-        # Fallback text rendering if layout dict is missing
+    elif bg_url and not player.get("is_custom") and not str(player_id).startswith("custom_"):
+        # Fallback text rendering ONLY if there is a separate background and not a custom full-card upload
         name = player.get("cardName") or player.get("lastName", "Player")
         font = font_bold(int(18 * SCALE))
         draw.text((target_size[0] // 2, int(target_size[1] * 0.85)), name.upper()[:14], fill=(255, 255, 255), font=font, anchor='mm')
