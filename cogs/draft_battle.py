@@ -6,6 +6,8 @@ import random
 import asyncio
 import io
 import time
+import traceback
+import maps
 from renderz_api import query_players_by_program
 from lineup_generator import generate_lineup_image, set_cached_layouts
 
@@ -105,17 +107,17 @@ def calculate_draft_chemistry(players: dict):
             continue
         total_ovr += p.get("rating", p.get("ovr", 110))
         count += 1
-        club = p.get("club", {}).get("name") or "None"
-        nation = p.get("nation", {}).get("name") or "None"
+        club = maps.get_club_display(p)
+        nation = maps.get_nation_display(p)
         clubs[club] = clubs.get(club, 0) + 1
         nations[nation] = nations.get(nation, 0) + 1
 
     avg_ovr = total_ovr / max(1, count)
     chem_score = 0
     for c, cnt in clubs.items():
-        if cnt >= 2 and c != "None": chem_score += (cnt * 2)
+        if cnt >= 2 and c != "🛡️ Club": chem_score += (cnt * 2)
     for n, cnt in nations.items():
-        if cnt >= 2 and n != "None": chem_score += (cnt * 2)
+        if cnt >= 2 and n != "🌍 World": chem_score += (cnt * 2)
 
     chem_boost = min(8, chem_score // 3)
     final_ovr = round(avg_ovr + chem_boost)
@@ -157,8 +159,8 @@ class DraftPickDropdown(discord.ui.Select):
             name = p.get("cardName") or p.get("lastName") or "Player"
             ovr = p.get("rating", 110)
             pos = p.get("position", slot)
-            club = p.get("club", {}).get("name", "Club")
-            nation = p.get("nation", {}).get("name", "Nation")
+            club = maps.get_club_display(p)
+            nation = maps.get_nation_display(p)
             options.append(discord.SelectOption(
                 label=f"{ovr} {name} ({pos})"[:100],
                 description=f"{club} | {nation}"[:100],
@@ -168,7 +170,13 @@ class DraftPickDropdown(discord.ui.Select):
         super().__init__(placeholder=f"Pick your {slot}...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        await self.view.handle_pick(interaction, self.slot, self.choices[int(self.values[0])])
+        try:
+            await self.view.handle_pick(interaction, self.slot, self.choices[int(self.values[0])])
+        except Exception as e:
+            print(f"[DraftBattle] Error in DraftPickDropdown callback: {e}")
+            traceback.print_exc()
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ An error occurred selecting this player.", ephemeral=True)
 
 
 class SinglePlayerDraftView(discord.ui.View):
@@ -181,6 +189,12 @@ class SinglePlayerDraftView(discord.ui.View):
         self.picked_players = {}
         self.on_complete_callback = on_complete_callback
         self.prompt_next_slot()
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item = None):
+        print(f"[DraftBattle] Error in SinglePlayerDraftView: {error}")
+        traceback.print_exc()
+        if not interaction.response.is_done():
+            await interaction.response.send_message("❌ An error occurred on your draft board.", ephemeral=True)
 
     def prompt_next_slot(self):
         self.clear_items()
@@ -238,6 +252,12 @@ class FormationSelectView(discord.ui.View):
         select.callback = self.select_callback
         self.add_item(select)
 
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item = None):
+        print(f"[DraftBattle] Error in FormationSelectView: {error}")
+        traceback.print_exc()
+        if not interaction.response.is_done():
+            await interaction.response.send_message("❌ An error occurred selecting your formation.", ephemeral=True)
+
     async def select_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user.id:
             return await interaction.response.send_message("❌ This is not your draft selection!", ephemeral=True)
@@ -261,6 +281,15 @@ class DraftBattleRoomView(discord.ui.View):
             opponent.id: ("🤖 AI Ready" if is_solo else "⏳ Not started")
         }
         self.update_buttons()
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item = None):
+        print(f"[DraftBattle] Error in DraftBattleRoomView: {error}")
+        traceback.print_exc()
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.send_message("❌ An error occurred in the draft room.", ephemeral=True)
+            except Exception:
+                pass
 
     def update_buttons(self):
         self.clear_items()
@@ -631,6 +660,15 @@ class DraftBattleChallengeView(discord.ui.View):
         self.channel_id = channel_id
         self.accepted = False
 
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item = None):
+        print(f"[DraftBattle] Error in DraftBattleChallengeView: {error}")
+        traceback.print_exc()
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.send_message("❌ An error occurred processing this draft battle challenge.", ephemeral=True)
+            except Exception:
+                pass
+
     @discord.ui.button(label="Accept Draft Battle ⚔️", style=discord.ButtonStyle.success)
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.opponent.id:
@@ -674,6 +712,18 @@ class DraftBattleChallengeView(discord.ui.View):
 class DraftBattleCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        asyncio.create_task(self._prewarm_draft_pool())
+
+    async def _prewarm_draft_pool(self):
+        global DRAFT_POOL_CACHE, LAST_CACHE_TIME
+        try:
+            cards = await database.get_official_cards_by_rating(108, 125, limit=500)
+            if cards:
+                DRAFT_POOL_CACHE = cards
+                LAST_CACHE_TIME = time.time()
+                print(f"[DraftBattle] Prewarmed {len(cards)} 108+ OVR cards in RAM draft pool!")
+        except Exception as e:
+            print(f"[DraftBattle] Prewarm draft pool note: {e}")
 
     draftbattle_group = app_commands.Group(name="draftbattle", description="FC FUT Draft Battles 1v1 Mode")
 

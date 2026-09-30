@@ -444,46 +444,132 @@ class DraftCog(commands.Cog):
             
         try:
             is_walkout = bool(is_walkout_pack or (isinstance(highest_ovr, int) and highest_ovr >= 120))
+            pity_b = 10 - (pity_counter % 10)
+            pity_a = max(0, 70 - pity_counter)
             
             if is_walkout:
+                # Stage 1: Nation Reveal
+                stage1_embed = discord.Embed(
+                    title="✨ WALKOUT DETECTED! ✨",
+                    description=(
+                        f"🚨 **A {highest_ovr} OVR SUPERSTAR IS WALKING OUT!**\n\n"
+                        f"🌍 **Nation:** **{nation_str}**\n"
+                        f"🏃 **Position:** ⏳ `???`\n"
+                        f"🛡️ **Club:** ⏳ `???`\n\n"
+                        f"*Building suspense...*"
+                    ),
+                    color=discord.Color.gold()
+                )
+                stage1_embed.set_author(name=f"{interaction.user.display_name}'s Pack", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
+                msg = await interaction.followup.send(embed=stage1_embed)
+                
+                await asyncio.sleep(1.2)
+                
+                # Stage 2: Position Reveal
+                stage2_embed = discord.Embed(
+                    title="🔥 WALKOUT: POSITION REVEALED! 🔥",
+                    description=(
+                        f"🚨 **A {highest_ovr} OVR SUPERSTAR IS WALKING OUT!**\n\n"
+                        f"🌍 **Nation:** **{nation_str}**\n"
+                        f"🏃 **Position:** **`{pos}`**\n"
+                        f"🛡️ **Club:** ⏳ `???`\n\n"
+                        f"*Who could it be?!*"
+                    ),
+                    color=discord.Color.gold()
+                )
+                stage2_embed.set_author(name=f"{interaction.user.display_name}'s Pack", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
+                try:
+                    await msg.edit(embed=stage2_embed)
+                except Exception:
+                    pass
+                
+                await asyncio.sleep(1.2)
+                
+                # Stage 3: Club Reveal
+                stage3_embed = discord.Embed(
+                    title="⚡ WALKOUT: CLUB REVEALED! ⚡",
+                    description=(
+                        f"🚨 **A {highest_ovr} OVR SUPERSTAR IS WALKING OUT!**\n\n"
+                        f"🌍 **Nation:** **{nation_str}**\n"
+                        f"🏃 **Position:** **`{pos}`**\n"
+                        f"🛡️ **Club:** **{club_str}**\n\n"
+                        f"💥 **HERE HE COMES...**"
+                    ),
+                    color=discord.Color.gold()
+                )
+                stage3_embed.set_author(name=f"{interaction.user.display_name}'s Pack", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
+                try:
+                    await msg.edit(embed=stage3_embed)
+                except Exception:
+                    pass
+                
+                await asyncio.sleep(1.2)
+
+                # Stage 4: Full Walkout Reveal with animated card
                 walkout_prefix = f"🔥 **{nation_str}** ➔ 🏃 **`{pos}`** ➔ **{club_str}**\n\n"
                 desc = f"{walkout_prefix}🌟 **Featured Walkout:** **{best_name}** `({pos})` ({highest_ovr} OVR)\n\n"
                 embed_title = f"🌟 WALKOUT REVEAL! ({amount}x Pack)" if amount > 1 else f"🌟 WALKOUT REVEAL! ({highest_ovr} OVR)"
                 embed_color = discord.Color.gold()
+                
+                if amount > 1:
+                    desc += "📋 **Other Pack Pulls:**\n"
+                    others = sorted([p for p in pulled_players if p != highest_player], key=lambda x: x.get('rating', 0), reverse=True)
+                    for p in others[:9]:
+                        name = p.get('cardName') or p.get('lastName', 'Unknown')
+                        ovr = p.get('rating', 0)
+                        p_pos = extract_pos(p)
+                        icon = "🔥" if ovr >= 120 else ("✨" if ovr >= 117 else "⚽")
+                        desc += f"{icon} **{name}** `({p_pos})` — `{ovr} OVR`\n"
+                    if len(others) > 9:
+                        desc += f"*...and {len(others) - 9} more cards added to your club!*"
+                
+                embed = discord.Embed(
+                    title=embed_title,
+                    description=desc,
+                    color=embed_color
+                )
+                embed.set_author(name=f"{interaction.user.display_name}'s Pack", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
+                if file and filename:
+                    embed.set_image(url=f"attachment://{filename}")
+                embed.set_footer(text=f"Draft {pack} Pity ➔ Pool B in {pity_b} drafts | Pool A Walkout in {pity_a} drafts")
+                
+                if file:
+                    file.fp.seek(0)
+                    await msg.edit(embed=embed, attachments=[file])
+                else:
+                    await msg.edit(embed=embed)
             else:
                 desc = f"✨ **Best Pull:** **{best_name}** `({pos})` ({highest_ovr} OVR)\n\n"
                 embed_title = f"🎉 {pack_tier_name} Pack Opened! ({amount}x)"
                 embed_color = discord.Color.blue()
-            
-            if amount > 1:
-                desc += "📋 **Other Pack Pulls:**\n"
-                others = sorted([p for p in pulled_players if p != highest_player], key=lambda x: x.get('rating', 0), reverse=True)
-                for p in others[:9]:
-                    name = p.get('cardName') or p.get('lastName', 'Unknown')
-                    ovr = p.get('rating', 0)
-                    p_pos = extract_pos(p)
-                    icon = "🔥" if ovr >= 120 else ("✨" if ovr >= 117 else "⚽")
-                    desc += f"{icon} **{name}** `({p_pos})` — `{ovr} OVR`\n"
-                if len(others) > 9:
-                    desc += f"*...and {len(others) - 9} more cards added to your club!*"
-            
-            embed = discord.Embed(
-                title=embed_title,
-                description=desc,
-                color=embed_color
-            )
-            embed.set_author(name=f"{interaction.user.display_name}'s Pack", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
-            if file and filename:
-                embed.set_image(url=f"attachment://{filename}")
-            
-            pity_b = 10 - (pity_counter % 10)
-            pity_a = max(0, 70 - pity_counter)
-            embed.set_footer(text=f"Draft {pack} Pity ➔ Pool B in {pity_b} drafts | Pool A Walkout in {pity_a} drafts")
-            
-            if file:
-                await interaction.followup.send(embed=embed, file=file)
-            else:
-                await interaction.followup.send(embed=embed)
+                
+                if amount > 1:
+                    desc += "📋 **Other Pack Pulls:**\n"
+                    others = sorted([p for p in pulled_players if p != highest_player], key=lambda x: x.get('rating', 0), reverse=True)
+                    for p in others[:9]:
+                        name = p.get('cardName') or p.get('lastName', 'Unknown')
+                        ovr = p.get('rating', 0)
+                        p_pos = extract_pos(p)
+                        icon = "🔥" if ovr >= 120 else ("✨" if ovr >= 117 else "⚽")
+                        desc += f"{icon} **{name}** `({p_pos})` — `{ovr} OVR`\n"
+                    if len(others) > 9:
+                        desc += f"*...and {len(others) - 9} more cards added to your club!*"
+                
+                embed = discord.Embed(
+                    title=embed_title,
+                    description=desc,
+                    color=embed_color
+                )
+                embed.set_author(name=f"{interaction.user.display_name}'s Pack", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
+                if file and filename:
+                    embed.set_image(url=f"attachment://{filename}")
+                
+                embed.set_footer(text=f"Draft {pack} Pity ➔ Pool B in {pity_b} drafts | Pool A Walkout in {pity_a} drafts")
+                
+                if file:
+                    await interaction.followup.send(embed=embed, file=file)
+                else:
+                    await interaction.followup.send(embed=embed)
             
         except Exception as e:
             print(f"[Draft] Error presenting pack: {e}")

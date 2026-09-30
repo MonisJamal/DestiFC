@@ -1,24 +1,45 @@
 nation_map = {
-    14: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 England", 18: "🇫🇷 France", 27: "🇮🇹 Italy", 54: "🇧🇷 Brazil", 
-    34: "🇳🇱 Netherlands", 45: "🇪🇸 Spain", 35: "🍀 Northern Ireland", 50: "🏴󠁧󠁢󠁷󠁬󠁳󠁿 Wales", 
-    108: "🇨🇮 Ivory Coast", 7: "🇧🇪 Belgium", 21: "🇩🇪 Germany", 38: "🇵🇹 Portugal", 
-    52: "🇦🇷 Argentina", 60: "🇺🇾 Uruguay", 83: "🇲🇽 Mexico", 163: "🇯🇵 Japan", 
-    95: "🇺🇸 USA", 10: "🇭🇷 Croatia", 36: "🇳🇴 Norway", 46: "🇸🇪 Sweden", 56: "🇨🇴 Colombia",
-    106: "🇸🇳 Senegal", 111: "🇪🇬 Egypt", 13: "🇩🇰 Denmark", 104: "🇲🇦 Morocco",
-    9: "🇧🇬 Bulgaria", 42: "🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland", 49: "🇺🇦 Ukraine", 133: "🇳🇬 Nigeria",
-    39: "🇷🇴 Romania", 59: "🇵🇪 Peru", 70: "🇨🇦 Canada", 103: "🇨🇲 Cameroon",
-    117: "🇬🇭 Ghana", 129: "🇲🇦 Morocco", 167: "🇰🇷 South Korea", 191: "🇺🇿 Uzbekistan",
-    12: "🇨🇿 Czech Republic", 47: "🇨🇭 Switzerland", 20: "🇬🇪 Georgia", 48: "🇹🇷 Turkey",
-    37: "🇵🇱 Poland", 4: "🇦🇹 Austria", 51: "🇷🇸 Serbia", 23: "🇭🇺 Hungary",
-    25: "🇮🇪 Ireland", 97: "🇩🇿 Algeria", 183: "🇸🇦 Saudi Arabia", 195: "🇦🇺 Australia",
-    55: "🇨🇱 Chile", 58: "🇵🇾 Paraguay", 57: "🇪🇨 Ecuador", 61: "🇻🇪 Venezuela",
-    17: "🇫🇮 Finland", 22: "🇬🇷 Greece", 43: "🇸🇰 Slovakia", 44: "🇸🇮 Slovenia",
-    161: "🇮🇷 Iran", 110: "🇨🇲 Cameroon", 112: "🇬🇶 Equatorial Guinea", 113: "🇬🇦 Gabon",
-    115: "🇬🇲 Gambia", 116: "🇬🇳 Guinea", 120: "🇰🇪 Kenya", 123: "🇱🇷 Liberia",
-    125: "🇲🇬 Madagascar", 126: "🇲🇼 Malawi", 127: "🇲🇱 Mali", 130: "🇲🇿 Mozambique",
-    132: "🇳🇪 Niger", 136: "🇷🇼 Rwanda", 138: "🇸🇱 Sierra Leone", 140: "🇿🇦 South Africa",
-    142: "🇸🇩 Sudan", 144: "🇹🇿 Tanzania", 145: "🇹🇬 Togo", 146: "🇹🇳 Tunisia",
-    147: "🇺🇬 Uganda", 148: "🇿🇲 Zambia", 149: "🇿🇼 Zimbabwe"
+    1: "🇦🇱 Albania", 2: "🇦🇩 Andorra", 3: "🇦🇲 Armenia", 4: "🇦🇹 Austria", 5: "🇦🇿 Azerbaijan",
+    6: "🇧🇾 Belarus", 7: "🇧🇪 Belgium", 8: "🇧🇦 Bosnia & Herzegovina", 9: "🇧🇬 Bulgaria", 10: "🇭🇷 Croatia",
+    11: "🇨🇾 Cyprus", 12: "🇨🇿 Czech Republic", 13: "🇩🇰 Denmark", 14: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 England", 15: "🇪🇪 Estonia",
+    16: "🇫🇴 Faroe Islands", 17: "🇫🇮 Finland", 18: "🇫🇷 France", 19: "🇲🇰 North Macedonia", 20: "🇬🇪 Georgia",
+    21: "🇩🇪 Germany", 22: "🇬🇷 Greece", 23: "🇭🇺 Hungary", 24: "🇮🇸 Iceland", 25: "🇮🇪 Republic of Ireland",
+    26: "🇮🇱 Israel", 27: "🇮🇹 Italy", 28: "🇱🇻 Latvia", 29: "🇱🇮 Liechtenstein", 30: "🇱🇹 Lithuania",
+    31: "🇱🇺 Luxembourg", 32: "🇲🇹 Malta", 33: "🇲🇩 Moldova", 34: "🇳🇱 Netherlands", 35: "🍀 Northern Ireland",
+    36: "🇳🇴 Norway", 37: "🇵🇱 Poland", 38: "🇵🇹 Portugal", 39: "🇷🇴 Romania", 40: "🇷🇺 Russia",
+    41: "🇸🇲 San Marino", 42: "🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland", 43: "🇸🇰 Slovakia", 44: "🇸🇮 Slovenia", 45: "🇪🇸 Spain",
+    46: "🇸🇪 Sweden", 47: "🇨🇭 Switzerland", 48: "🇹🇷 Turkey", 49: "🇺🇦 Ukraine", 50: "🏴󠁧󠁢󠁷󠁬󠁳󠁿 Wales",
+    51: "🇷🇸 Serbia", 52: "🇦🇷 Argentina", 53: "🇧🇴 Bolivia", 54: "🇧🇷 Brazil", 55: "🇨🇱 Chile",
+    56: "🇨🇴 Colombia", 57: "🇪🇨 Ecuador", 58: "🇵🇾 Paraguay", 59: "🇵🇪 Peru", 60: "🇺🇾 Uruguay",
+    61: "🇻🇪 Venezuela", 62: "🇦🇮 Anguilla", 63: "🇦🇬 Antigua and Barbuda", 64: "🇦🇼 Aruba", 65: "🇧🇸 Bahamas",
+    66: "🇧🇧 Barbados", 67: "🇧🇿 Belize", 68: "🇧🇲 Bermuda", 69: "🇻🇬 British Virgin Islands", 70: "🇨🇦 Canada",
+    71: "🇰🇾 Cayman Islands", 72: "🇨🇷 Costa Rica", 73: "🇨🇺 Cuba", 74: "🇩🇲 Dominica", 75: "🇩🇴 Dominican Republic",
+    76: "🇸🇻 El Salvador", 77: "🇬🇩 Grenada", 78: "🇬🇹 Guatemala", 79: "🇬🇾 Guyana", 80: "🇭🇹 Haiti",
+    81: "🇭🇳 Honduras", 82: "🇯🇲 Jamaica", 83: "🇲🇽 Mexico", 84: "🇲🇸 Montserrat", 85: "🇳🇮 Nicaragua",
+    86: "🇵🇦 Panama", 87: "🇵🇷 Puerto Rico", 88: "🇰🇳 Saint Kitts and Nevis", 89: "🇱🇨 Saint Lucia", 90: "🇻🇨 Saint Vincent",
+    91: "🇸🇷 Suriname", 92: "🇹🇹 Trinidad and Tobago", 93: "🇹🇨 Turks and Caicos", 94: "🇻🇮 US Virgin Islands", 95: "🇺🇸 USA",
+    96: "🇦🇫 Afghanistan", 97: "🇩🇿 Algeria", 98: "🇦🇴 Angola", 99: "🇧🇭 Bahrain", 100: "🇧🇩 Bangladesh",
+    101: "🇧🇯 Benin", 102: "🇧🇼 Botswana", 103: "🇨🇲 Cameroon", 104: "🇲🇦 Morocco", 105: "🇨🇻 Cape Verde",
+    106: "🇸🇳 Senegal", 107: "🇨🇫 Central African Rep.", 108: "🇨🇮 Ivory Coast", 109: "🇹🇩 Chad", 110: "🇰🇲 Comoros",
+    111: "🇪🇬 Egypt", 112: "🇬🇶 Equatorial Guinea", 113: "🇬🇦 Gabon", 114: "🇬🇲 Gambia", 115: "🇬🇭 Ghana",
+    116: "🇬🇳 Guinea", 117: "🇬🇼 Guinea-Bissau", 118: "🇰🇪 Kenya", 119: "🇱🇸 Lesotho", 120: "🇱🇷 Liberia",
+    121: "🇱🇾 Libya", 122: "🇲🇬 Madagascar", 123: "🇲🇼 Malawi", 124: "🇲🇱 Mali", 125: "🇲🇷 Mauritania",
+    126: "🇲🇺 Mauritius", 127: "🇲🇦 Morocco", 128: "🇲🇿 Mozambique", 129: "🇳🇦 Namibia", 130: "🇳🇪 Niger",
+    131: "🇳🇬 Nigeria", 132: "🇷🇼 Rwanda", 133: "🇳🇬 Nigeria", 134: "🇸🇹 Sao Tome and Principe", 135: "🇸🇨 Seychelles",
+    136: "🇸🇱 Sierra Leone", 137: "🇸🇴 Somalia", 138: "🇿🇦 South Africa", 139: "🇸🇸 South Sudan", 140: "🇿🇦 South Africa",
+    141: "🇸🇩 Sudan", 142: "🇸🇿 Eswatini", 143: "🇹🇿 Tanzania", 144: "🇹🇬 Togo", 145: "🇹🇳 Tunisia",
+    146: "🇹🇳 Tunisia", 147: "🇺🇬 Uganda", 148: "🇿🇲 Zambia", 149: "🇿🇼 Zimbabwe", 155: "🇨🇳 China PR",
+    156: "🇹🇼 Chinese Taipei", 157: "🇬🇺 Guam", 158: "🇭🇰 Hong Kong", 159: "🇮🇳 India", 160: "🇮🇩 Indonesia",
+    161: "🇮🇷 Iran", 162: "🇮🇶 Iraq", 163: "🇯🇵 Japan", 164: "🇯🇴 Jordan", 165: "🇰🇿 Kazakhstan",
+    166: "🇰🇵 North Korea", 167: "🇰🇷 South Korea", 168: "🇰🇼 Kuwait", 169: "🇰🇬 Kyrgyzstan", 170: "🇱🇦 Laos",
+    171: "🇱🇧 Lebanon", 172: "🇲🇴 Macau", 173: "🇲🇾 Malaysia", 174: "🇲🇻 Maldives", 175: "🇲🇳 Mongolia",
+    176: "🇲🇲 Myanmar", 177: "🇳🇵 Nepal", 178: "🇴🇲 Oman", 179: "🇵🇰 Pakistan", 180: "🇵🇸 Palestine",
+    181: "🇵🇭 Philippines", 182: "🇶🇦 Qatar", 183: "🇸🇦 Saudi Arabia", 184: "🇸🇬 Singapore", 185: "🇱🇰 Sri Lanka",
+    186: "🇸🇾 Syria", 187: "🇹🇯 Tajikistan", 188: "🇹🇭 Thailand", 189: "🇹🇲 Turkmenistan", 190: "🇦🇪 UAE",
+    191: "🇺🇿 Uzbekistan", 192: "🇻🇳 Vietnam", 193: "🇾🇪 Yemen", 194: "🇦🇸 American Samoa", 195: "🇦🇺 Australia",
+    196: "🇨🇰 Cook Islands", 197: "🇫🇯 Fiji", 198: "🇳🇿 New Zealand", 199: "🇵🇬 Papua New Guinea", 200: "🇼🇸 Samoa",
+    201: "🇸🇧 Solomon Islands", 202: "🇵🇫 Tahiti", 203: "🇹🇴 Tonga", 204: "🇻🇺 Vanuatu", 208: "🇲🇪 Montenegro",
+    214: "🇽🇰 Kosovo", 219: "🇬🇮 Gibraltar"
 }
 
 COUNTRY_FLAGS = {
@@ -39,24 +60,67 @@ COUNTRY_FLAGS = {
     "paraguay": "🇵🇾", "ecuador": "🇪🇨", "venezuela": "🇻🇪", "finland": "🇫🇮",
     "greece": "🇬🇷", "slovakia": "🇸🇰", "slovenia": "🇸🇮", "iran": "🇮🇷",
     "mali": "🇲🇱", "guinea": "🇬🇳", "gabon": "🇬🇦", "togo": "🇹🇬", "tunisia": "🇹🇳",
-    "south africa": "🇿🇦", "zambia": "🇿🇲", "denmark": "🇩🇰"
+    "south africa": "🇿🇦", "zambia": "🇿🇲", "denmark": "🇩🇰", "china": "🇨🇳",
+    "china pr": "🇨🇳", "jordan": "🇯🇴", "uae": "🇦🇪", "qatar": "🇶🇦", "iraq": "🇮🇶",
+    "costa rica": "🇨🇷", "jamaica": "🇯🇲", "panama": "🇵🇦", "albania": "🇦🇱",
+    "bosnia & herzegovina": "🇧🇦", "bosnia": "🇧🇦", "iceland": "🇮🇸", "israel": "🇮🇱",
+    "montenegro": "🇲🇪", "kosovo": "🇽🇰", "new zealand": "🇳🇿", "india": "🇮🇳"
 }
 
 club_map = {
-    114154: "🛡️ Icons", 115935: "🛡️ Heroes", 241: "🛡️ FC Barcelona", 243: "🛡️ Real Madrid",
-    21: "🛡️ Bayern Munich", 11: "🛡️ Manchester United", 9: "🛡️ Liverpool", 10: "🛡️ Manchester City",
-    5: "🛡️ Chelsea", 1: "🛡️ Arsenal", 73: "🛡️ Paris SG", 45: "🛡️ Juventus", 44: "🛡️ Inter", 
-    47: "🛡️ AC Milan", 236: "🛡️ Sporting CP", 112139: "🛡️ Al Nassr", 112533: "🛡️ Inter Miami", 
-    896: "🛡️ FC Basel", 175: "🛡️ Bayer Leverkusen", 112658: "🛡️ Al Hilal",
-    325: "🛡️ Galatasaray", 1335: "🛡️ France (INT)", 1362: "🛡️ Spain (INT)",
-    1318: "🛡️ England (INT)", 1325: "🛡️ Belgium (INT)", 1352: "🛡️ Norway (INT)", 
-    1354: "🛡️ Portugal (INT)", 1364: "🛡️ Switzerland (INT)", 1369: "🛡️ Argentina (INT)",
-    22: "🛡️ Borussia Dortmund", 327: "🛡️ VfB Stuttgart", 112606: "🛡️ Atletico Madrid",
-    114640: "🛡️ Charlotte FC", 111111: "🛡️ PSV", 18: "🛡️ RB Leipzig", 689: "🛡️ NY Red Bulls",
-    101014: "🛡️ CSKA Moscow", 111130: "🛡️ Liverpool", 1370: "🛡️ Brazil (INT)", 1328: "🛡️ Croatia (INT)",
-    240: "🛡️ Atletico Madrid", 48: "🛡️ Napoli", 52: "🛡️ Roma", 1877: "🛡️ Aston Villa",
-    18: "🛡️ Tottenham", 19: "🛡️ Newcastle", 110: "🛡️ Ajax", 234: "🛡️ FC Porto",
-    237: "🛡️ Benfica", 112657: "🛡️ Al Ittihad", 112659: "🛡️ Al Ahli"
+    # Special Promo Classes
+    114154: "🛡️ Icons", 115935: "🛡️ Heroes",
+    
+    # Premier League
+    1: "🛡️ Arsenal", 2: "🛡️ Aston Villa", 3: "🛡️ Blackburn", 5: "🛡️ Chelsea", 
+    7: "🛡️ Everton", 9: "🛡️ Liverpool", 10: "🛡️ Manchester City", 11: "🛡️ Manchester United", 
+    13: "🛡️ Newcastle United", 14: "🛡️ Nottingham Forest", 17: "🛡️ Southampton", 18: "🛡️ Tottenham Hotspur", 
+    19: "🛡️ West Ham United", 1795: "🛡️ Fulham", 1808: "🛡️ Brighton", 1877: "🛡️ Aston Villa", 
+    1884: "🛡️ Crystal Palace", 1886: "🛡️ Wolverhampton", 1896: "🛡️ Brentford", 111130: "🛡️ Liverpool",
+
+    # La Liga
+    240: "🛡️ Atletico Madrid", 241: "🛡️ FC Barcelona", 243: "🛡️ Real Madrid",
+    448: "🛡️ Real Betis", 449: "🛡️ Athletic Club", 457: "🛡️ Real Sociedad",
+    461: "🛡️ Sevilla FC", 472: "🛡️ Valencia CF", 481: "🛡️ Villarreal CF",
+    479: "🛡️ Girona FC", 112606: "🛡️ Atletico Madrid",
+
+    # Bundesliga
+    21: "🛡️ Bayern Munich", 22: "🛡️ Borussia Dortmund", 23: "🛡️ Borussia M'gladbach",
+    31: "🛡️ Bayer Leverkusen", 32: "🛡️ Schalke 04", 34: "🛡️ VfB Stuttgart",
+    36: "🛡️ VfL Wolfsburg", 38: "🛡️ Werder Bremen", 175: "🛡️ Bayer Leverkusen",
+    112172: "🛡️ RB Leipzig", 327: "🛡️ VfB Stuttgart", 1824: "🛡️ Eintracht Frankfurt",
+
+    # Serie A
+    44: "🛡️ Inter", 45: "🛡️ Juventus", 47: "🛡️ AC Milan", 48: "🛡️ Napoli",
+    52: "🛡️ AS Roma", 54: "🛡️ SS Lazio", 55: "🛡️ Fiorentina", 64: "🛡️ Atalanta",
+    1842: "🛡️ Bologna", 1843: "🛡️ Torino",
+
+    # Ligue 1
+    73: "🛡️ Paris Saint-Germain", 74: "🛡️ Marseille", 76: "🛡️ Lyon",
+    79: "🛡️ AS Monaco", 81: "🛡️ Lille OSC", 84: "🛡️ OGC Nice",
+
+    # Saudi Pro League
+    605: "🛡️ Al Hilal", 673: "🛡️ Al Hilal", 112658: "🛡️ Al Hilal",
+    112139: "🛡️ Al Nassr", 112657: "🛡️ Al Ittihad", 112659: "🛡️ Al Ahli",
+    112093: "🛡️ Al Shabab", 112660: "🛡️ Al Ettifaq",
+
+    # MLS & Americas
+    112533: "🛡️ Inter Miami", 689: "🛡️ NY Red Bulls", 693: "🛡️ LA Galaxy",
+    112885: "🛡️ LAFC", 114640: "🛡️ Charlotte FC", 111111: "🛡️ PSV",
+    1876: "🛡️ River Plate", 1877: "🛡️ Boca Juniors", 101014: "🛡️ CSKA Moscow",
+
+    # Portugal, Netherlands, Turkey & Europe
+    110: "🛡️ Ajax", 111: "🛡️ Feyenoord", 112: "🛡️ PSV Eindhoven",
+    234: "🛡️ FC Porto", 236: "🛡️ Sporting CP", 237: "🛡️ SL Benfica",
+    325: "🛡️ Galatasaray", 326: "🛡️ Fenerbahce", 327: "🛡️ Besiktas",
+    896: "🛡️ FC Basel", 1013: "🛡️ Celtic", 1014: "🛡️ Rangers",
+
+    # National Teams (International)
+    1318: "🛡️ England (INT)", 1325: "🛡️ Belgium (INT)", 1328: "🛡️ Croatia (INT)",
+    1335: "🛡️ France (INT)", 1352: "🛡️ Norway (INT)", 1354: "🛡️ Portugal (INT)", 
+    1362: "🛡️ Spain (INT)", 1364: "🛡️ Switzerland (INT)", 1369: "🛡️ Argentina (INT)",
+    1370: "🛡️ Brazil (INT)", 1337: "🛡️ Germany (INT)", 1343: "🛡️ Italy (INT)",
+    1357: "🛡️ Netherlands (INT)"
 }
 
 def get_nation_display(player_data: dict) -> str:
@@ -88,16 +152,33 @@ def get_nation_display(player_data: dict) -> str:
         except (ValueError, TypeError):
             pass
 
-    # Check explicit name first
+    # Clean placeholder strings like "NationName_37" or "Nation 37"
+    if n_name and isinstance(n_name, str):
+        cleaned = n_name.strip()
+        if "nationname_" in cleaned.lower() or "nation_" in cleaned.lower():
+            # Extract ID if present in string
+            digits = "".join([c for c in cleaned if c.isdigit()])
+            if digits and not n_id:
+                try: n_id = int(digits)
+                except Exception: pass
+            n_name = None
+        elif cleaned.isdigit():
+            if not n_id:
+                try: n_id = int(cleaned)
+                except Exception: pass
+            n_name = None
+
+    # Check ID lookup in nation_map first
+    if n_id and int(n_id) in nation_map:
+        return nation_map[int(n_id)]
+
+    # Check explicit valid name
     if n_name:
         clean_name = str(n_name).strip()
         flag = COUNTRY_FLAGS.get(clean_name.lower())
         if flag:
             return f"{flag} {clean_name}"
         return f"🌍 {clean_name}"
-
-    if n_id and n_id in nation_map:
-        return nation_map[n_id]
 
     return "🌍 World"
 
@@ -135,7 +216,26 @@ def get_club_display(player_data: dict) -> str:
         except (ValueError, TypeError):
             pass
 
-    # Check explicit name first
+    # Clean placeholder strings like "TeamName_21" or "Club_21"
+    if c_name and isinstance(c_name, str):
+        cleaned = c_name.strip()
+        if "teamname_" in cleaned.lower() or "club_" in cleaned.lower() or "team_" in cleaned.lower():
+            digits = "".join([c for c in cleaned if c.isdigit()])
+            if digits and not c_id:
+                try: c_id = int(digits)
+                except Exception: pass
+            c_name = None
+        elif cleaned.isdigit():
+            if not c_id:
+                try: c_id = int(cleaned)
+                except Exception: pass
+            c_name = None
+
+    # Check ID in club_map first
+    if c_id and int(c_id) in club_map:
+        return club_map[int(c_id)]
+
+    # Check explicit valid name
     if c_name:
         clean_name = str(c_name).strip()
         if clean_name.lower() in ("icons", "icon"):
@@ -146,10 +246,8 @@ def get_club_display(player_data: dict) -> str:
             return clean_name
         return f"🛡️ {clean_name}"
 
-    if c_id and c_id in club_map:
-        return club_map[c_id]
-
     return "🛡️ Club"
+
 
 
 import json
