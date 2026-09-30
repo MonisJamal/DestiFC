@@ -7,8 +7,39 @@ nation_map = {
     106: "🇸🇳 Senegal", 111: "🇪🇬 Egypt", 13: "🇩🇰 Denmark", 104: "🇲🇦 Morocco",
     9: "🇧🇬 Bulgaria", 42: "🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland", 49: "🇺🇦 Ukraine", 133: "🇳🇬 Nigeria",
     39: "🇷🇴 Romania", 59: "🇵🇪 Peru", 70: "🇨🇦 Canada", 103: "🇨🇲 Cameroon",
-    117: "🇬🇭 Ghana", 129: "🇲🇦 Morocco", 167: "🇰🇷 Korea Republic", 191: "🇺🇿 Uzbekistan",
-    12: "🇨🇿 Czech Republic", 47: "🇨🇭 Switzerland", 20: "🇬🇪 Georgia", 48: "🇹🇷 Turkey"
+    117: "🇬🇭 Ghana", 129: "🇲🇦 Morocco", 167: "🇰🇷 South Korea", 191: "🇺🇿 Uzbekistan",
+    12: "🇨🇿 Czech Republic", 47: "🇨🇭 Switzerland", 20: "🇬🇪 Georgia", 48: "🇹🇷 Turkey",
+    37: "🇵🇱 Poland", 4: "🇦🇹 Austria", 51: "🇷🇸 Serbia", 23: "🇭🇺 Hungary",
+    25: "🇮🇪 Ireland", 97: "🇩🇿 Algeria", 183: "🇸🇦 Saudi Arabia", 195: "🇦🇺 Australia",
+    55: "🇨🇱 Chile", 58: "🇵🇾 Paraguay", 57: "🇪🇨 Ecuador", 61: "🇻🇪 Venezuela",
+    17: "🇫🇮 Finland", 22: "🇬🇷 Greece", 43: "🇸🇰 Slovakia", 44: "🇸🇮 Slovenia",
+    161: "🇮🇷 Iran", 110: "🇨🇲 Cameroon", 112: "🇬🇶 Equatorial Guinea", 113: "🇬🇦 Gabon",
+    115: "🇬🇲 Gambia", 116: "🇬🇳 Guinea", 120: "🇰🇪 Kenya", 123: "🇱🇷 Liberia",
+    125: "🇲🇬 Madagascar", 126: "🇲🇼 Malawi", 127: "🇲🇱 Mali", 130: "🇲🇿 Mozambique",
+    132: "🇳🇪 Niger", 136: "🇷🇼 Rwanda", 138: "🇸🇱 Sierra Leone", 140: "🇿🇦 South Africa",
+    142: "🇸🇩 Sudan", 144: "🇹🇿 Tanzania", 145: "🇹🇬 Togo", 146: "🇹🇳 Tunisia",
+    147: "🇺🇬 Uganda", 148: "🇿🇲 Zambia", 149: "🇿🇼 Zimbabwe"
+}
+
+COUNTRY_FLAGS = {
+    "england": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "france": "🇫🇷", "italy": "🇮🇹", "brazil": "🇧🇷",
+    "netherlands": "🇳🇱", "holland": "🇳🇱", "spain": "🇪🇸", "northern ireland": "🍀",
+    "wales": "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "ivory coast": "🇨🇮", "côte d'ivoire": "🇨🇮", "belgium": "🇧🇪",
+    "germany": "🇩🇪", "portugal": "🇵🇹", "argentina": "🇦🇷", "uruguay": "🇺🇾",
+    "mexico": "🇲🇽", "japan": "🇯🇵", "united states": "🇺🇸", "usa": "🇺🇸",
+    "croatia": "🇭🇷", "norway": "🇳🇴", "sweden": "🇸🇪", "colombia": "🇨🇴",
+    "senegal": "🇸🇳", "egypt": "🇪🇬", "morocco": "🇲🇦", "bulgaria": "🇧🇬",
+    "scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "ukraine": "🇺🇦", "nigeria": "🇳🇬", "romania": "🇷🇴",
+    "peru": "🇵🇪", "canada": "🇨🇦", "cameroon": "🇨🇲", "ghana": "🇬🇭",
+    "korea republic": "🇰🇷", "korea": "🇰🇷", "south korea": "🇰🇷", "uzbekistan": "🇺🇿",
+    "czech republic": "🇨🇿", "czechia": "🇨🇿", "switzerland": "🇨🇭", "georgia": "🇬🇪",
+    "turkey": "🇹🇷", "türkiye": "🇹🇷", "poland": "🇵🇱", "austria": "🇦🇹",
+    "serbia": "🇷🇸", "hungary": "🇭🇺", "ireland": "🇮🇪", "republic of ireland": "🇮🇪",
+    "algeria": "🇩🇿", "saudi arabia": "🇸🇦", "australia": "🇦🇺", "chile": "🇨🇱",
+    "paraguay": "🇵🇾", "ecuador": "🇪🇨", "venezuela": "🇻🇪", "finland": "🇫🇮",
+    "greece": "🇬🇷", "slovakia": "🇸🇰", "slovenia": "🇸🇮", "iran": "🇮🇷",
+    "mali": "🇲🇱", "guinea": "🇬🇳", "gabon": "🇬🇦", "togo": "🇹🇬", "tunisia": "🇹🇳",
+    "south africa": "🇿🇦", "zambia": "🇿🇲", "denmark": "🇩🇰"
 }
 
 club_map = {
@@ -22,8 +53,102 @@ club_map = {
     1354: "🛡️ Portugal (INT)", 1364: "🛡️ Switzerland (INT)", 1369: "🛡️ Argentina (INT)",
     22: "🛡️ Borussia Dortmund", 327: "🛡️ VfB Stuttgart", 112606: "🛡️ Atletico Madrid",
     114640: "🛡️ Charlotte FC", 111111: "🛡️ PSV", 18: "🛡️ RB Leipzig", 689: "🛡️ NY Red Bulls",
-    101014: "🛡️ CSKA Moscow", 111130: "🛡️ Liverpool", 1370: "🛡️ Brazil (INT)", 1328: "🛡️ Croatia (INT)"
+    101014: "🛡️ CSKA Moscow", 111130: "🛡️ Liverpool", 1370: "🛡️ Brazil (INT)", 1328: "🛡️ Croatia (INT)",
+    240: "🛡️ Atletico Madrid", 48: "🛡️ Napoli", 52: "🛡️ Roma", 1877: "🛡️ Aston Villa",
+    18: "🛡️ Tottenham", 19: "🛡️ Newcastle", 110: "🛡️ Ajax", 234: "🛡️ FC Porto",
+    237: "🛡️ Benfica", 112657: "🛡️ Al Ittihad", 112659: "🛡️ Al Ahli"
 }
+
+def get_nation_display(player_data: dict) -> str:
+    if not isinstance(player_data, dict):
+        return "🌍 World"
+
+    # 1. Direct nation dict or object
+    nation = player_data.get('nation') or player_data.get('country')
+    n_id = None
+    n_name = None
+
+    if isinstance(nation, dict):
+        n_id = nation.get('id')
+        n_name = nation.get('name')
+    elif isinstance(nation, int):
+        n_id = nation
+    elif isinstance(nation, str):
+        if nation.isdigit():
+            n_id = int(nation)
+        else:
+            n_name = nation
+
+    # Secondary field fallbacks
+    if not n_name:
+        n_name = player_data.get('nation_name') or player_data.get('nationName') or player_data.get('country_name')
+    if not n_id and player_data.get('nation_id'):
+        try:
+            n_id = int(player_data.get('nation_id'))
+        except (ValueError, TypeError):
+            pass
+
+    if n_id and n_id in nation_map:
+        return nation_map[n_id]
+
+    if n_name:
+        clean_name = str(n_name).strip()
+        flag = COUNTRY_FLAGS.get(clean_name.lower())
+        if flag:
+            return f"{flag} {clean_name}"
+        return f"🌍 {clean_name}"
+
+    return "🌍 World"
+
+def get_club_display(player_data: dict) -> str:
+    if not isinstance(player_data, dict):
+        return "🛡️ Club"
+
+    source = str(player_data.get('source', '')).upper()
+    if 'ICON' in source:
+        return "🛡️ Icons"
+    if 'HERO' in source:
+        return "🛡️ Heroes"
+
+    club = player_data.get('club') or player_data.get('team')
+    c_id = None
+    c_name = None
+
+    if isinstance(club, dict):
+        c_id = club.get('id')
+        c_name = club.get('name')
+    elif isinstance(club, int):
+        c_id = club
+    elif isinstance(club, str):
+        if club.isdigit():
+            c_id = int(club)
+        else:
+            c_name = club
+
+    # Secondary field fallbacks
+    if not c_name:
+        c_name = player_data.get('club_name') or player_data.get('clubName') or player_data.get('team_name')
+    if not c_id and player_data.get('club_id'):
+        try:
+            c_id = int(player_data.get('club_id'))
+        except (ValueError, TypeError):
+            pass
+
+    if c_id and c_id in club_map:
+        return club_map[c_id]
+
+    if c_name:
+        clean_name = str(c_name).strip()
+        if clean_name.lower() in ("icons", "icon"):
+            return "🛡️ Icons"
+        if clean_name.lower() in ("heroes", "hero"):
+            return "🛡️ Heroes"
+        if clean_name.startswith("🛡️"):
+            return clean_name
+        return f"🛡️ {clean_name}"
+
+    return "🛡️ Club"
+
 
 import json
 

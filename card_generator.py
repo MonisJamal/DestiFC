@@ -122,6 +122,23 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
     colors = anim.get("colors") or {}
     layout = anim.get("layout") or {}
     
+    # Extract sprite animation if animated is requested
+    sprite_url = None
+    max_frames = 0
+    if animated:
+        anims_list = anim.get("animations") or []
+        if anims_list and isinstance(anims_list, list):
+            for a_entry in anims_list:
+                sub_anims = a_entry.get("animations") or []
+                if sub_anims and isinstance(sub_anims, list):
+                    for sub in sub_anims:
+                        if sub.get("image"):
+                            sprite_url = sub.get("image")
+                            max_frames = sub.get("maxFrames", 30)
+                            break
+                if sprite_url:
+                    break
+
     bg_url = images.get("playerCardBackground") or images.get("background") or player.get("bg_image") or player.get("playerCardBackground")
     player_url = images.get("playerCardImage") or images.get("playerImage") or player.get("imageUrl") or player.get("image") or player.get("playerCardImage")
     flag_url = images.get("flagImage") or player.get("flagImage")
@@ -135,6 +152,8 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
         "bg": (bg_url, target_size),
         "player": (player_url, target_size),
     }
+    if sprite_url:
+        tasks["sprite"] = (sprite_url, None)
     if flag_url and "nation" in layout:
         l = layout["nation"]
         tasks["flag"] = (flag_url, (int(int(l["sizeX"]) * SCALE), int(int(l["sizeY"]) * SCALE)))
@@ -146,7 +165,7 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
         tasks["league"] = (league_url, (int(int(l["sizeX"]) * SCALE), int(int(l["sizeY"]) * SCALE)))
 
     fetched_images = {}
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=6) as executor:
         future_map = {
             executor.submit(get_image_from_url, url_sz[0], url_sz[1]): k 
             for k, url_sz in tasks.items() if url_sz[0]
@@ -219,6 +238,35 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
         draw.text((int(target_size[0] * 0.22), int(target_size[1] * 0.28)), str(rating), fill=(255, 215, 0), font=font_bold(int(22 * SCALE)), anchor='mm')
         draw.text((int(target_size[0] * 0.22), int(target_size[1] * 0.38)), str(player.get("position", "ST")).upper(), fill=(220, 220, 220), font=font_bold(int(14 * SCALE)), anchor='mm')
 
+    # If animated and sprite exists, render animated GIF frames
+    sprite_sheet = fetched_images.get("sprite")
+    if animated and sprite_sheet:
+        try:
+            cols = sprite_sheet.width // 256
+            if cols > 0:
+                capped_frames = min(max_frames or 30, 30)
+                step = 2 if capped_frames > 18 else 1
+                frames = []
+                for frame_idx in range(0, capped_frames, step):
+                    col = frame_idx % cols
+                    row = frame_idx // cols
+                    box = (col * 256, row * 256, (col + 1) * 256, (row + 1) * 256)
+                    frame_sprite = sprite_sheet.crop(box)
+                    if SCALE != 1.0:
+                        frame_sprite = frame_sprite.resize(target_size, Image.Resampling.BILINEAR)
+                    
+                    frame_card = card.copy()
+                    frame_card.alpha_composite(frame_sprite)
+                    frame_card.alpha_composite(overlay)
+                    frames.append(frame_card)
+                    
+                if frames:
+                    if len(_MEMORY_CARD_CACHE) < 500:
+                        _MEMORY_CARD_CACHE[card_cache_key] = frames
+                    return frames
+        except Exception as e:
+            print(f"Error generating animated frames: {e}")
+
     card.alpha_composite(overlay)
     if len(_MEMORY_CARD_CACHE) < 500:
         _MEMORY_CARD_CACHE[card_cache_key] = card.copy()
@@ -227,11 +275,22 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
 def save_card_to_bytes(card_result):
     import io
     binary = io.BytesIO()
-    if isinstance(card_result, list):
-        card_result[0].save(binary, 'GIF', save_all=True, append_images=card_result[1:], duration=100, loop=0, optimize=True)
+    if isinstance(card_result, list) and len(card_result) > 0:
+        card_result[0].save(
+            binary,
+            format='GIF',
+            save_all=True,
+            append_images=card_result[1:],
+            duration=80,
+            loop=0,
+            optimize=True,
+            disposal=2
+        )
         binary.seek(0)
         return binary, 'card.gif'
     else:
+        if isinstance(card_result, list):
+            card_result = card_result[0]
         card_result.save(binary, 'PNG')
         binary.seek(0)
         return binary, 'card.png'
@@ -292,8 +351,10 @@ def get_or_create_card_bytes(player: dict, scale: int = 3, animated: bool = Fals
     raw = bio.getvalue()
     
     # Persist to disk cache
+    actual_ext = "gif" if filename.endswith(".gif") else "png"
+    actual_disk_file = os.path.join(CARD_CACHE_DIR, f"{clean_id}_{rating}_{scale}.{actual_ext}")
     try:
-        with open(disk_file, "wb") as f:
+        with open(actual_disk_file, "wb") as f:
             f.write(raw)
     except Exception:
         pass

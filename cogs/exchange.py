@@ -8,29 +8,9 @@ import json
 import datetime
 from renderz_api import query_players_by_program, fetch_all_players_by_rating
 from card_generator import get_or_create_card_bytes
-from maps import nation_map, club_map, extract_pos
+from maps import nation_map, club_map, extract_pos, get_nation_display, get_club_display
 from auth import is_team_admin_or_owner
 import database
-
-def get_nation_display(player_data):
-    nation = player_data.get('nation')
-    if isinstance(nation, dict):
-        n_id = nation.get('id')
-        if n_id in nation_map: return nation_map[n_id]
-        if nation.get('name'): return f"🌍 {nation['name']}"
-    elif isinstance(nation, str):
-        return f"🌍 {nation}"
-    return "🌍 World"
-
-def get_club_display(player_data):
-    club = player_data.get('club')
-    if isinstance(club, dict):
-        c_id = club.get('id')
-        if c_id in club_map: return club_map[c_id]
-        if club.get('name'): return f"🛡️ {club['name']}"
-    elif isinstance(club, str):
-        return f"🛡️ {club}"
-    return "🛡️ Club"
 
 class ExchangeCog(commands.Cog):
     def __init__(self, bot):
@@ -258,11 +238,13 @@ class ExchangeCog(commands.Cog):
                 player_data = random.choice(fb_players)
 
         # Parallelize database updates and card image generation
+        ovr = player_data.get('rating', 0)
+        is_anim = bool(isinstance(ovr, int) and ovr >= 120)
         db_task = asyncio.gather(
             database.remove_players_from_inventory(user_id, to_delete),
             database.add_player_to_inventory(user_id, player_data)
         )
-        card_gen_task = asyncio.to_thread(get_or_create_card_bytes, player_data, 3, False)
+        card_gen_task = asyncio.to_thread(get_or_create_card_bytes, player_data, 3, is_anim)
 
         image_result, _ = await asyncio.gather(card_gen_task, db_task)
         image_binary, filename = image_result

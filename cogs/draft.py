@@ -9,28 +9,8 @@ import datetime
 import database
 from renderz_api import query_players_by_program, fetch_all_players_by_rating
 from card_generator import generate_card, save_card_to_bytes, get_or_create_card_bytes
-from maps import nation_map, club_map, extract_pos
+from maps import nation_map, club_map, extract_pos, get_nation_display, get_club_display
 from auth import is_team_admin_or_owner
-
-def get_nation_display(player_data):
-    nation = player_data.get('nation')
-    if isinstance(nation, dict):
-        n_id = nation.get('id')
-        if n_id in nation_map: return nation_map[n_id]
-        if nation.get('name'): return f"🌍 {nation['name']}"
-    elif isinstance(nation, str):
-        return f"🌍 {nation}"
-    return "🌍 World"
-
-def get_club_display(player_data):
-    club = player_data.get('club')
-    if isinstance(club, dict):
-        c_id = club.get('id')
-        if c_id in club_map: return club_map[c_id]
-        if club.get('name'): return f"🛡️ {club['name']}"
-    elif isinstance(club, str):
-        return f"🛡️ {club}"
-    return "🛡️ Club"
 
 class DraftCog(commands.Cog):
     def __init__(self, bot):
@@ -388,13 +368,14 @@ class DraftCog(commands.Cog):
                 pack_tier_name = tier_name
 
         # Parallelize database updates and card image generation concurrently
+        is_anim = bool(is_walkout_pack or (isinstance(highest_ovr, int) and highest_ovr >= 120))
         db_task = asyncio.gather(
             database.add_vouchers(user_id, -amount),
             database.add_players_to_inventory_batch(user_id, pulled_players),
             database.increment_drafts(user_id, amount),
             database.set_drafts_since_walkout(user_id, pity_counter)
         )
-        card_gen_task = asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, False)
+        card_gen_task = asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, is_anim)
 
         image_result, _ = await asyncio.gather(card_gen_task, db_task)
         image_binary, filename = image_result
