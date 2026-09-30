@@ -743,3 +743,21 @@ async def preload_official_cards_cache():
     except Exception as e:
         print(f"[Database] Card cache preload note: {e}")
 
+async def get_max_official_ovr() -> int:
+    """
+    Returns the maximum OVR rating available in the official cards database.
+    Dynamically scales when higher-rated cards (e.g., 124+, 125+) are released.
+    """
+    global _OFFICIAL_CARDS_CACHE
+    if _OFFICIAL_CARDS_CACHE:
+        valid_ratings = [r for r, cards in _OFFICIAL_CARDS_CACHE.items() if len(cards) >= 1]
+        if valid_ratings:
+            return max(valid_ratings)
+    try:
+        p = await get_db()
+        max_r = await p.fetchval('SELECT MAX(rating) FROM official_cards')
+        return int(max_r) if max_r else 122
+    except Exception:
+        return 122
+
+
