@@ -18,13 +18,13 @@ _LAYOUTS_CACHE_EXP = 0
 
 async def get_db():
     global _pool
-    if _pool is None:
+    if _pool is None or getattr(_pool, '_closed', False):
         _pool = await asyncpg.create_pool(
             SUPABASE_URL,
-            min_size=5,
-            max_size=30,
-            command_timeout=15,
-            max_inactive_connection_lifetime=300.0,
+            min_size=2,
+            max_size=20,
+            command_timeout=30,
+            max_inactive_connection_lifetime=60.0,
             statement_cache_size=0
         )
     return _pool
