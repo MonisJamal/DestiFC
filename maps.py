@@ -281,3 +281,90 @@ def extract_pos(item) -> str:
 
     return "ST"
 
+# ================= Alternate Position Compatibility =================
+# Players standing in their natural OR alternate positions play at 100% full OVR without penalty
+POSITION_ALTERNATES = {
+    "ST": {"ST", "CF", "CAM", "LF", "RF"},
+    "CF": {"CF", "ST", "CAM", "LF", "RF"},
+    "LF": {"LF", "CF", "ST", "LW"},
+    "RF": {"RF", "CF", "ST", "RW"},
+    "LW": {"LW", "LM", "RW", "ST", "LF"},
+    "RW": {"RW", "RM", "LW", "ST", "RF"},
+    "CAM": {"CAM", "CM", "CF", "ST", "LM", "RM"},
+    "CM": {"CM", "CDM", "CAM", "LM", "RM"},
+    "CDM": {"CDM", "CM", "CB"},
+    "LM": {"LM", "LW", "CM", "LWB", "RM"},
+    "RM": {"RM", "RW", "CM", "RWB", "LM"},
+    "CB": {"CB", "LB", "RB", "CDM"},
+    "LB": {"LB", "LWB", "CB", "LM"},
+    "RB": {"RB", "RWB", "CB", "RM"},
+    "LWB": {"LWB", "LB", "LM", "CB"},
+    "RWB": {"RWB", "RB", "RM", "CB"},
+    "GK": {"GK"}
+}
+
+def is_position_compatible(player_natural_pos: str, slot_pos: str) -> bool:
+    """
+    Returns True if slot_pos is the player's primary position or a natural alternate position.
+    """
+    if not player_natural_pos or not slot_pos:
+        return True
+    clean_slot = ''.join([c for c in str(slot_pos) if not c.isdigit()]).strip().upper()
+    clean_nat = ''.join([c for c in str(player_natural_pos) if not c.isdigit()]).strip().upper()
+    if clean_nat == clean_slot:
+        return True
+    return clean_slot in POSITION_ALTERNATES.get(clean_nat, set())
+
+# ================= Tactics & Formations Synergy =================
+TACTICS = {
+    "Tiki-Taka": {
+        "name": "Tiki-Taka",
+        "description": "Short passing, dominant midfield possession & patient build-up.",
+        "best_formations": ["4-3-3 Holding", "4-1-4-1"],
+        "emoji": "🪄",
+        "boost_focus": "Midfield Control & Possession (+8%)"
+    },
+    "Gegenpressing": {
+        "name": "Gegenpressing",
+        "description": "Aggressive high-press to win turnovers instantly in the opponent third.",
+        "best_formations": ["4-3-3 Attack", "4-2-3-1 Narrow", "4-2-3-1 Wide"],
+        "emoji": "⚡",
+        "boost_focus": "Turnovers, High-Press & Fast Shots (+10%)"
+    },
+    "Wing Play": {
+        "name": "Wing Play",
+        "description": "Exploit wide flanks with pacey wingers delivering dangerous crosses.",
+        "best_formations": ["4-4-2 Flat", "4-3-3 Flat"],
+        "emoji": "🏃",
+        "boost_focus": "Crossing & Corner Aerial Threat (+10%)"
+    },
+    "Counter-Attack": {
+        "name": "Counter-Attack",
+        "description": "Absorb opponent pressure and hit lightning-fast clinical breakaways.",
+        "best_formations": ["5-2-1-2", "4-4-2 Holding", "4-3-3 Defend"],
+        "emoji": "🏹",
+        "boost_focus": "Breakaway Goals & Defensive Resilience (+12%)"
+    },
+    "Kick and Rush": {
+        "name": "Kick and Rush",
+        "description": "Direct long balls into the penalty box for powerful physical strikers.",
+        "best_formations": ["4-4-2 Flat", "5-4-1 Flat", "5-4-1 Defend"],
+        "emoji": "🚀",
+        "boost_focus": "Direct Long Balls & Box Power (+10%)"
+    },
+    "Park the Bus": {
+        "name": "Park the Bus",
+        "description": "Impenetrable defensive low block in the box frustrating attacks.",
+        "best_formations": ["5-4-1 Flat", "5-4-1 Defend", "4-5-1 Flat", "4-5-1 Attack"],
+        "emoji": "🚌",
+        "boost_focus": "Defensive Blocks & Clean Sheet Rate (+15%)"
+    },
+    "Vertical Tiki-Taka": {
+        "name": "Vertical Tiki-Taka",
+        "description": "Quick vertical triangles slicing through central defensive channels.",
+        "best_formations": ["4-3-2-1", "4-1-2-1-2 Narrow"],
+        "emoji": "🔺",
+        "boost_focus": "Central Through Balls & xG Efficiency (+12%)"
+    }
+}
+

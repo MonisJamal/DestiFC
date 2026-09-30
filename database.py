@@ -15,6 +15,9 @@ _DRAFTS_CACHE = None
 _DRAFTS_CACHE_EXP = 0
 _LAYOUTS_CACHE = None
 _LAYOUTS_CACHE_EXP = 0
+_USER_INVENTORY_CACHE = {}  # {user_id: {"data": list, "exp": timestamp}}
+_USER_SQUAD_CACHE = {}      # {user_id: {"data": dict, "exp": timestamp}}
+_USER_CACHE = {}            # {user_id: {"data": dict, "exp": timestamp}}
 
 async def get_db():
     global _pool
@@ -23,7 +26,7 @@ async def get_db():
             SUPABASE_URL,
             min_size=2,
             max_size=20,
-            command_timeout=30,
+            command_timeout=20,
             max_inactive_connection_lifetime=60.0,
             statement_cache_size=0
         )
@@ -229,12 +232,26 @@ async def set_highest_div(user_id: int, div: str):
 async def set_starter_claimed(user_id: int):
     pass
 
+async def get_user_rank(user_id: int) -> dict:
+    p = await get_db()
+    try:
+        user_fans = await p.fetchval('SELECT fans FROM users WHERE user_id = $1', user_id)
+        if user_fans is None:
+            user_fans = 0
+        rank = await p.fetchval('SELECT COUNT(*) + 1 FROM users WHERE fans > $1', user_fans)
+        total = await p.fetchval('SELECT COUNT(*) FROM users')
+        return {"rank": int(rank or 1), "fans": int(user_fans), "total_users": int(total or 1)}
+    except Exception as e:
+        print(f"[Database] Error getting user rank: {e}")
+        return {"rank": 1, "fans": 0, "total_users": 1}
+
 async def add_player_to_inventory(user_id: int, player_data: dict):
     await add_players_to_inventory_batch(user_id, [player_data])
 
 async def add_players_to_inventory_batch(user_id: int, player_list: list):
     if not player_list:
         return
+    _USER_INVENTORY_CACHE.pop(user_id, None)
     p = await get_db()
     records = []
     for player_data in player_list:
@@ -250,34 +267,63 @@ async def add_players_to_inventory_batch(user_id: int, player_list: list):
     )
 
 async def get_inventory(user_id: int) -> list:
+    now = time.time()
+    if user_id in _USER_INVENTORY_CACHE:
+        cached = _USER_INVENTORY_CACHE[user_id]
+        if now - cached['exp'] < 20:
+            return cached['data']
     p = await get_db()
     rows = await p.fetch('SELECT * FROM inventory WHERE user_id = $1 ORDER BY ovr DESC', user_id)
-    return [dict(r) for r in rows]
+    inv = [dict(r) for r in rows]
+    _USER_INVENTORY_CACHE[user_id] = {"data": inv, "exp": now}
+    return inv
 
 async def get_inventory_autocomplete(user_id: int, search: str = "") -> list:
+    now = time.time()
+    clean_search = (search or "").strip().lower()
+    
+    # Check in-memory inventory cache first for 0ms instantaneous autocomplete response
+    if user_id in _USER_INVENTORY_CACHE:
+        cached = _USER_INVENTORY_CACHE[user_id]
+        if now - cached['exp'] < 20:
+            inv = cached['data']
+            if clean_search:
+                results = [
+                    p for p in inv 
+                    if clean_search in str(p.get('player_name', '')).lower() 
+                    or clean_search in str(p.get('id', ''))
+                ]
+            else:
+                results = inv
+            return results[:25]
+
     p = await get_db()
-    clean_search = (search or "").strip()
-    if clean_search:
-        rows = await p.fetch(
-            '''SELECT id, player_name, ovr, player_data 
-               FROM inventory 
-               WHERE user_id = $1 AND (player_name ILIKE $2 OR id::text LIKE $2) 
-               ORDER BY ovr DESC, id DESC 
-               LIMIT 25''',
-            user_id, f"%{clean_search}%"
-        )
-    else:
-        rows = await p.fetch(
-            '''SELECT id, player_name, ovr, player_data 
-               FROM inventory 
-               WHERE user_id = $1 
-               ORDER BY ovr DESC, id DESC 
-               LIMIT 25''',
-            user_id
-        )
-    return [dict(r) for r in rows]
+    try:
+        if clean_search:
+            rows = await asyncio.wait_for(p.fetch(
+                '''SELECT id, player_name, ovr, player_data, locked 
+                   FROM inventory 
+                   WHERE user_id = $1 AND (player_name ILIKE $2 OR id::text LIKE $2) 
+                   ORDER BY ovr DESC, id DESC 
+                   LIMIT 25''',
+                user_id, f"%{clean_search}%"
+            ), timeout=1.8)
+        else:
+            rows = await asyncio.wait_for(p.fetch(
+                '''SELECT id, player_name, ovr, player_data, locked 
+                   FROM inventory 
+                   WHERE user_id = $1 
+                   ORDER BY ovr DESC, id DESC 
+                   LIMIT 25''',
+                user_id
+            ), timeout=1.8)
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
 
 async def get_inventory_size(user_id: int) -> int:
+    if user_id in _USER_INVENTORY_CACHE:
+        return len(_USER_INVENTORY_CACHE[user_id]['data'])
     p = await get_db()
     val = await p.fetchval('SELECT COUNT(*) FROM inventory WHERE user_id = $1', user_id)
     return val or 0
@@ -285,6 +331,7 @@ async def get_inventory_size(user_id: int) -> int:
 async def remove_players_from_inventory(user_id: int, inventory_ids: list):
     if not inventory_ids:
         return
+    _USER_INVENTORY_CACHE.pop(user_id, None)
     p = await get_db()
     int_ids = [int(x) for x in inventory_ids]
     await p.execute(
@@ -293,17 +340,30 @@ async def remove_players_from_inventory(user_id: int, inventory_ids: list):
     )
 
 async def get_squad(user_id: int) -> dict:
+    now = time.time()
+    if user_id in _USER_SQUAD_CACHE:
+        cached = _USER_SQUAD_CACHE[user_id]
+        if now - cached['exp'] < 30:
+            return cached['data']
+
     await get_user(user_id)
     p = await get_db()
     row = await p.fetchrow('SELECT active_squad FROM squads WHERE user_id = $1', user_id)
     if row and row['active_squad']:
-        data = json.loads(row['active_squad'])
+        try:
+            data = json.loads(row['active_squad'])
+        except Exception:
+            data = {}
         if "formation" not in data:
-            data = {"formation": "4-3-3", "players": data}
+            data = {"formation": "4-3-3 Flat", "players": data.get("players", data)}
+        if "tactic" not in data:
+            data["tactic"] = "Tiki-Taka"
+        _USER_SQUAD_CACHE[user_id] = {"data": data, "exp": now}
         return data
     
     default_squad = {
-        "formation": "4-3-3",
+        "formation": "4-3-3 Flat",
+        "tactic": "Tiki-Taka",
         "players": {
             "LW": None, "ST": None, "RW": None,
             "CM1": None, "CM2": None, "CM3": None,
@@ -315,9 +375,11 @@ async def get_squad(user_id: int) -> dict:
         'INSERT INTO squads (user_id, active_squad) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET active_squad = $2',
         user_id, json.dumps(default_squad)
     )
+    _USER_SQUAD_CACHE[user_id] = {"data": default_squad, "exp": now}
     return default_squad
 
 async def update_squad(user_id: int, squad: dict):
+    _USER_SQUAD_CACHE[user_id] = {"data": squad, "exp": time.time()}
     await get_user(user_id)
     p = await get_db()
     await p.execute(
@@ -804,11 +866,12 @@ async def get_max_official_ovr() -> int:
 
 async def record_player_match_stats(user_id: int, stats_list: list[dict]):
     """
-    Records detailed post-match stats for an array of players for a user.
+    Records detailed post-match stats for an array of players for a user in a single batch operation.
     """
     if not stats_list:
         return
     p = await get_db()
+    records = []
     for s in stats_list:
         p_name = s.get("player_name") or s.get("name") or "Player"
         p_id = str(s.get("player_id") or s.get("id") or "")
@@ -821,29 +884,30 @@ async def record_player_match_stats(user_id: int, stats_list: list[dict]):
         reds = int(s.get("red_cards") or s.get("reds") or 0)
         rating = float(s.get("rating") or 6.0)
         motm = int(s.get("is_motm") or 0)
+        records.append((user_id, p_name, p_id, pos, ovr, goals, assists, clean_sheets, yellows, reds, rating, motm))
 
-        try:
-            await p.execute('''
-                INSERT INTO player_stats (
-                    user_id, player_name, player_id, position, ovr,
-                    matches_played, goals, assists, clean_sheets,
-                    yellow_cards, red_cards, total_rating, motm_count
-                ) VALUES ($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10, $11, $12)
-                ON CONFLICT (user_id, player_name) DO UPDATE SET
-                    player_id = COALESCE(NULLIF(EXCLUDED.player_id, ''), player_stats.player_id),
-                    position = COALESCE(EXCLUDED.position, player_stats.position),
-                    ovr = GREATEST(COALESCE(player_stats.ovr, 0), EXCLUDED.ovr),
-                    matches_played = player_stats.matches_played + 1,
-                    goals = player_stats.goals + EXCLUDED.goals,
-                    assists = player_stats.assists + EXCLUDED.assists,
-                    clean_sheets = player_stats.clean_sheets + EXCLUDED.clean_sheets,
-                    yellow_cards = player_stats.yellow_cards + EXCLUDED.yellow_cards,
-                    red_cards = player_stats.red_cards + EXCLUDED.red_cards,
-                    total_rating = player_stats.total_rating + EXCLUDED.total_rating,
-                    motm_count = player_stats.motm_count + EXCLUDED.motm_count
-            ''', user_id, p_name, p_id, pos, ovr, goals, assists, clean_sheets, yellows, reds, rating, motm)
-        except Exception as e:
-            print(f"[Database] Error recording stats for {p_name}: {e}")
+    try:
+        await p.executemany('''
+            INSERT INTO player_stats (
+                user_id, player_name, player_id, position, ovr,
+                matches_played, goals, assists, clean_sheets,
+                yellow_cards, red_cards, total_rating, motm_count
+            ) VALUES ($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10, $11, $12)
+            ON CONFLICT (user_id, player_name) DO UPDATE SET
+                player_id = COALESCE(NULLIF(EXCLUDED.player_id, ''), player_stats.player_id),
+                position = COALESCE(EXCLUDED.position, player_stats.position),
+                ovr = GREATEST(COALESCE(player_stats.ovr, 0), EXCLUDED.ovr),
+                matches_played = player_stats.matches_played + 1,
+                goals = player_stats.goals + EXCLUDED.goals,
+                assists = player_stats.assists + EXCLUDED.assists,
+                clean_sheets = player_stats.clean_sheets + EXCLUDED.clean_sheets,
+                yellow_cards = player_stats.yellow_cards + EXCLUDED.yellow_cards,
+                red_cards = player_stats.red_cards + EXCLUDED.red_cards,
+                total_rating = player_stats.total_rating + EXCLUDED.total_rating,
+                motm_count = player_stats.motm_count + EXCLUDED.motm_count
+        ''', records)
+    except Exception as e:
+        print(f"[Database] Error batch recording stats: {e}")
 
 async def get_user_player_stats(user_id: int, player_name: str = None) -> list[dict]:
     """

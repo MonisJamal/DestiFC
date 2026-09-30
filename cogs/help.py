@@ -19,7 +19,9 @@ class HelpCog(commands.Cog):
 `> /starterpack` - 🎁 Claim your one-time 300 Million Coins & Starter Squad!
 `> /draft` - Open active Draft Packs (pools rotate every 2 hours!)
 `> /draft_info` - See which players are featured in each draft
-`> /exchange` - Trade 25 unwanted cards for a Guaranteed 120+ Walkout!
+`> /exchange` - Trade 15 Pool C, 5 Pool B, 1 Pool A cards for a Guaranteed 120+ Walkout!
+`> /club_stats` (or `/stats`) - View club performance leaders (Top Scorer, Assists, Ratings, Clean Sheets)
+`> /player_stats <player>` - View lifetime match stats of a specific player
         """, inline=False)
         
         embed.add_field(name="⚔️ FC Draft Battles 1v1 (New!)", value="""
@@ -38,8 +40,9 @@ class HelpCog(commands.Cog):
 `> /trade send <user>` - 🤝 Trade cards, coins & vouchers directly with another user!
         """, inline=False)
 
-        embed.add_field(name="🛡️ Squad & Themes", value="""
+        embed.add_field(name="🛡️ Squad, Tactics & Themes", value="""
 `> /squad autobuild` - ⚡ Auto-fill your squad with your highest OVR players!
+`> /squad tactic <tactic>` - 🧠 Set team playstyle (Tiki-Taka, Gegenpressing, Counter-Attack, etc.) for synergy boosts!
 `> /squad view [user]` - Generate 3D stadium pitch lineup of your or another user's Starting 11!
 `> /squad lock <id>` - 🔒 Lock a player to protect from exchange/SBC/quicksell
 `> /inventory [user]` - View your or another user's club cards
@@ -48,7 +51,7 @@ class HelpCog(commands.Cog):
         """, inline=False)
         
         embed.add_field(name="🏆 Economy, Rivals & Pass", value="""
-`> /play <user>` - Challenge a friend to Live H2H! (Win = +10M Coins, +1 Voucher, +10k Fans)
+`> /play <user>` - Challenge a friend to Live H2H with line-by-line tactical simulation!
 `> /leaderboard [type]` - 🌍 View Global Leaderboards for Fans, Coins, or Vouchers!
 `> /daily` - Claim daily coins & 15% jackpot chance
 `> /season` - View Season Pass tiers and claim rewards
@@ -100,9 +103,9 @@ Join the official DestiFC Support Server for updates, pack flex, giveaways, and 
         embed.add_field(
             name="3️⃣ Drafts, Packs & The 2-Hour Rotator",
             value=(
-                "• `/draft` — Open Standard (10M), Premium (50M), or Ultimate Draft (1 Voucher) packs!\n"
-                "• **Pity System**: Every 10–15 packs guarantees a top **Pool A Walkout** (120–122 OVR).\n"
-                "• **2-Hour Pool Rotations**: Draft pools rotate every 2 hours featuring different 120–122 superstars across all 357 top cards!\n"
+                "• `/draft` — Open Standard, Premium, or Ultimate Draft packs!\n"
+                "• **Pity System**: Every 10 packs guarantees an Elite/Pool B card, and 70 packs guarantees a **Pool A Walkout** (120–122 OVR).\n"
+                "• **2-Hour Pool Rotations**: Draft pools rotate every 2 hours featuring different 120–122 superstars across top cards!\n"
                 "• `/draft_info` — Inspect currently featured event players and probabilities."
             ),
             inline=False
@@ -122,13 +125,14 @@ Join the official DestiFC Support Server for updates, pack flex, giveaways, and 
         )
 
         embed.add_field(
-            name="5️⃣ Squads, 34 Formations & 3D Pitch View",
+            name="5️⃣ Squads, Tactics, Formations & 3D Pitch View",
             value=(
                 "• `/squad formation <name>` — Choose from 34 tactical setups (e.g. `4-1-2-1-2 Narrow`, `4-3-3 Attack`, `3-5-2`, `5-2-1-2`).\n"
-                "• `/squad autobuild` — Automatically place your highest OVR cards into optimal positions!\n"
+                "• `/squad tactic <tactic>` — Set team tactics (Tiki-Taka, Gegenpressing, Counter-Attack, Park the Bus, etc.) for tactical synergy boosts!\n"
+                "• `/squad autobuild` — Automatically place your highest OVR cards into optimal positions (including alternate positions at 100% full OVR)!\n"
                 "• `/squad view [user]` — Render a photorealistic 3D holographic stadium pitch with transparent cards!\n"
                 "• `/squad lock <id>` — Lock your favorite cards so they cannot be accidentally quicksold or exchanged.\n"
-                "• `/store themes` & `/squad theme <id>` — Unlock snow, lava, cyberpunk, galaxy, gold, and desert pitches!"
+                "• `/stats` & `/player_stats` — Track lifetime top scorers, assists, ratings, clean sheets, and cards!"
             ),
             inline=False
         )
@@ -136,7 +140,7 @@ Join the official DestiFC Support Server for updates, pack flex, giveaways, and 
         embed.add_field(
             name="6️⃣ Exchanges, SBCs & 4-Hour Player Store",
             value=(
-                "• `/exchange` — Trade **25 unwanted cards** (100–119 OVR) for a **Guaranteed 120–122 Walkout**!\n"
+                "• `/exchange` — Trade **15 Pool C, 5 Pool B, 1 Pool A** cards for a **Guaranteed 120–122 Walkout**!\n"
                 "• `/sbc` — Solve daily squad challenges for coins, vouchers, and exclusive packs.\n"
                 "• `/store players` — Direct 4-hour shop featuring 3 rotating 120–122 Prime Icons/Superstars!\n"
                 "• `/market` — Buy and list players on the global user transfer market.\n"

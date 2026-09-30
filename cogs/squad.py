@@ -41,7 +41,7 @@ FORMATION_MAP = {
 }
 
 import database
-from maps import extract_pos
+from maps import extract_pos, TACTICS, is_position_compatible
 from cogs.market import get_price_limits, format_price_short
 
 async def formation_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
@@ -251,12 +251,24 @@ class SquadCog(commands.Cog):
                     self._render_cache[cache_key] = png_bytes
 
             file = discord.File(fp=io.BytesIO(png_bytes), filename='lineup.png')
-            embed = discord.Embed(title=f"🛡️ {target.display_name}'s Squad", description=f"**Formation:** {formation} | **Team OVR:** {team_ovr}", color=discord.Color.blue())
+            
+            tactic_name = squad.get("tactic", "Tiki-Taka")
+            t_data = TACTICS.get(tactic_name, TACTICS["Tiki-Taka"])
+            is_synergy = any(f.lower() in formation.lower() for f in t_data["best_formations"])
+            tactic_badge = f"{t_data['emoji']} **{tactic_name}**" + (" `[🌟 SYNERGY BOOST!]`" if is_synergy else "")
+            
+            embed = discord.Embed(
+                title=f"🛡️ {target.display_name}'s Squad", 
+                description=f"**Formation:** `{formation}` | **Team OVR:** `{team_ovr}`\n**Playstyle Tactic:** {tactic_badge}", 
+                color=discord.Color.green() if is_synergy else discord.Color.blue()
+            )
             embed.set_image(url="attachment://lineup.png")
             
             if count < 11:
                 footer_msg = "Your squad is incomplete! Use /squad set to add players." if target.id == interaction.user.id else f"{target.display_name}'s squad is incomplete ({count}/11 players)."
                 embed.set_footer(text=footer_msg)
+            else:
+                embed.set_footer(text=f"Tactical Focus: {t_data['boost_focus']} • Use /squad tactic to change")
                 
             await interaction.followup.send(embed=embed, file=file)
         except Exception as e:
@@ -269,15 +281,62 @@ class SquadCog(commands.Cog):
         if new_formation not in FORMATION_MAP:
             return await interaction.followup.send("❌ Invalid formation selected. Please use the autocomplete choices.", ephemeral=True)
             
+        squad = await database.get_squad(interaction.user.id)
         positions = FORMATION_MAP[new_formation].copy()
             
         new_squad = {
             "formation": new_formation,
+            "tactic": squad.get("tactic", "Tiki-Taka"),
+            "theme": squad.get("theme", "default"),
             "players": positions
         }
         
         await database.update_squad(interaction.user.id, new_squad)
-        await interaction.followup.send(f"✅ Formation changed to **{new_formation}**! Your squad has been reset, please set your players again.")
+        t_data = TACTICS.get(new_squad["tactic"], TACTICS["Tiki-Taka"])
+        is_syn = any(f.lower() in new_formation.lower() for f in t_data["best_formations"])
+        syn_msg = f"\n🌟 **Tactical Chemistry Synergy is ACTIVE with your {t_data['emoji']} {t_data['name']} tactic!**" if is_syn else f"\n💡 *Tip: Best suitable tactic for {new_formation}: Check `/squad tactic`.*"
+        
+        await interaction.followup.send(f"✅ Formation changed to **{new_formation}**! Your squad has been reset, please set your players again.{syn_msg}")
+
+    @squad_group.command(name="tactic", description="Select or view your team's tactical playstyle & formation synergy")
+    @app_commands.describe(tactic="Select playstyle tactic for your club")
+    @app_commands.choices(tactic=[
+        app_commands.Choice(name="Tiki-Taka (Best: 4-3-3 Holding, 4-1-4-1)", value="Tiki-Taka"),
+        app_commands.Choice(name="Gegenpressing (Best: 4-3-3 Attack, 4-2-3-1)", value="Gegenpressing"),
+        app_commands.Choice(name="Wing Play (Best: 4-4-2 Flat, 4-3-3 Flat)", value="Wing Play"),
+        app_commands.Choice(name="Counter-Attack (Best: 5-2-1-2, 4-4-2 Holding)", value="Counter-Attack"),
+        app_commands.Choice(name="Kick and Rush (Best: 4-4-2 Flat, 5-4-1)", value="Kick and Rush"),
+        app_commands.Choice(name="Park the Bus (Best: 5-4-1, 4-5-1)", value="Park the Bus"),
+        app_commands.Choice(name="Vertical Tiki-Taka (Best: 4-3-2-1, 4-1-2-1-2 Narrow)", value="Vertical Tiki-Taka"),
+    ])
+    async def set_tactic(self, interaction: discord.Interaction, tactic: str = None):
+        await interaction.response.defer()
+        squad = await database.get_squad(interaction.user.id)
+        current_tactic = squad.get("tactic", "Tiki-Taka")
+        formation = squad.get("formation", "4-3-3 Flat")
+        
+        if not tactic:
+            t_data = TACTICS.get(current_tactic, TACTICS["Tiki-Taka"])
+            is_synergy = any(f.lower() in formation.lower() for f in t_data["best_formations"])
+            synergy_str = "✅ **Tactical Synergy Active! (+10% In-Match Gameplay Boost)**" if is_synergy else f"⚠️ *No Synergy with current formation ({formation}). Best formations:* `{', '.join(t_data['best_formations'])}`"
+            embed = discord.Embed(
+                title=f"{t_data['emoji']} Active Club Tactic: {t_data['name']}",
+                description=f"{t_data['description']}\n\n**Specialty Focus:** {t_data['boost_focus']}\n\n{synergy_str}",
+                color=discord.Color.green() if is_synergy else discord.Color.gold()
+            )
+            embed.set_footer(text="Use /squad tactic [tactic] to change your playstyle!")
+            return await interaction.followup.send(embed=embed)
+
+        if tactic not in TACTICS:
+            return await interaction.followup.send("❌ Invalid tactic selected.", ephemeral=True)
+
+        squad["tactic"] = tactic
+        await database.update_squad(interaction.user.id, squad)
+        t_data = TACTICS[tactic]
+        is_synergy = any(f.lower() in formation.lower() for f in t_data["best_formations"])
+        synergy_str = "🌟 **Tactical Chemistry Synergy Activated!**" if is_synergy else f"ℹ️ *Tip: Switch formation to `{', '.join(t_data['best_formations'])}` for maximum synergy boost.*"
+        
+        await interaction.followup.send(f"✅ Set club tactic to **{t_data['emoji']} {tactic}**!\n{synergy_str}")
 
     @squad_group.command(name="set", description="Set a player card in your starting 11 squad")
     @app_commands.describe(position="Position slot in your formation", player="Select player card from your inventory (or type card name/ID)")
@@ -375,9 +434,12 @@ class SquadCog(commands.Cog):
             "ovr": new_ovr
         }
         
-        await database.update_squad(interaction.user.id, squad)
+        card_pos = extract_pos(player_row)
+        clean_target = ''.join([c for c in target_pos if not c.isdigit()]).strip().upper()
+        clean_card = ''.join([c for c in card_pos if not c.isdigit()]).strip().upper()
+        alt_note = f" *(Alternate Position: `{clean_card}` ➔ `{clean_target}` • 100% OVR)*" if (clean_card != clean_target and is_position_compatible(clean_card, clean_target)) else ""
         reposition_note = f" (Moved from **{repositioned_from}**)" if repositioned_from else ""
-        await interaction.followup.send(f"✅ Set **{new_name} ({new_ovr} OVR)** as your starting **{target_pos}**!{reposition_note}")
+        await interaction.followup.send(f"✅ Set **{new_name} ({new_ovr} OVR)** as your starting **{target_pos}**!{reposition_note}{alt_note}")
 
     @squad_group.command(name="remove", description="Remove a player from a specific squad position")
     @app_commands.describe(position="Position slot to empty")
@@ -411,35 +473,13 @@ class SquadCog(commands.Cog):
             await interaction.followup.send("❌ Your club is empty! Open some packs with `/draft` first.", ephemeral=True)
             return
         
-        # FC Mobile position compatibility: squad slot -> which player positions can fill it
-        pos_compat = {
-            "ST": ["ST", "CF"],       "ST1": ["ST", "CF"],      "ST2": ["ST", "CF"],
-            "CF": ["CF", "ST", "CAM"],
-            "LW": ["LW", "LM", "LF"], "RW": ["RW", "RM", "RF"],
-            "LF": ["LF", "LW"],       "RF": ["RF", "RW"],
-            "CAM": ["CAM", "CF", "CM"], "CAM1": ["CAM", "CF", "CM"], "CAM2": ["CAM", "CF", "CM"], "CAM3": ["CAM", "CF", "CM"],
-            "CM": ["CM", "CAM", "CDM"], "CM1": ["CM", "CAM", "CDM"], "CM2": ["CM", "CAM", "CDM"], "CM3": ["CM", "CAM", "CDM"],
-            "CDM": ["CDM", "CM"],      "CDM1": ["CDM", "CM"],     "CDM2": ["CDM", "CM"],
-            "LM": ["LM", "LW"],       "RM": ["RM", "RW"],
-            "LB": ["LB", "LWB"],      "RB": ["RB", "RWB"],
-            "LWB": ["LWB", "LB"],     "RWB": ["RWB", "RB"],
-            "CB": ["CB"],             "CB1": ["CB"],             "CB2": ["CB"],  "CB3": ["CB"],
-            "GK": ["GK"]
-        }
-        
-        # Parse each inventory card's position from player_data JSON
-        import json
+        # Parse each inventory card's position
         enriched = []
         for p in inventory:
-            player_pos = "ST"  # fallback
-            try:
-                pd = json.loads(p['player_data']) if isinstance(p['player_data'], str) else p['player_data']
-                player_pos = str(pd.get('position', 'ST')).strip().upper()
-            except: pass
+            player_pos = extract_pos(p)
             enriched.append({**p, 'pos': player_pos})
         
-        # Sort by OVR descending, and then by OVR asc? No, just OVR desc.
-        # This guarantees highest OVR gets placed first!
+        # Sort by OVR descending so highest OVR gets prioritized
         enriched.sort(key=lambda x: x['ovr'], reverse=True)
         
         new_players = {slot: None for slot in positions}
@@ -450,12 +490,11 @@ class SquadCog(commands.Cog):
             if p['id'] in used_ids: continue
             if p['player_name'] in used_names: continue
             
-            # Find an empty slot this player is compatible with
+            # Find an empty slot this player is compatible with (Natural or Alternate position)
             assigned = False
             for slot in positions:
                 if new_players[slot] is not None: continue # slot is full
-                allowed = pos_compat.get(slot, [slot])
-                if p['pos'] in allowed:
+                if is_position_compatible(p['pos'], slot):
                     new_players[slot] = {
                         "inv_id": p['id'],
                         "name": p['player_name'],

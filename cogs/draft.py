@@ -323,6 +323,27 @@ class DraftCog(commands.Cog):
 
         custom_draft_pool = await database.get_all_custom_draft_cards()
 
+        # Helper to pick Pool A card with exact weightings (6% 122, 35% 121, 59% 120)
+        def pick_pool_a_weighted(pool_a_list):
+            if not pool_a_list:
+                return {}
+            cards_122 = [p for p in pool_a_list if (p.get('rating') or 0) >= 122]
+            cards_121 = [p for p in pool_a_list if (p.get('rating') or 0) == 121]
+            cards_120 = [p for p in pool_a_list if (p.get('rating') or 0) <= 120]
+            
+            tier_roll = random.uniform(0, 100)
+            if tier_roll < 6.0 and cards_122:
+                return random.choice(cards_122)
+            elif tier_roll < 41.0 and cards_121:
+                return random.choice(cards_121)
+            elif cards_120:
+                return random.choice(cards_120)
+            elif cards_121:
+                return random.choice(cards_121)
+            elif cards_122:
+                return random.choice(cards_122)
+            return random.choice(pool_a_list)
+
         # Roll for all packs
         for _ in range(amount):
             current_drafts += 1
@@ -332,10 +353,10 @@ class DraftCog(commands.Cog):
             
             # Pity Triggers — 70th pack guaranteed Pool A, 10th pack guaranteed Pool B
             if pity_counter >= 70:
-                roll = random.uniform(0.01, 2.99)  # Force Pool A
+                roll = random.uniform(0.01, 2.49)  # Force Pool A
             elif pity_counter % 10 == 0:
-                if roll > 33.0:
-                    roll = random.uniform(3.1, 33.0)  # Force Pool B
+                if roll > 32.5:
+                    roll = random.uniform(2.6, 32.5)  # Force Pool B
             
             if custom_draft_pool and random.random() < 0.03:
                 player_data = random.choice(custom_draft_pool)
@@ -343,18 +364,18 @@ class DraftCog(commands.Cog):
                 tier_name = "CUSTOM LEGEND 👑" if is_walkout else "CUSTOM ELITE 💎"
                 if is_walkout:
                     pity_counter = 0
-            elif roll <= 3.0:
-                # Pool A (3% base chance: 1.5x boosted)
+            elif roll <= 2.5:
+                # Pool A (2.5% base chance: 6% for 122, 35% for 121, 59% for 120)
                 is_walkout = True
                 pity_counter = 0  # RESET PITY IMMEDIATELY
                 tier_name = "WALKOUT 🌟🌟🌟"
-                player_data = random.choice(d['pool_a'])
-            elif roll <= 33.0:
+                player_data = pick_pool_a_weighted(d['pool_a'])
+            elif roll <= 32.5:
                 # Pool B (30% chance: 117-119)
                 tier_name = "Elite ✨✨"
-                player_data = random.choice(d['pool_b']) if d.get('pool_b') else random.choice(d['pool_a'])
+                player_data = random.choice(d['pool_b']) if d.get('pool_b') else pick_pool_a_weighted(d['pool_a'])
             else:
-                # Pool C (68% chance: 112-116)
+                # Pool C (67.5% chance: 110-116)
                 tier_name = "Standard"
                 player_data = random.choice(d['pool_c']) if d.get('pool_c') else (random.choice(d.get('pool_b', d['pool_a'])))
                 

@@ -111,7 +111,7 @@ class ExchangeCog(commands.Cog):
 
         embed = discord.Embed(
             title="🔄 2-Hour Guaranteed Exchange Pool",
-            description=f"Exchange 25 cards using `/exchange` to win one of these guaranteed featured walkouts!\n\n**Expires:** {expires_display}",
+            description=f"Exchange 21 cards (15 Pool C, 5 Pool B, 1 Pool A) using `/exchange` to win one of these guaranteed featured walkouts!\n\n**Expires:** {expires_display}",
             color=0xF59E0B
         )
 
@@ -126,11 +126,11 @@ class ExchangeCog(commands.Cog):
         mid_lines = [format_player_line(p) for p in pool.get('cards_121', [])]
         low_lines = [format_player_line(p) for p in pool.get('cards_120', [])]
 
-        embed.add_field(name=f"👑 Grand Master Walkouts ({ovr_top} OVR — 2 Cards • 10% Chance)", value="\n".join(top_lines) if top_lines else "*Rotating...*", inline=False)
-        embed.add_field(name=f"✨ Elite Master Walkouts ({ovr_mid} OVR — 5 Cards • 40% Chance)", value="\n".join(mid_lines) if mid_lines else "*Rotating...*", inline=False)
-        embed.add_field(name=f"🌟 Prime Walkouts ({ovr_low} OVR — 5 Cards • 50% Chance)", value="\n".join(low_lines) if low_lines else "*Rotating...*", inline=False)
+        embed.add_field(name=f"👑 Grand Master Walkouts ({ovr_top} OVR — 2 Cards • 6% Chance)", value="\n".join(top_lines) if top_lines else "*Rotating...*", inline=False)
+        embed.add_field(name=f"✨ Elite Master Walkouts ({ovr_mid} OVR — 5 Cards • 35% Chance)", value="\n".join(mid_lines) if mid_lines else "*Rotating...*", inline=False)
+        embed.add_field(name=f"🌟 Prime Walkouts ({ovr_low} OVR — 5 Cards • 59% Chance)", value="\n".join(low_lines) if low_lines else "*Rotating...*", inline=False)
 
-        embed.set_footer(text="Trade 25 club cards in /exchange • Guaranteed 120+ Walkout Every Time!")
+        embed.set_footer(text="Trade 21 club cards in /exchange (15 Pool C, 5 Pool B, 1 Pool A) • Guaranteed 120+ Walkout Every Time!")
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="exchange_refresh", description="[ADMIN] Force refresh the 2-Hour Exchange Pool right now")
@@ -148,12 +148,12 @@ class ExchangeCog(commands.Cog):
 
     async def exchange_autocomplete(self, interaction: discord.Interaction, current: str):
         choices = [
-            app_commands.Choice(name="Standard Exchange (25 Any Cards -> Active 120-122 Walkout Pool)", value="standard"),
+            app_commands.Choice(name="Standard Exchange (15x Pool C, 5x Pool B, 1x Pool A -> 120-122 Walkout)", value="standard"),
             app_commands.Choice(name="Fodder Exchange (20x 110-116 Cards -> 117-119 Card)", value="fodder")
         ]
         return [c for c in choices if current.lower() in c.name.lower()]
 
-    @app_commands.command(name="exchange", description="Trade useless cards for guaranteed high OVR players!")
+    @app_commands.command(name="exchange", description="Trade cards for guaranteed high OVR walkouts!")
     @app_commands.autocomplete(exchange_type=exchange_autocomplete)
     async def exchange(self, interaction: discord.Interaction, exchange_type: str = "standard"):
         await interaction.response.defer()
@@ -178,7 +178,16 @@ class ExchangeCog(commands.Cog):
                 if isinstance(row, dict): return int(row.get('ovr', 0))
                 return json.loads(row[1]).get('rating', 0)
             except: return 0
+
+        def format_card_entry(r):
+            pname = r.get('player_name') or 'Player'
+            ovr_val = get_ovr(r)
+            pos_val = extract_pos(r)
+            return f"`{pname} ({pos_val} {ovr_val})`"
             
+        consumed_field_value = ""
+        total_consumed = 0
+
         if exchange_type == "fodder":
             cost = 20
             # Filter for 110-116
@@ -187,8 +196,15 @@ class ExchangeCog(commands.Cog):
                 return await interaction.followup.send(f"❌ You don't have enough Fodder cards! You need {cost} cards rated between 110-116, but you only have {len(fodder_cards)}.", ephemeral=True)
                 
             fodder_cards.sort(key=get_ovr)
-            to_delete = [row['id'] if isinstance(row, dict) else row[0] for row in fodder_cards[:cost]]
+            consumed_list = fodder_cards[:cost]
+            to_delete = [row['id'] if isinstance(row, dict) else row[0] for row in consumed_list]
+            total_consumed = cost
             
+            consumed_preview = ", ".join([format_card_entry(r) for r in consumed_list[:6]])
+            if len(consumed_list) > 6:
+                consumed_preview += f" *+{len(consumed_list) - 6} more*"
+            consumed_field_value = f"**20x Fodder Cards (110-116):**\n{consumed_preview}"
+
             # Reward: 117-119
             roll = random.random()
             if roll < 0.10: min_ovr = 119
@@ -205,24 +221,58 @@ class ExchangeCog(commands.Cog):
             player_data = random.choice(players)
             
         else:
-            # Standard Exchange (25 cards -> Guaranteed Pool of 5x 120s, 5x 121s, 2x 122s)
-            cost = 25
-            if len(inventory) < cost:
-                return await interaction.followup.send(f"❌ You don't have enough cards! The Standard Exchange requires {cost} cards, but you only have {len(inventory)}.", ephemeral=True)
+            # Standard Exchange: 15x Pool C (110-116), 5x Pool B (117-119), 1x Pool A (120+)
+            pool_c_cards = [row for row in inventory if 110 <= get_ovr(row) <= 116]
+            pool_b_cards = [row for row in inventory if 117 <= get_ovr(row) <= 119]
+            pool_a_cards = [row for row in inventory if get_ovr(row) >= 120]
+
+            if len(pool_c_cards) < 15 or len(pool_b_cards) < 5 or len(pool_a_cards) < 1:
+                missing_lines = []
+                if len(pool_c_cards) < 15:
+                    missing_lines.append(f"• **Pool C (110-116 OVR):** You have `{len(pool_c_cards)}/15`")
+                if len(pool_b_cards) < 5:
+                    missing_lines.append(f"• **Pool B (117-119 OVR):** You have `{len(pool_b_cards)}/5`")
+                if len(pool_a_cards) < 1:
+                    missing_lines.append(f"• **Pool A (120+ OVR):** You have `{len(pool_a_cards)}/1`")
                 
-            inventory.sort(key=get_ovr)
-            to_delete = [row['id'] if isinstance(row, dict) else row[0] for row in inventory[:cost]]
+                return await interaction.followup.send(
+                    f"❌ **Insufficient Cards for Standard Exchange!**\nRequirements:\n" + "\n".join(missing_lines) + "\n\n*(Note: Locked players and players in your active starting XI cannot be consumed)*",
+                    ephemeral=True
+                )
+                
+            pool_c_cards.sort(key=get_ovr)
+            pool_b_cards.sort(key=get_ovr)
+            pool_a_cards.sort(key=get_ovr)
+
+            consumed_c = pool_c_cards[:15]
+            consumed_b = pool_b_cards[:5]
+            consumed_a = pool_a_cards[:1]
+
+            consumed_all = consumed_c + consumed_b + consumed_a
+            to_delete = [row['id'] if isinstance(row, dict) else row[0] for row in consumed_all]
+            total_consumed = len(to_delete)
+
+            a_str = ", ".join([format_card_entry(r) for r in consumed_a])
+            b_str = ", ".join([format_card_entry(r) for r in consumed_b])
+            c_str = ", ".join([format_card_entry(r) for r in consumed_c[:6]]) + (f" *+{len(consumed_c)-6} more*" if len(consumed_c) > 6 else "")
+
+            consumed_field_value = (
+                f"**Pool A (1x 120+):** {a_str}\n"
+                f"**Pool B (5x 117-119):** {b_str}\n"
+                f"**Pool C (15x 110-116):** {c_str}"
+            )
 
             if not pool or not pool.get("cards_120") or not pool.get("cards_121") or not pool.get("cards_122"):
                 # Emergency generation if empty
                 await self.exchange_rotator()
                 pool = await database.get_active_exchange_pool()
 
-            roll = random.random()
-            if roll < 0.10 and pool.get("cards_122"):
+            # Reward roll: 122 (6%), 121 (35%), 120 (59%)
+            roll = random.uniform(0, 100)
+            if roll < 6.0 and pool.get("cards_122"):
                 player_data = random.choice(pool["cards_122"])
                 tier_name = "GRAND MASTER WALKOUT 👑👑👑"
-            elif roll < 0.50 and pool.get("cards_121"):
+            elif roll < 41.0 and pool.get("cards_121"):
                 player_data = random.choice(pool["cards_121"])
                 tier_name = "ELITE MASTER WALKOUT 🌟🌟"
             elif pool.get("cards_120"):
@@ -274,7 +324,7 @@ class ExchangeCog(commands.Cog):
             is_walkout = (isinstance(ovr, int) and ovr >= 120)
             
             walkout_prefix = f"🔥 **{nation_str}** | 🏃 **`{pos}`** | **{club_str}**\n\n" if is_walkout else ""
-            desc = f"{walkout_prefix}🌟 **Exchange Walkout Reward:** **{card_name}** `({pos})` ({ovr} OVR)\n\n*Successfully swapped `{cost}` cards from your club!*"
+            desc = f"{walkout_prefix}🌟 **Exchange Walkout Reward:** **{card_name}** `({pos})` ({ovr} OVR)\n\n*Successfully swapped `{total_consumed}` cards from your club!*"
             
             embed = discord.Embed(
                 title=f"🎉 {tier_name} Completed!",
@@ -282,9 +332,13 @@ class ExchangeCog(commands.Cog):
                 color=discord.Color.gold() if is_walkout else discord.Color.blue()
             )
             embed.set_author(name=f"{interaction.user.display_name}'s Exchange", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
+            
+            if consumed_field_value:
+                embed.add_field(name=f"🗑️ Consumed Cards ({total_consumed} Total)", value=consumed_field_value, inline=False)
+                
             if file and filename:
                 embed.set_image(url=f"attachment://{filename}")
-            embed.set_footer(text=f"{cost} players consumed • 1 card added to your inventory • Check /exchange_info for current pool")
+            embed.set_footer(text=f"{total_consumed} players consumed • 1 card added to your inventory • Check /exchange_info for active pool")
 
             if file:
                 await interaction.followup.send(embed=embed, file=file)
