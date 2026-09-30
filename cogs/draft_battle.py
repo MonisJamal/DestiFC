@@ -210,14 +210,14 @@ class FormationSelectView(discord.ui.View):
 
 
 class DraftBattleRoomView(discord.ui.View):
-    def __init__(self, challenger: discord.Member, opponent: discord.Member, wager: int, bot, message: discord.Message = None):
+    def __init__(self, challenger: discord.Member, opponent: discord.Member, wager: int, bot, message: discord.Message = None, channel_id: int = None):
         super().__init__(timeout=300)
         self.challenger = challenger
         self.opponent = opponent
         self.wager = wager
         self.bot = bot
         self.message = message
-        self.channel_id = message.channel.id if (message and message.channel) else None
+        self.channel_id = channel_id or (message.channel.id if (message and message.channel) else None)
         self.draft_data = {}
         self.drafting_status = {
             challenger.id: "⏳ Not started",
@@ -397,7 +397,7 @@ class DraftBattleRoomView(discord.ui.View):
         file = None
         try:
             winning_squad = squad_a if score_a >= score_b else squad_b
-            img = generate_lineup_image(winning_squad, {})
+            img = await asyncio.to_thread(generate_lineup_image, winning_squad, {})
             binary = io.BytesIO()
             img.save(binary, 'PNG')
             binary.seek(0)
@@ -408,17 +408,17 @@ class DraftBattleRoomView(discord.ui.View):
 
         # Resolve public target channel
         target_channel = None
-        if self.message and self.message.channel:
-            target_channel = self.message.channel
-        elif interaction and interaction.channel:
-            target_channel = interaction.channel
-        elif self.channel_id:
+        if self.channel_id:
             target_channel = self.bot.get_channel(self.channel_id)
             if not target_channel:
                 try:
                     target_channel = await self.bot.fetch_channel(self.channel_id)
                 except Exception:
                     pass
+        if not target_channel and self.message and self.message.channel:
+            target_channel = self.message.channel
+        if not target_channel and interaction and interaction.channel:
+            target_channel = interaction.channel
 
         # Update or complete lobby message
         try:
@@ -449,6 +449,8 @@ class DraftBattleRoomView(discord.ui.View):
                     )
             except Exception as e:
                 print("[DraftBattle] Error sending result message:", e)
+        else:
+            print(f"[DraftBattle] Warning: Could not resolve target_channel (channel_id={self.channel_id}) to post match results.")
 
         if interaction:
             try:
@@ -459,12 +461,13 @@ class DraftBattleRoomView(discord.ui.View):
 
 
 class DraftBattleChallengeView(discord.ui.View):
-    def __init__(self, challenger: discord.Member, opponent: discord.Member, wager: int, bot):
+    def __init__(self, challenger: discord.Member, opponent: discord.Member, wager: int, bot, channel_id: int = None):
         super().__init__(timeout=60)
         self.challenger = challenger
         self.opponent = opponent
         self.wager = wager
         self.bot = bot
+        self.channel_id = channel_id
         self.accepted = False
 
     @discord.ui.button(label="Accept Draft Battle ⚔️", style=discord.ButtonStyle.success)
@@ -487,7 +490,8 @@ class DraftBattleChallengeView(discord.ui.View):
         self.accepted = True
         self.stop()
 
-        room_view = DraftBattleRoomView(self.challenger, self.opponent, self.wager, self.bot, interaction.message)
+        ch_id = interaction.channel_id or self.channel_id
+        room_view = DraftBattleRoomView(self.challenger, self.opponent, self.wager, self.bot, interaction.message, channel_id=ch_id)
         await interaction.response.edit_message(embed=room_view.generate_status_embed(), view=room_view)
 
     @discord.ui.button(label="Decline ❌", style=discord.ButtonStyle.danger)
@@ -532,7 +536,7 @@ class DraftBattleCog(commands.Cog):
             if user_data.get("coins", 0) < wager:
                 return await interaction.response.send_message(f"❌ You don't have enough coins for a **{wager:,}** coin wager! Your balance: **{user_data.get('coins', 0):,}**", ephemeral=True)
 
-        view = DraftBattleChallengeView(interaction.user, user, wager, self.bot)
+        view = DraftBattleChallengeView(interaction.user, user, wager, self.bot, channel_id=interaction.channel_id)
         view.channel = interaction.channel
         wager_text = f"\n🪙 **Coin Wager:** `{wager:,}` Coins (Winner takes `{wager * 2:,}`)" if wager > 0 else ""
 
