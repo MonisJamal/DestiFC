@@ -177,17 +177,16 @@ class MatchCog(commands.Cog):
                 goals_b = random.randint(1, 4)
                 goals_a = random.randint(0, goals_b - 1)
                 
-            # Extract players by position for realistic commentary
+            # Extract players by position for realistic commentary and full squad ratings
             def categorize_players(squad):
                 atk, mid, defn, gk = [], [], [], []
-                all_players = []
+                all_starters = []
                 for pos_raw, p in squad.get('players', {}).items():
                     if not p: continue
                     name = p.get('name') or p.get('player_name', 'Player')
-                    all_players.append(name)
-                    
-                    # Strip digits (ST1 -> ST, CAM2 -> CAM, CB3 -> CB)
                     pos = ''.join([c for c in pos_raw if not c.isdigit()]).strip().upper()
+                    entry = {"name": name, "pos": pos, "raw_pos": pos_raw, "ovr": p.get('ovr', 100)}
+                    all_starters.append(entry)
                     
                     if pos in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF']:
                         atk.append(name)
@@ -200,15 +199,16 @@ class MatchCog(commands.Cog):
                     else:
                         mid.append(name)
                 
-                # Fallbacks: Always use real squad players instead of generic placeholders
-                if not atk: atk = mid if mid else (all_players if all_players else ["Star Player"])
-                if not mid: mid = atk if atk else (all_players if all_players else ["Midfielder"])
-                if not defn: defn = mid if mid else (all_players if all_players else ["Defender"])
-                if not gk: gk = [all_players[-1]] if all_players else ["Goalkeeper"]
-                return atk, mid, defn, gk
+                # Fallbacks if squad has unconventional positions
+                names_all = [p['name'] for p in all_starters]
+                if not atk: atk = mid if mid else (names_all if names_all else ["Star Striker"])
+                if not mid: mid = atk if atk else (names_all if names_all else ["Playmaker"])
+                if not defn: defn = mid if mid else (names_all if names_all else ["Defender"])
+                if not gk: gk = [names_all[-1]] if names_all else ["Goalkeeper"]
+                return atk, mid, defn, gk, all_starters
                 
-            atk_a, mid_a, def_a, gk_a = categorize_players(squad_a)
-            atk_b, mid_b, def_b, gk_b = categorize_players(squad_b)
+            atk_a, mid_a, def_a, gk_a, starters_a = categorize_players(squad_a)
+            atk_b, mid_b, def_b, gk_b, starters_b = categorize_players(squad_b)
             
             # Distribute goals across 90 minutes
             all_goals = []
@@ -221,50 +221,81 @@ class MatchCog(commands.Cog):
             all_goals.sort(key=lambda x: x[1])  # Sort by minute
 
             scoresheet_events = []
-            player_scores = {p: 0 for p in (atk_a + mid_a + def_a + gk_a + atk_b + mid_b + def_b + gk_b)}
+            player_scores = {p['name']: 0 for p in (starters_a + starters_b)}
 
             current_score_a = 0
             current_score_b = 0
 
-            # Pre-calculate MOTM early to kick off background AI analysis concurrently with the live ticks
             is_a_win = (winner == player_a)
             is_b_win = (winner == player_b)
             is_draw = (winner is None)
 
-            def calc_team_ratings(squad, is_winning_team, is_draw_match):
+            # Generate realistic match statistics
+            possession_a = int(50 + (ovr_a - ovr_b) * 1.5 + random.randint(-4, 4))
+            possession_a = max(35, min(65, possession_a))
+            possession_b = 100 - possession_a
+
+            shots_on_target_a = goals_a + random.randint(2, 6)
+            shots_total_a = shots_on_target_a + random.randint(3, 7)
+            shots_on_target_b = goals_b + random.randint(2, 6)
+            shots_total_b = shots_on_target_b + random.randint(3, 7)
+
+            saves_a = max(0, shots_on_target_b - goals_b)
+            saves_b = max(0, shots_on_target_a - goals_a)
+
+            corners_a = random.randint(2, 8)
+            corners_b = random.randint(2, 8)
+            fouls_a = random.randint(2, 7)
+            fouls_b = random.randint(2, 7)
+            yellows_a = random.randint(0, 2)
+            yellows_b = random.randint(0, 2)
+            pass_acc_a = random.randint(82, 93)
+            pass_acc_b = random.randint(80, 92)
+            xg_a = round(goals_a * 0.65 + (shots_on_target_a * 0.18) + random.uniform(0.1, 0.4), 2)
+            xg_b = round(goals_b * 0.65 + (shots_on_target_b * 0.18) + random.uniform(0.1, 0.4), 2)
+
+            def calc_full_team_ratings(starters, is_winning_team, is_draw_match, goals_conceded, goals_scored):
                 ratings = []
-                for pos, p in squad.get("players", {}).items():
-                    if not p: continue
-                    p_name = p.get("name", "Player")
+                for s in starters:
+                    p_name = s['name']
+                    pos = s['pos']
                     goals = player_scores.get(p_name, 0)
                     
-                    base = 7.0 + random.uniform(-0.4, 0.4)
-                    if is_winning_team: base += 0.8
-                    elif is_draw_match: base += 0.3
-                    else: base -= 0.4
+                    base = 6.8 + random.uniform(-0.3, 0.4)
+                    if is_winning_team: base += 0.7
+                    elif is_draw_match: base += 0.2
+                    else: base -= 0.5
                     
-                    base += goals * 1.4
-                    if pos in ['GK', 'CB', 'LB', 'RB'] and (goals_b == 0 if is_winning_team else goals_a == 0):
-                        base += 0.6
-                        
+                    base += goals * 1.3
+                    if pos == 'GK':
+                        base += (saves_a if is_winning_team else saves_b) * 0.2
+                        if goals_conceded == 0: base += 0.8
+                    elif pos in ['CB', 'LB', 'RB', 'LWB', 'RWB']:
+                        if goals_conceded == 0: base += 0.6
+                        base += random.uniform(-0.1, 0.3)
+                    elif pos in ['CAM', 'CM', 'CDM', 'LM', 'RM']:
+                        base += random.uniform(-0.1, 0.4)
+                    elif pos in ['ST', 'CF', 'LW', 'RW']:
+                        if goals == 0 and goals_scored > 0:
+                            base += random.uniform(-0.2, 0.2)
+                            
                     rating = round(min(10.0, max(5.5, base)), 1)
-                    ratings.append({"name": p_name, "pos": pos, "rating": rating, "goals": goals})
-                ratings.sort(key=lambda x: (x["goals"], x["rating"]), reverse=True)
+                    ratings.append({"name": p_name, "pos": pos, "rating": rating, "goals": goals, "ovr": s['ovr']})
                 return ratings
 
             # Temporary pre-calculation of player scores for goals
             for g in all_goals:
                 player_scores[g[2]] = player_scores.get(g[2], 0) + 1
 
-            ratings_a_est = calc_team_ratings(squad_a, is_a_win, is_draw)
-            ratings_b_est = calc_team_ratings(squad_b, is_b_win, is_draw)
+            ratings_a_est = calc_full_team_ratings(starters_a, is_a_win, is_draw, goals_b, goals_a)
+            ratings_b_est = calc_full_team_ratings(starters_b, is_b_win, is_draw, goals_a, goals_b)
             all_rated = [(r, player_a.display_name) for r in ratings_a_est] + [(r, player_b.display_name) for r in ratings_b_est]
-            motm_entry, motm_team = max(all_rated, key=lambda x: (x[0]["goals"], x[0]["rating"]))
+            motm_entry, motm_team = max(all_rated, key=lambda x: (x[0]["goals"] * 2 + x[0]["rating"]))
 
-            # Reset player_scores for the live simulation step
-            player_scores = {p: 0 for p in (atk_a + mid_a + def_a + gk_a + atk_b + mid_b + def_b + gk_b)}
+            # Reset player_scores for live commentary tracking
+            player_scores = {p['name']: 0 for p in (starters_a + starters_b)}
 
-            # Kick off async AI Pundit analysis in the background to consume tokens from http://localhost:20128/v1
+            # Kick off async AI Pundit analysis in background
             events_summary = [f"{g[1]}' {g[2]} ({g[0].display_name})" for g in all_goals]
             ai_analysis_task = asyncio.create_task(
                 ai_engine.generate_post_match_analysis(
@@ -278,9 +309,9 @@ class MatchCog(commands.Cog):
                 )
             )
 
-            # Fast 6-tick match simulation (~27-28 seconds total)
-            # Ticks at: 15', 30', 45' (HT), 60', 75', 90' (FT)
-            ticks = [15, 30, 45, 60, 75, 90]
+            # Exactly 1-minute match simulation (8 ticks x 7.5s = 60s total)
+            # Ticks at: 10', 25', 40', 45' (HT), 60', 75', 85', 90' (FT)
+            ticks = [10, 25, 40, 45, 60, 75, 85, 90]
             
             for idx, current_minute in enumerate(ticks):
                 prev_minute = ticks[idx - 1] if idx > 0 else 0
@@ -306,8 +337,10 @@ class MatchCog(commands.Cog):
                 if not events:
                     if random.choice([True, False]):
                         t_atk, t_mid, t_def, t_gk = atk_a, mid_a, def_b, gk_b
+                        att_team_name = player_a.display_name
                     else:
                         t_atk, t_mid, t_def, t_gk = atk_b, mid_b, def_a, gk_a
+                        att_team_name = player_b.display_name
                         
                     a = random.choice(t_atk)
                     m = random.choice(t_mid)
@@ -315,17 +348,18 @@ class MatchCog(commands.Cog):
                     g = random.choice(t_gk)
                     
                     commentary_pool = [
-                        f"⚡ Fluid tiki-taka movement in midfield orchestrated by **{m}**!",
-                        f"🧤 Tremendous diving save by **{g}** denying a curled effort from **{a}**!",
-                        f"🛡️ Rock-solid sliding interception from **{d}** stopping the counter-attack.",
-                        f"🎯 **{m}** whips a cross into the box, but **{d}** clears with authority.",
-                        f"🚀 Long-range screamer from **{a}**... rattles off the crossbar!",
-                        f"🟨 Tactical foul by **{d}** to break up the fast break."
+                        f"⚡ Fluid tiki-taka build-up orchestrated by **{m}** splitting the defensive line!",
+                        f"🧤 WORLD-CLASS REFLEXES! **{g}** makes a fingertip diving save to deny a thunderous curled strike from **{a}**!",
+                        f"🛡️ Rock-solid sliding interception from **{d}** thwarting a dangerous counter-attack.",
+                        f"🎯 **{m}** delivers an inswinging cross into the penalty box, but **{d}** clears with authority.",
+                        f"🚀 Long-range screamer from **{a}**... it rattles violently off the crossbar!",
+                        f"🔥 **{a}** executes a blistering step-over and cuts inside, but the shot is blocked behind for a corner.",
+                        f"📐 Pinpoint corner whipped into the 6-yard box by **{m}**, headed just inches wide!",
+                        f"🟨 Cynical tactical foul by **{d}** to halt {att_team_name}'s fast break."
                     ]
                     chosen_com = random.choice(commentary_pool)
                     events.append(f"🎙️ *{chosen_com}*")
                     
-                    # Add key defensive save to score sheet if triggered
                     if "save" in chosen_com.lower():
                         scoresheet_events.append(f"🧤 **{current_minute}'** - **{g}** (Crucial Save)")
                     elif "foul" in chosen_com.lower():
@@ -333,19 +367,24 @@ class MatchCog(commands.Cog):
                 
                 event_text = "\n".join(events)
                 scoreboard = f"**{player_a.display_name}** `{current_score_a} - {current_score_b}` **{player_b.display_name}**"
-                time_label = "⏱️ **45' HALF TIME**" if current_minute == 45 else f"⏱️ **{current_minute}' Min**"
+                time_label = "⏱️ **45' HALF TIME**" if current_minute == 45 else (f"⏱️ **90' FULL TIME**" if current_minute == 90 else f"⏱️ **{current_minute}' Min**")
                 
-                await interaction.edit_original_response(content=f"🏟️ **LIVE MATCH IN PROGRESS**\n\n{scoreboard}\n{time_label}\n\n{event_text}", view=None)
+                stats_mini = f"📊 Possession: `{possession_a}%` ⬝ `{possession_b}%` | Shots: `{current_score_a + random.randint(1,3)}` ⬝ `{current_score_b + random.randint(1,3)}`"
+                
+                await interaction.edit_original_response(
+                    content=f"🏟️ **LIVE DIVISION RIVALS MATCH**\n\n{scoreboard}\n{time_label} • {stats_mini}\n\n{event_text}",
+                    view=None
+                )
                 
                 if current_minute < 90:
-                    await asyncio.sleep(4.5)
+                    await asyncio.sleep(7.5)
 
             # Re-calculate accurate final ratings with actual player scores
-            ratings_a = calc_team_ratings(squad_a, is_a_win, is_draw)
-            ratings_b = calc_team_ratings(squad_b, is_b_win, is_draw)
+            ratings_a = calc_full_team_ratings(starters_a, is_a_win, is_draw, goals_b, goals_a)
+            ratings_b = calc_full_team_ratings(starters_b, is_b_win, is_draw, goals_a, goals_b)
             all_rated_final = [(r, player_a.display_name) for r in ratings_a] + [(r, player_b.display_name) for r in ratings_b]
-            motm_entry, motm_team = max(all_rated_final, key=lambda x: (x[0]["goals"], x[0]["rating"]))
-            motm_str = f"⭐ **{motm_entry['name']}** ({motm_entry['rating']} Rating) — *{motm_team}*"
+            motm_entry, motm_team = max(all_rated_final, key=lambda x: (x[0]["goals"] * 2 + x[0]["rating"]))
+            motm_str = f"⭐ **{motm_entry['name']}** `({motm_entry['rating']} Rating)` — *{motm_team}*"
 
             # Match Over - Apply Rewards
             color = discord.Color.light_grey()
@@ -418,39 +457,60 @@ class MatchCog(commands.Cog):
                 await database.add_vouchers(player_b.id, promo_v_b)
                 bonus_b_str += f"\n🏅 **PROMOTION!** +{promo_v_b}x Vouchers!"
 
-            # Await background AI pundit analysis (with a fast 2-second timeout window if not done)
+            # Instant timeout check for AI pundit so post-match never hangs
             ai_pundit_text = None
             try:
-                ai_pundit_text = await asyncio.wait_for(ai_analysis_task, timeout=2.5)
+                ai_pundit_text = await asyncio.wait_for(ai_analysis_task, timeout=1.0)
             except Exception:
                 ai_pundit_text = None
 
             embed = discord.Embed(title="FULL TIME ⏱️", description=result_text, color=color)
             
-            # 1. Score Sheet Timeline Field
+            # 1. Match Score Sheet & Key Events
             sheet_text = "\n".join(scoresheet_events) if scoresheet_events else "*No goals or major incidents.*"
-            embed.add_field(name="📋 Match Score Sheet", value=sheet_text, inline=False)
+            embed.add_field(name="📋 Match Events", value=sheet_text, inline=False)
             
-            # 2. Man of the Match
+            # 2. Detailed Real-Life Team Match Statistics
+            stats_table = (
+                f"```\n"
+                f"{player_a.display_name[:12]:<12}      STATISTIC      {player_b.display_name[:12]:>12}\n"
+                f"{str(possession_a) + '%':<12}     Possession     {str(possession_b) + '%':>12}\n"
+                f"{str(xg_a):<12}         xG          {str(xg_b):>12}\n"
+                f"{f'{shots_total_a} ({shots_on_target_a})':<12}   Shots (Target)   {f'{shots_total_b} ({shots_on_target_b})':>12}\n"
+                f"{str(saves_a):<12}       GK Saves       {str(saves_b):>12}\n"
+                f"{str(corners_a):<12}       Corners        {str(corners_b):>12}\n"
+                f"{f'{fouls_a} ({yellows_a}🟨)':<12}     Fouls (Cards)    {f'{fouls_b} ({yellows_b}🟨)':>12}\n"
+                f"{str(pass_acc_a) + '%':<12}    Pass Accuracy   {str(pass_acc_b) + '%':>12}\n"
+                f"```"
+            )
+            embed.add_field(name="📊 Match Statistics", value=stats_table, inline=False)
+
+            # 3. Man of the Match
             embed.add_field(name="🎖️ Man of the Match", value=motm_str, inline=False)
-            
-            # 3. AI Pundit Match Analysis (Powered by Local AI tokens)
-            if ai_pundit_text:
-                embed.add_field(name="🎙️ AI Pundit Tactical Analysis", value=f"*{ai_pundit_text}*", inline=False)
-            
-            # 4. Top Player Ratings
-            def format_ratings(r_list):
+
+            # 4. Full Squad Player Ratings (All 11 Starters for both teams)
+            def format_full_ratings(r_list):
                 lines = []
-                for r in r_list[:4]:  # Top 4 performers
-                    icon = "⭐ " if r["name"] == motm_entry["name"] else ("⚽ " if r["goals"] > 0 else "• ")
-                    lines.append(f"{icon}**{r['name']}** `{r['rating']}`")
+                for r in r_list:
+                    icon = "🧤" if r["pos"] == "GK" else ("🛡️" if r["pos"] in ['CB', 'LB', 'RB', 'LWB', 'RWB'] else ("⚡" if r["pos"] in ['CAM', 'CM', 'CDM', 'LM', 'RM'] else "🔥"))
+                    star = " ⭐" if r["name"] == motm_entry["name"] else ""
+                    goal_badge = f" {'⚽' * r['goals']}" if r['goals'] > 0 else ""
+                    lines.append(f"{icon} `[{r['pos']:<3}]` **{r['name'][:14]}** `{r['rating']}`{star}{goal_badge}")
                 return "\n".join(lines)
 
-            embed.add_field(name=f"📊 {player_a.display_name} Ratings", value=format_ratings(ratings_a), inline=True)
-            embed.add_field(name=f"📊 {player_b.display_name} Ratings", value=format_ratings(ratings_b), inline=True)
+            embed.add_field(name=f"👥 {player_a.display_name} XI", value=format_full_ratings(ratings_a), inline=True)
+            embed.add_field(name=f"👥 {player_b.display_name} XI", value=format_full_ratings(ratings_b), inline=True)
+
+            # 5. AI Pundit Match Analysis
+            if ai_pundit_text:
+                embed.add_field(name="🎙️ AI Pundit Tactical Breakdown", value=f"*{ai_pundit_text}*", inline=False)
             
-            # 5. Fans & Rewards
-            embed.add_field(name="📈 Fans & Rewards", value=fan_change_str + ("\n" + bonus_a_str if bonus_a_str else "") + ("\n" + bonus_b_str if bonus_b_str else ""), inline=False)
+            # 6. Fans & Rewards
+            embed.add_field(
+                name="📈 Fans & Rewards",
+                value=fan_change_str + ("\n" + bonus_a_str if bonus_a_str else "") + ("\n" + bonus_b_str if bonus_b_str else ""),
+                inline=False
+            )
             
             await interaction.edit_original_response(content=None, embed=embed, view=None)
 

@@ -273,51 +273,113 @@ class MarketSellSelectView(discord.ui.View):
 
 # ================== Interactive QuickSell Dropdown View ==================
 
-class QuickSellSelect(discord.ui.Select):
-    def __init__(self, user_id: int, eligible_cards: list):
+class QuickSellSelectView(discord.ui.View):
+    def __init__(self, user_id: int, eligible_cards: list, current_page: int = 1):
+        super().__init__(timeout=120)
         self.user_id = user_id
-        self.cards_map = {str(c['id']): c for c in eligible_cards}
+        self.eligible_cards = eligible_cards
+        self.current_page = current_page
+        self.items_per_page = 25
+        self.max_pages = max(1, (len(eligible_cards) + self.items_per_page - 1) // self.items_per_page)
+        self.setup_components()
 
-        options = []
-        for c in eligible_cards[:25]:
-            pos = extract_pos(c)
-            qs_val = get_quicksell_value(c['ovr'])
-            options.append(discord.SelectOption(
-                label=f"{c['player_name']} ({pos}) — {c['ovr']} OVR",
-                value=str(c['id']),
-                description=f"Quick Sell for 🪙 {qs_val:,} Coins (ID: {c['id']})",
-                emoji="🪙"
-            ))
-        super().__init__(placeholder="Select a player card to quick sell instantly...", min_values=1, max_values=1, options=options)
+    def setup_components(self):
+        self.clear_items()
+        start = (self.current_page - 1) * self.items_per_page
+        page_cards = self.eligible_cards[start : start + self.items_per_page]
+        
+        if page_cards:
+            options = []
+            for c in page_cards:
+                pos = extract_pos(c)
+                qs_val = get_quicksell_value(c['ovr'])
+                emoji = "🔥" if c['ovr'] >= 120 else "✨" if c['ovr'] >= 115 else "🪙"
+                options.append(discord.SelectOption(
+                    label=f"{c['player_name'][:25]} ({pos}) — {c['ovr']} OVR",
+                    value=str(c['id']),
+                    description=f"Quick Sell: 🪙 {format_price_short(qs_val)} Coins (ID: {c['id']})",
+                    emoji=emoji
+                ))
+            select = discord.ui.Select(
+                placeholder=f"Select cards to quick sell (Page {self.current_page}/{self.max_pages})...",
+                min_values=1,
+                max_values=len(options),
+                options=options,
+                row=0
+            )
+            select.callback = self.select_callback
+            self.add_item(select)
 
-    async def callback(self, interaction: discord.Interaction):
+        # Pagination buttons
+        prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, disabled=(self.current_page <= 1), row=1)
+        next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, disabled=(self.current_page >= self.max_pages), row=1)
+        prev_btn.callback = self.prev_page
+        next_btn.callback = self.next_page
+        self.add_item(prev_btn)
+        self.add_item(next_btn)
+
+    async def select_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("❌ This is not your menu.", ephemeral=True)
-
-        selected_id = int(self.values[0])
-        card = self.cards_map.get(str(selected_id))
-        if not card:
-            return await interaction.response.send_message("❌ Card not found in inventory.", ephemeral=True)
-
-        ovr = card["ovr"]
-        sell_val = get_quicksell_value(ovr)
-        pos = extract_pos(card)
-
-        await database.remove_players_from_inventory(self.user_id, [selected_id])
-        await database.add_coins(self.user_id, sell_val)
-
+            
+        select = [item for item in self.children if isinstance(item, discord.ui.Select)][0]
+        selected_ids = [int(v) for v in select.values]
+        
+        cards_by_id = {c['id']: c for c in self.eligible_cards}
+        sold_cards = [cards_by_id[cid] for cid in selected_ids if cid in cards_by_id]
+        
+        if not sold_cards:
+            return await interaction.response.send_message("❌ Selected cards are no longer available in inventory.", ephemeral=True)
+            
+        total_coins = sum(get_quicksell_value(c['ovr']) for c in sold_cards)
+        await database.remove_players_from_inventory(self.user_id, selected_ids)
+        await database.add_coins(self.user_id, total_coins)
+        
+        # Remove sold cards from eligible list
+        self.eligible_cards = [c for c in self.eligible_cards if c['id'] not in selected_ids]
+        
+        names_summary = "\n".join([f"• **{c['player_name']}** `({extract_pos(c)})` ({c['ovr']} OVR) — 🪙 {get_quicksell_value(c['ovr']):,} Coins" for c in sold_cards[:10]])
+        if len(sold_cards) > 10:
+            names_summary += f"\n*...and {len(sold_cards) - 10} more cards*"
+            
         embed = discord.Embed(
-            title="🪙 Card Quick Sold!",
-            description=f"Quick sold **{card['player_name']}** `({pos})` ({ovr} OVR) for **{sell_val:,} Coins** 💰\n*(75% of minimum market valuation)*",
+            title="🪙 Quick Sell Successful!",
+            description=f"Successfully quick sold **{len(sold_cards)} card(s)**:\n\n{names_summary}\n\n💰 **+{total_coins:,} Coins** added to your club balance!",
             color=discord.Color.gold()
         )
-        await interaction.response.edit_message(embed=embed, view=None)
+        embed.set_footer(text=f"Valued at 75% of minimum market valuation. Remaining unlocked cards: {len(self.eligible_cards)}")
+        
+        if not self.eligible_cards:
+            return await interaction.response.edit_message(embed=embed, view=None)
+            
+        self.max_pages = max(1, (len(self.eligible_cards) + self.items_per_page - 1) // self.items_per_page)
+        self.current_page = min(self.current_page, self.max_pages)
+        self.setup_components()
+        await interaction.response.edit_message(embed=embed, view=self)
 
+    async def prev_page(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("❌ This is not your menu.", ephemeral=True)
+        self.current_page -= 1
+        self.setup_components()
+        embed = discord.Embed(
+            title="🪙 Quick Sell Dropdown Menu",
+            description=f"Select one or multiple cards from the dropdown below to quick sell instantly for **75% of minimum market value**.\n\n📄 **Page {self.current_page}/{self.max_pages}** | Total Unlocked Cards: `{len(self.eligible_cards)}`",
+            color=discord.Color.gold()
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
 
-class QuickSellSelectView(discord.ui.View):
-    def __init__(self, user_id: int, eligible_cards: list):
-        super().__init__(timeout=90)
-        self.add_item(QuickSellSelect(user_id, eligible_cards))
+    async def next_page(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("❌ This is not your menu.", ephemeral=True)
+        self.current_page += 1
+        self.setup_components()
+        embed = discord.Embed(
+            title="🪙 Quick Sell Dropdown Menu",
+            description=f"Select one or multiple cards from the dropdown below to quick sell instantly for **75% of minimum market value**.\n\n📄 **Page {self.current_page}/{self.max_pages}** | Total Unlocked Cards: `{len(self.eligible_cards)}`",
+            color=discord.Color.gold()
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
 
 
 # ================== Market Cog ==================
