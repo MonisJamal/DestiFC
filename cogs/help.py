@@ -17,7 +17,7 @@ class HelpCog(commands.Cog):
         
         embed.add_field(name="📦 Packs & Drafts", value="""
 `> /starterpack` - 🎁 Claim your one-time 3 Billion Coins & Starter Squad!
-`> /draft` - Open active Draft Packs (pools rotate every hour!)
+`> /draft` - Open active Draft Packs (pools rotate every 2 hours!)
 `> /draft_info` - See which players are featured in each draft
 `> /exchange` - Trade 25 unwanted cards for a Guaranteed 120+ Walkout!
         """, inline=False)

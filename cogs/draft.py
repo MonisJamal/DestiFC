@@ -80,8 +80,8 @@ class DraftCog(commands.Cog):
                 if not pool_112: pool_112 = pool_117  # fallback
                 
                 new_drafts = {}
-                # 1-Hour draft rotation for fast and active pool refreshes
-                expires = (datetime.datetime.now() + datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+                # 2-Hour draft rotation for active pool refreshes
+                expires = (datetime.datetime.now() + datetime.timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
                 
                 used_featured_ids = set()
                 for i in range(1, 4):
