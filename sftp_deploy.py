@@ -34,10 +34,17 @@ def main():
             else:
                 if item.endswith(('.zip', '.pyc', '.db', '.db-wal', '.db-shm', '.DS_Store')) or item.startswith(('patch_', 'test_')):
                     continue
+                try:
+                    r_stat = sftp.stat(r_item)
+                    l_stat = os.stat(l_item)
+                    if r_stat.st_size == l_stat.st_size and r_stat.st_mtime >= l_stat.st_mtime:
+                        continue
+                except Exception:
+                    pass
                 print(f"Uploading {item} -> {r_item}...")
                 sftp.put(l_item, r_item)
 
-    print("\n🚀 Syncing core source code, cogs, fonts, and assets to Pterodactyl...")
+    print("\n🚀 Delta-syncing changed source code, cogs, fonts, and assets to Pterodactyl...")
     upload_dir(local_dir, ".")
 
     # Helper to clean up remote directory
