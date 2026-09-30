@@ -23,8 +23,11 @@ class MatchRequestView(discord.ui.View):
         self.ovr_a = ovr_a
         self.ovr_b = ovr_b
         self.message = None
+        self.accepted = False
 
     async def on_timeout(self):
+        if self.accepted:
+            return
         ACTIVE_MATCH_USERS.discard(self.challenger.id)
         ACTIVE_MATCH_USERS.discard(self.opponent.id)
         for child in self.children:
@@ -41,6 +44,8 @@ class MatchRequestView(discord.ui.View):
             await interaction.response.send_message("Only the challenged player can accept!", ephemeral=True)
             return
             
+        self.accepted = True
+        self.stop()
         for child in self.children:
             child.disabled = True
         await interaction.response.edit_message(content=f"⚔️ **Match Accepted!** The players are walking onto the pitch...", view=self)
@@ -54,6 +59,7 @@ class MatchRequestView(discord.ui.View):
             await interaction.response.send_message("Only the challenged player can decline!", ephemeral=True)
             return
             
+        self.stop()
         ACTIVE_MATCH_USERS.discard(self.challenger.id)
         ACTIVE_MATCH_USERS.discard(self.opponent.id)
         

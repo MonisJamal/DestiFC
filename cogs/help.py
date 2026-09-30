@@ -16,7 +16,7 @@ class HelpCog(commands.Cog):
         )
         
         embed.add_field(name="📦 Packs & Drafts", value="""
-`> /starterpack` - 🎁 Claim your one-time 3 Billion Coins & Starter Squad!
+`> /starterpack` - 🎁 Claim your one-time 300 Million Coins & Starter Squad!
 `> /draft` - Open active Draft Packs (pools rotate every 2 hours!)
 `> /draft_info` - See which players are featured in each draft
 `> /exchange` - Trade 25 unwanted cards for a Guaranteed 120+ Walkout!
@@ -33,7 +33,7 @@ class HelpCog(commands.Cog):
 `> /market buy <id>` - Buy a player listed on the market using Coins
 `> /market sell [id] [price]` - List a player (or leave blank for dropdown menu)
 `> /market sell_page` - Bulk list all cards on a page at min price
-`> /quicksell [id]` - 🪙 Instantly sell a card for 75% min market value
+`> /quicksell [id]` - 🪙 Instantly sell a card for 70% min market value
 `> /quicksell_bulk <max_ovr>` - 🪙 Bulk quicksell low cards (e.g. `<= 116`)
 `> /trade send <user>` - 🤝 Trade cards, coins & vouchers directly with another user!
         """, inline=False)
@@ -79,7 +79,7 @@ Join the official DestiFC Support Server for updates, pack flex, giveaways, and 
         embed.add_field(
             name="1️⃣ Getting Started",
             value=(
-                "• `/starterpack` — Claim **3 Billion Coins** and an instant 11-player Starter Squad!\n"
+                "• `/starterpack` — Claim **300 Million Coins** and an instant 11-player Starter Squad!\n"
                 "• `/daily` — Claim your daily coins + **15% jackpot chance**.\n"
                 "• `/balance` — Check your Coins and Draft Vouchers.\n"
                 "• `/season` — Track your Season Pass milestones and claim bonus rewards."
@@ -140,7 +140,7 @@ Join the official DestiFC Support Server for updates, pack flex, giveaways, and 
                 "• `/sbc` — Solve daily squad challenges for coins, vouchers, and exclusive packs.\n"
                 "• `/store players` — Direct 4-hour shop featuring 3 rotating 120–122 Prime Icons/Superstars!\n"
                 "• `/market` — Buy and list players on the global user transfer market.\n"
-                "• `/quicksell` & `/quicksell_bulk` — Instantly cash in cards at 75% market value."
+                "• `/quicksell` & `/quicksell_bulk` — Instantly cash in cards at 70% market value."
             ),
             inline=False
         )

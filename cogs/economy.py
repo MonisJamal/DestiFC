@@ -531,7 +531,7 @@ class EconomyCog(commands.Cog):
             
         import renderz_api
         await database.set_starter_claimed(interaction.user.id)
-        await database.add_coins(interaction.user.id, 3_000_000_000)
+        await database.add_coins(interaction.user.id, 300_000_000)
         await database.add_vouchers(interaction.user.id, 5)
         
         page = random.randint(1, 5)
@@ -547,7 +547,7 @@ class EconomyCog(commands.Cog):
             name = p.get('cardName') or p.get('lastName', 'Unknown')
             given_players.append(f"**{name}** ({p.get('rating', '?')})")
             
-        desc = "💰 **+3,000,000,000 Coins**\n🎫 **+5x Draft Vouchers**\n\n**Your Starter Players:**\n" + "\n".join(given_players)
+        desc = "💰 **+300,000,000 Coins (300M)**\n🎫 **+5x Draft Vouchers**\n\n**Your Starter Players:**\n" + "\n".join(given_players)
         embed = discord.Embed(title="🎉 Starter Pack Claimed!", description=desc, color=discord.Color.green())
         embed.set_footer(text="Use /squad autobuild to equip your new players!")
         await interaction.followup.send(embed=embed)

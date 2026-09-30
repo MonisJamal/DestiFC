@@ -30,7 +30,7 @@ def get_price_limits(ovr: int):
 
 def get_quicksell_value(ovr: int) -> int:
     min_p, _ = get_price_limits(ovr)
-    return max(1, int(min_p * 0.75))
+    return max(1, int(min_p * 0.70))
 
 def format_price_short(val: int) -> str:
     if val >= 1_000_000_000:
@@ -642,7 +642,7 @@ class MarketCog(commands.Cog):
         embed.set_footer(text="All cards listed at minimum price. 10% tax on sale.")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="quicksell", description="Quick sell a player for 75% of min market value (or open dropdown menu)")
+    @app_commands.command(name="quicksell", description="Quick sell a player for 70% of min market value (or open dropdown menu)")
     @app_commands.describe(inventory_id="Card to quick sell (select from dropdown or leave empty to browse)")
     @app_commands.autocomplete(inventory_id=quicksell_inventory_autocomplete)
     async def quicksell(self, interaction: discord.Interaction, inventory_id: int = None):
@@ -662,7 +662,7 @@ class MarketCog(commands.Cog):
             view = QuickSellSelectView(user_id, eligible)
             embed = discord.Embed(
                 title="🪙 Quick Sell Menu",
-                description="Select a card from the dropdown menu below to quick sell it instantly for **75% of its minimum market value**:",
+                description="Select a card from the dropdown menu below to quick sell it instantly for **70% of its minimum market value**:",
                 color=discord.Color.gold()
             )
             return await interaction.followup.send(embed=embed, view=view, ephemeral=True)
@@ -688,12 +688,12 @@ class MarketCog(commands.Cog):
 
         embed = discord.Embed(
             title="🪙 Card Quick Sold!",
-            description=f"Quick sold **{player['player_name']}** `({pos})` ({ovr} OVR) for **{sell_val:,} Coins** 💰\n*(75% of minimum market valuation)*",
+            description=f"Quick sold **{player['player_name']}** `({pos})` ({ovr} OVR) for **{sell_val:,} Coins** 💰\n*(70% of minimum market valuation)*",
             color=discord.Color.gold()
         )
         await interaction.followup.send(embed=embed)
 
-    @app_commands.command(name="quicksell_bulk", description="Bulk quick sell all unlocked, non-squad cards in an OVR range for 75% min value")
+    @app_commands.command(name="quicksell_bulk", description="Bulk quick sell all unlocked, non-squad cards in an OVR range for 70% min value")
     @app_commands.describe(max_ovr="Maximum OVR to quick sell (e.g. 116)", min_ovr="Minimum OVR to quick sell (default 0)")
     async def quicksell_bulk(self, interaction: discord.Interaction, max_ovr: int, min_ovr: int = 0):
         await interaction.response.defer()
