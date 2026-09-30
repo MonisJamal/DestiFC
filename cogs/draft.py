@@ -304,33 +304,30 @@ class DraftCog(commands.Cog):
             is_walkout = is_walkout_pack or is_anim
             
             # Start image generation task concurrently with walkout sequence
-            card_gen_task = asyncio.create_task(asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, is_anim))
+            card_gen_task = asyncio.create_task(asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, False))
             
-            if is_walkout:
+            if is_walkout and amount == 1:
                 # Step 1: Flag / Nation
                 msg = await interaction.followup.send(
                     f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n\n*(Walking onto the stage...)*"
                 )
-                await asyncio.sleep(1.2)
+                await asyncio.sleep(0.5)
                 
                 # Step 2: Position
                 await interaction.followup.edit_message(
                     msg.id,
                     content=f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n# 🏃 **`{pos}`**\n\n*(Entering the stadium tunnel...)*"
                 )
-                await asyncio.sleep(1.2)
+                await asyncio.sleep(0.5)
                 
                 # Step 3: Club
                 await interaction.followup.edit_message(
                     msg.id,
                     content=f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n# 🏃 **`{pos}`**\n# {club_str.upper()}\n\n🔥 **PYROTECHNICS EXPLODING!**"
                 )
-                await asyncio.sleep(1.2)
+                await asyncio.sleep(0.5)
 
             image_binary, filename = await card_gen_task
-            if not image_binary:
-                image_binary, filename = await asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, False)
-                
             file = discord.File(fp=image_binary, filename=filename or 'card.png') if image_binary else None
                 
             walkout_prefix = f"🔥 **{nation_str}** | 🏃 **`{pos}`** | **{club_str}**\n\n" if is_walkout else ""
@@ -361,7 +358,7 @@ class DraftCog(commands.Cog):
             pity_a = max(0, 70 - pity_counter)
             embed.set_footer(text=f"Drafts to Guaranteed Pool B: {pity_b} | Drafts to Guaranteed Pool A: {pity_a}")
             
-            if is_walkout:
+            if is_walkout and amount == 1:
                 if file:
                     await interaction.followup.edit_message(msg.id, content=None, embed=embed, attachments=[file])
                 else:

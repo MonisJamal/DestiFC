@@ -168,7 +168,6 @@ async def get_user(user_id: int) -> dict:
     }
 
 async def add_coins(user_id: int, amount: int):
-    await get_user(user_id)
     p = await get_db()
     await p.execute(
         'UPDATE users SET coins = GREATEST(0, coins + $1) WHERE user_id = $2',
@@ -179,7 +178,6 @@ async def update_coins(user_id: int, amount: int):
     await add_coins(user_id, amount)
 
 async def add_vouchers(user_id: int, amount: int):
-    await get_user(user_id)
     p = await get_db()
     await p.execute(
         'UPDATE users SET vouchers = GREATEST(0, vouchers + $1) WHERE user_id = $2',
@@ -190,7 +188,6 @@ async def update_vouchers(user_id: int, amount: int):
     await add_vouchers(user_id, amount)
 
 async def update_gems(user_id: int, amount: int):
-    await get_user(user_id)
     p = await get_db()
     await p.execute(
         'UPDATE users SET gems = GREATEST(0, gems + $1) WHERE user_id = $2',
@@ -198,7 +195,6 @@ async def update_gems(user_id: int, amount: int):
     )
 
 async def add_fans(user_id: int, amount: int):
-    await get_user(user_id)
     p = await get_db()
     await p.execute(
         'UPDATE users SET fans = GREATEST(0, fans + $1) WHERE user_id = $2',
@@ -206,7 +202,6 @@ async def add_fans(user_id: int, amount: int):
     )
 
 async def increment_drafts(user_id: int, amount: int = 1):
-    await get_user(user_id)
     p = await get_db()
     await p.execute(
         'UPDATE users SET drafts_opened = drafts_opened + $1 WHERE user_id = $2',
@@ -240,7 +235,6 @@ async def add_player_to_inventory(user_id: int, player_data: dict):
 async def add_players_to_inventory_batch(user_id: int, player_list: list):
     if not player_list:
         return
-    await get_user(user_id)
     p = await get_db()
     records = []
     for player_data in player_list:
@@ -256,13 +250,11 @@ async def add_players_to_inventory_batch(user_id: int, player_list: list):
     )
 
 async def get_inventory(user_id: int) -> list:
-    await get_user(user_id)
     p = await get_db()
     rows = await p.fetch('SELECT * FROM inventory WHERE user_id = $1 ORDER BY ovr DESC', user_id)
     return [dict(r) for r in rows]
 
 async def get_inventory_size(user_id: int) -> int:
-    await get_user(user_id)
     p = await get_db()
     val = await p.fetchval('SELECT COUNT(*) FROM inventory WHERE user_id = $1', user_id)
     return val or 0
@@ -270,7 +262,6 @@ async def get_inventory_size(user_id: int) -> int:
 async def remove_players_from_inventory(user_id: int, inventory_ids: list):
     if not inventory_ids:
         return
-    await get_user(user_id)
     p = await get_db()
     int_ids = [int(x) for x in inventory_ids]
     await p.execute(

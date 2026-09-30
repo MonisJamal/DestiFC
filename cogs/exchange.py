@@ -130,28 +130,28 @@ class ExchangeCog(commands.Cog):
             is_anim = is_walkout
             
             # Start image generation task in background during walkout animation
-            card_gen_task = asyncio.create_task(asyncio.to_thread(get_or_create_card_bytes, player_data, 3, is_anim))
+            card_gen_task = asyncio.create_task(asyncio.to_thread(get_or_create_card_bytes, player_data, 3, False))
             
             if is_walkout:
                 # Step 1: Flag / Nation
                 msg = await interaction.followup.send(
                     f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n\n*(Walking onto the stage...)*"
                 )
-                await asyncio.sleep(1.2)
+                await asyncio.sleep(0.5)
                 
                 # Step 2: Position
                 await interaction.followup.edit_message(
                     msg.id,
                     content=f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n# 🏃 **`{pos}`**\n\n*(Entering the tunnel spotlight...)*"
                 )
-                await asyncio.sleep(1.2)
+                await asyncio.sleep(0.5)
                 
                 # Step 3: Club
                 await interaction.followup.edit_message(
                     msg.id,
                     content=f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n# 🏃 **`{pos}`**\n# {club_str.upper()}\n\n🔥 **PYROTECHNICS EXPLODING!**"
                 )
-                await asyncio.sleep(1.2)
+                await asyncio.sleep(0.5)
 
             image_binary, filename = await card_gen_task
             file = discord.File(fp=image_binary, filename=filename)
