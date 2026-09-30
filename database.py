@@ -1637,7 +1637,22 @@ DEFAULT_GAMEPLAY_CONFIG = {
     "draft_battle_winner_coins": 50_000_000,
     "draft_battle_winner_vouchers": 5,
     "custom_card_match_boost": 1.15,
-    "penalty_shootout_enabled": True
+    "penalty_shootout_enabled": True,
+    "division_tiers": [
+        { "id": 1, "name": "Amateur III", "min_fans": 0, "badge": "🥉", "win_reward_coins": 10000000, "win_reward_vouchers": 1 },
+        { "id": 2, "name": "Amateur II", "min_fans": 10000, "badge": "🥉", "win_reward_coins": 12000000, "win_reward_vouchers": 1 },
+        { "id": 3, "name": "Amateur I", "min_fans": 20000, "badge": "🥉", "win_reward_coins": 15000000, "win_reward_vouchers": 1 },
+        { "id": 4, "name": "Pro III", "min_fans": 30000, "badge": "🥈", "win_reward_coins": 18000000, "win_reward_vouchers": 2 },
+        { "id": 5, "name": "Pro II", "min_fans": 50000, "badge": "🥈", "win_reward_coins": 20000000, "win_reward_vouchers": 2 },
+        { "id": 6, "name": "Pro I", "min_fans": 70000, "badge": "🥈", "win_reward_coins": 25000000, "win_reward_vouchers": 2 },
+        { "id": 7, "name": "World Class III", "min_fans": 100000, "badge": "🥇", "win_reward_coins": 30000000, "win_reward_vouchers": 3 },
+        { "id": 8, "name": "World Class II", "min_fans": 200000, "badge": "🥇", "win_reward_coins": 35000000, "win_reward_vouchers": 3 },
+        { "id": 9, "name": "World Class I", "min_fans": 300000, "badge": "🥇", "win_reward_coins": 40000000, "win_reward_vouchers": 3 },
+        { "id": 10, "name": "Legendary III", "min_fans": 400000, "badge": "💎", "win_reward_coins": 50000000, "win_reward_vouchers": 4 },
+        { "id": 11, "name": "Legendary II", "min_fans": 600000, "badge": "💎", "win_reward_coins": 65000000, "win_reward_vouchers": 4 },
+        { "id": 12, "name": "Legendary I", "min_fans": 800000, "badge": "💎", "win_reward_coins": 80000000, "win_reward_vouchers": 5 },
+        { "id": 13, "name": "FC Champion", "min_fans": 1000000, "badge": "🏆", "win_reward_coins": 100000000, "win_reward_vouchers": 6 }
+    ]
 }
 
 _GAMEPLAY_CACHE = None

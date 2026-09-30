@@ -83,22 +83,44 @@ class MatchCog(commands.Cog):
                 count += 1
         return round(total / 11) if count == 11 else 0
 
-    def get_division(self, fans: int):
-        if fans < 10000: return "Amateur III"
-        elif fans < 20000: return "Amateur II"
-        elif fans < 30000: return "Amateur I"
-        elif fans < 50000: return "Pro III"
-        elif fans < 70000: return "Pro II"
-        elif fans < 100000: return "Pro I"
-        elif fans < 200000: return "World Class III"
-        elif fans < 300000: return "World Class II"
-        elif fans < 400000: return "World Class I"
-        elif fans < 600000: return "Legendary III"
-        elif fans < 800000: return "Legendary II"
-        elif fans < 1000000: return "Legendary I"
+    def get_division(self, fans: int, gp_cfg: dict = None):
+        if gp_cfg and "division_tiers" in gp_cfg and gp_cfg["division_tiers"]:
+            tiers = sorted(gp_cfg["division_tiers"], key=lambda x: int(x.get('min_fans', 0)))
+            matched = tiers[0]
+            for t in tiers:
+                if fans >= int(t.get('min_fans', 0)):
+                    matched = t
+                else:
+                    break
+            badge = matched.get('badge', '')
+            name = matched.get('name', 'Amateur')
+            return f"{name} {badge}".strip()
+
+        if fans < 10000: return "Amateur III 🥉"
+        elif fans < 20000: return "Amateur II 🥉"
+        elif fans < 30000: return "Amateur I 🥉"
+        elif fans < 50000: return "Pro III 🥈"
+        elif fans < 70000: return "Pro II 🥈"
+        elif fans < 100000: return "Pro I 🥈"
+        elif fans < 200000: return "World Class III 🥇"
+        elif fans < 300000: return "World Class II 🥇"
+        elif fans < 400000: return "World Class I 🥇"
+        elif fans < 600000: return "Legendary III 💎"
+        elif fans < 800000: return "Legendary II 💎"
+        elif fans < 1000000: return "Legendary I 💎"
         else: return "FC Champion 🏆"
 
-    def get_division_index(self, fans: int):
+    def get_division_index(self, fans: int, gp_cfg: dict = None):
+        if gp_cfg and "division_tiers" in gp_cfg and gp_cfg["division_tiers"]:
+            tiers = sorted(gp_cfg["division_tiers"], key=lambda x: int(x.get('min_fans', 0)))
+            idx = 0
+            for i, t in enumerate(tiers):
+                if fans >= int(t.get('min_fans', 0)):
+                    idx = i
+                else:
+                    break
+            return idx
+
         if fans < 10000: return 0
         elif fans < 20000: return 1
         elif fans < 30000: return 2
@@ -171,7 +193,7 @@ class MatchCog(commands.Cog):
         view = MatchRequestView(interaction.user, opponent, self, squad_a, squad_b, fans_a, fans_b, ovr_a, ovr_b, timeout_secs=timeout_secs)
         
         msg = await interaction.followup.send(
-            f"⚔️ **DIVISION RIVALS CHALLENGE!** ⚔️\n\n**{interaction.user.display_name} ({ovr_a})** [{self.get_division(fans_a)}]\n🆚\n**{opponent.display_name} ({ovr_b})** [{self.get_division(fans_b)}]\n\nHey {opponent.mention}, you have been challenged! Do you accept? *(Expires in {timeout_secs}s)*",
+            f"⚔️ **DIVISION RIVALS CHALLENGE!** ⚔️\n\n**{interaction.user.display_name} ({ovr_a})** [{self.get_division(fans_a, gp_cfg)}]\n🆚\n**{opponent.display_name} ({ovr_b})** [{self.get_division(fans_b, gp_cfg)}]\n\nHey {opponent.mention}, you have been challenged! Do you accept? *(Expires in {timeout_secs}s)*",
             view=view
         )
         view.message = msg
@@ -720,13 +742,14 @@ class MatchCog(commands.Cog):
                 embed.add_field(name="📍 Your Inventory", value=f"🎫 **{u_data.get('vouchers', 0):,}** Draft Vouchers", inline=False)
             
         else:
+            gp_cfg = await database.get_gameplay_config()
             lb = await database.get_leaderboard(10)
             lines = []
             top_ids = set()
             for i, row in enumerate(lb):
                 uid = row['user_id']
                 top_ids.add(uid)
-                div = self.get_division(row['fans'])
+                div = self.get_division(row['fans'], gp_cfg)
                 medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"**{i+1}.**"
                 lines.append(f"{medal} <@{uid}> — **{row['fans']:,}** Fans `[{div}]`")
             desc = "\n".join(lines) if lines else "No ranked players yet!"
@@ -735,7 +758,7 @@ class MatchCog(commands.Cog):
             if user_id not in top_ids:
                 user_rank_info = await database.get_user_rank(user_id)
                 user_fans = user_rank_info.get('fans', 0)
-                user_div = self.get_division(user_fans)
+                user_div = self.get_division(user_fans, gp_cfg)
                 embed.add_field(
                     name="📍 Your Global Rank",
                     value=f"**Rank #{user_rank_info.get('rank', 'N/A')}** of {user_rank_info.get('total_users', 1)} • **{user_fans:,}** Fans `[{user_div}]`",
