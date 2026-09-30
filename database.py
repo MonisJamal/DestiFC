@@ -207,6 +207,32 @@ async def add_vouchers(user_id: int, amount: int):
 async def update_vouchers(user_id: int, amount: int):
     await add_vouchers(user_id, amount)
 
+async def get_daily_vouchers_bought(user_id: int) -> int:
+    user = await get_user(user_id)
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    if user.get("last_voucher_buy_date") != today:
+        return 0
+    return int(user.get("daily_vouchers_bought", 0) or 0)
+
+async def record_vouchers_bought(user_id: int, amount: int):
+    global _USER_CACHE
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    user = await get_user(user_id)
+    
+    current = 0 if user.get("last_voucher_buy_date") != today else int(user.get("daily_vouchers_bought", 0) or 0)
+    new_total = current + amount
+
+    if user_id in _USER_CACHE:
+        _USER_CACHE[user_id]['data']['daily_vouchers_bought'] = new_total
+        _USER_CACHE[user_id]['data']['last_voucher_buy_date'] = today
+
+    p = await get_db()
+    await p.execute('''
+        UPDATE users 
+        SET daily_vouchers_bought = $1, last_voucher_buy_date = $2
+        WHERE user_id = $3
+    ''', new_total, today, user_id)
+
 async def update_gems(user_id: int, amount: int):
     global _USER_CACHE
     if user_id in _USER_CACHE:

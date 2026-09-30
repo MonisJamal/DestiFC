@@ -401,13 +401,16 @@ class StoreCog(commands.Cog):
         user = await database.get_user(user_id)
         coins = user.get("coins", 0)
         vouchers = user.get("vouchers", 0)
+        daily_bought = await database.get_daily_vouchers_bought(user_id)
+        daily_left = max(0, 70 - daily_bought)
 
         embed = discord.Embed(
             title="🎟️ Draft Voucher Exchange Shop",
             description=(
                 f"Buy **Draft Vouchers 🎫** with your Coins to open more packs in `/draft`!\n\n"
                 f"🪙 **Your Balance:** `{coins:,} Coins`\n"
-                f"🎟️ **Your Vouchers:** `{vouchers:,} Vouchers`\n\n"
+                f"🎟️ **Your Vouchers:** `{vouchers:,} Vouchers`\n"
+                f"📊 **Daily Coin Purchase Limit:** `{daily_bought}/70` (Remaining: **{daily_left}**)\n\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"📦 **Single Voucher:** `30,000,000 Coins` (30M)\n"
                 f"🔥 **10x Mega Bundle:** `250,000,000 Coins` (250M) — *Save 50M Coins!*\n"
@@ -415,21 +418,34 @@ class StoreCog(commands.Cog):
             ),
             color=discord.Color.gold()
         )
-        embed.set_footer(text="Click the buttons below or use /buy_vouchers <amount>")
+        embed.set_footer(text="Click the buttons below or use /buy_vouchers <amount> | Daily Limit: 70")
 
         view = VoucherShopView(user_id)
         await interaction.followup.send(embed=embed, view=view)
 
-    @app_commands.command(name="buy_vouchers", description="Buy Draft Vouchers with Coins (30M each, 10 for 250M)")
-    @app_commands.describe(amount="Number of Draft Vouchers to purchase")
+    @app_commands.command(name="buy_vouchers", description="Buy Draft Vouchers with Coins (30M each, 10 for 250M | Max 70/day)")
+    @app_commands.describe(amount="Number of Draft Vouchers to purchase (Max 70 per day)")
     async def buy_vouchers_cmd(self, interaction: discord.Interaction, amount: int):
         await interaction.response.defer()
         if amount <= 0:
             return await interaction.followup.send("❌ Please enter a positive number of vouchers.", ephemeral=True)
-        if amount > 500:
-            return await interaction.followup.send("❌ You can buy a maximum of 500 vouchers per transaction.", ephemeral=True)
-
+        
         user_id = interaction.user.id
+        daily_bought = await database.get_daily_vouchers_bought(user_id)
+        daily_left = max(0, 70 - daily_bought)
+
+        if daily_left <= 0:
+            return await interaction.followup.send(
+                f"❌ **Daily Limit Reached!**\nYou have reached the limit of **70 Draft Vouchers per day**.\nLimit resets daily at 00:00 UTC.",
+                ephemeral=True
+            )
+
+        if amount > daily_left:
+            return await interaction.followup.send(
+                f"❌ **Daily Limit Exceeded!**\nYou have bought **{daily_bought}/70** vouchers today.\nYou can only buy **{daily_left} more** vouchers today (Limit resets at 00:00 UTC).",
+                ephemeral=True
+            )
+
         user = await database.get_user(user_id)
         balance = user.get("coins", 0)
 
@@ -446,12 +462,17 @@ class StoreCog(commands.Cog):
 
         await database.add_coins(user_id, -total_cost)
         await database.add_vouchers(user_id, amount)
+        await database.record_vouchers_bought(user_id, amount)
+
+        new_daily_bought = daily_bought + amount
+        new_daily_left = max(0, 70 - new_daily_bought)
 
         savings_msg = f" *(Saved 50M per 10-bundle!)*" if bundles_10 > 0 else ""
         embed = discord.Embed(
             title="🎟️ Vouchers Purchased!",
             description=(
                 f"Successfully purchased **{amount}x Draft Vouchers 🎫** for **{total_cost:,} Coins**!{savings_msg}\n\n"
+                f"📊 **Daily Quota:** `{new_daily_bought}/70` (Remaining Allowance: **{new_daily_left}**)\n"
                 f"Use `/draft` to open packs now!"
             ),
             color=discord.Color.green()
@@ -470,6 +491,21 @@ class VoucherShopView(discord.ui.View):
 
         await interaction.response.defer()
         user_id = interaction.user.id
+        daily_bought = await database.get_daily_vouchers_bought(user_id)
+        daily_left = max(0, 70 - daily_bought)
+
+        if daily_left <= 0:
+            return await interaction.followup.send(
+                f"❌ **Daily Limit Reached!**\nYou have already purchased your maximum allowance of **70 Draft Vouchers** today.\nLimit resets daily at 00:00 UTC.",
+                ephemeral=True
+            )
+
+        if amount > daily_left:
+            return await interaction.followup.send(
+                f"❌ **Daily Limit Exceeded!**\nYou have bought **{daily_bought}/70** vouchers today.\nYou can only buy **{daily_left} more** vouchers today (Limit: 70/day).",
+                ephemeral=True
+            )
+
         user = await database.get_user(user_id)
         balance = user.get("coins", 0)
 
@@ -478,10 +514,19 @@ class VoucherShopView(discord.ui.View):
 
         await database.add_coins(user_id, -cost)
         await database.add_vouchers(user_id, amount)
+        await database.record_vouchers_bought(user_id, amount)
+
+        new_daily_bought = daily_bought + amount
+        new_daily_left = max(0, 70 - new_daily_bought)
 
         embed = discord.Embed(
             title="🎉 Vouchers Purchased!",
-            description=f"You successfully bought **{amount}x Draft Vouchers 🎫** for **{cost:,} Coins**!\nNew Balance: **{(balance - cost):,} Coins** | **{user.get('vouchers', 0) + amount} Vouchers**",
+            description=(
+                f"You successfully bought **{amount}x Draft Vouchers 🎫** for **{cost:,} Coins**!\n\n"
+                f"🪙 **New Balance:** `{(balance - cost):,} Coins`\n"
+                f"🎟️ **Total Vouchers:** `{user.get('vouchers', 0) + amount} Vouchers`\n"
+                f"📊 **Daily Quota:** `{new_daily_bought}/70` (Remaining: **{new_daily_left}**)"
+            ),
             color=discord.Color.green()
         )
         await interaction.followup.send(embed=embed)
