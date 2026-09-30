@@ -258,6 +258,7 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                 capped_frames = min(max_frames or 30, 30)
                 step = 2 if capped_frames > 18 else 1
                 frames = []
+                discord_dark_bg = (30, 31, 34, 255)  # Discord dark theme (#1E1F22)
                 for frame_idx in range(0, capped_frames, step):
                     col = frame_idx % cols
                     row = frame_idx // cols
@@ -269,7 +270,11 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                     frame_card = card.copy()
                     frame_card.alpha_composite(frame_sprite)
                     frame_card.alpha_composite(overlay)
-                    frames.append(frame_card)
+                    
+                    # Composite onto clean dark canvas to eliminate transparent edge pixel distortion
+                    solid_canvas = Image.new("RGBA", target_size, discord_dark_bg)
+                    solid_canvas.alpha_composite(frame_card)
+                    frames.append(solid_canvas.convert("RGB"))
                     
                 if frames:
                     if len(_MEMORY_CARD_CACHE) < 500:
@@ -299,8 +304,7 @@ def save_card_to_bytes(card_result):
             append_images=card_result[1:],
             duration=80,
             loop=0,
-            optimize=True,
-            disposal=2
+            optimize=True
         )
         binary.seek(0)
         return binary, 'card.gif'

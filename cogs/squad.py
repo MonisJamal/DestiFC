@@ -41,7 +41,7 @@ FORMATION_MAP = {
 }
 
 import database
-from maps import extract_pos, TACTICS, is_position_compatible
+from maps import extract_pos, TACTICS, is_position_compatible, get_player_official_positions, check_player_position_eligibility
 from cogs.market import get_price_limits, format_price_short
 
 async def formation_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
@@ -444,6 +444,21 @@ class SquadCog(commands.Cog):
         new_name = player_row['player_name']
         new_ovr = player_row['ovr']
         
+        # Check position compatibility against official RenderZ positions
+        is_eligible, is_primary = check_player_position_eligibility(player_row, target_pos)
+        main_p, alt_ps = get_player_official_positions(player_row)
+        clean_target = ''.join([c for c in str(target_pos) if not c.isdigit()]).strip().upper()
+        
+        if not is_eligible:
+            alt_str = ", ".join(alt_ps) if alt_ps else "None"
+            return await interaction.followup.send(
+                f"❌ **Position Incompatible!**\n**{new_name}** cannot play at **{target_pos}** (`{clean_target}`).\n"
+                f"• **Main Position:** `{main_p}`\n"
+                f"• **Official Alt Positions:** `{alt_str}`\n\n"
+                f"*(Cards can only play at their main position or official alternate positions from RenderZ)*",
+                ephemeral=True
+            )
+
         # If card was equipped in another slot, automatically unequip from that slot (move/swap)
         repositioned_from = None
         for pos, active_p in list(players.items()):
@@ -460,10 +475,7 @@ class SquadCog(commands.Cog):
             "ovr": new_ovr
         }
         
-        card_pos = extract_pos(player_row)
-        clean_target = ''.join([c for c in target_pos if not c.isdigit()]).strip().upper()
-        clean_card = ''.join([c for c in card_pos if not c.isdigit()]).strip().upper()
-        alt_note = f" *(Alternate Position: `{clean_card}` ➔ `{clean_target}` • 100% OVR)*" if (clean_card != clean_target and is_position_compatible(clean_card, clean_target)) else ""
+        alt_note = f" *(Official Alt Position: `{main_p}` ➔ `{clean_target}` • 100% OVR)*" if not is_primary else ""
         reposition_note = f" (Moved from **{repositioned_from}**)" if repositioned_from else ""
         await interaction.followup.send(f"✅ Set **{new_name} ({new_ovr} OVR)** as your starting **{target_pos}**!{reposition_note}{alt_note}")
 
@@ -499,43 +511,65 @@ class SquadCog(commands.Cog):
             await interaction.followup.send("❌ Your club is empty! Open some packs with `/draft` first.", ephemeral=True)
             return
         
-        # Parse each inventory card's position
+        # Parse each inventory card's official RenderZ main and alternate positions
         enriched = []
         for p in inventory:
-            player_pos = extract_pos(p)
-            enriched.append({**p, 'pos': player_pos})
+            main_pos, alts = get_player_official_positions(p)
+            enriched.append({
+                **p,
+                'main_pos': main_pos,
+                'alt_positions': alts
+            })
         
         # Sort by OVR descending so highest OVR gets prioritized
-        enriched.sort(key=lambda x: x['ovr'], reverse=True)
+        enriched.sort(key=lambda x: x.get('ovr', 0), reverse=True)
         
         new_players = {slot: None for slot in positions}
         used_ids = set()
         used_names = set()
         
-        for p in enriched:
-            if p['id'] in used_ids: continue
-            if p['player_name'] in used_names: continue
-            
-            # Find an empty slot this player is compatible with (Natural or Alternate position)
-            assigned = False
-            for slot in positions:
-                if new_players[slot] is not None: continue # slot is full
-                if is_position_compatible(p['pos'], slot):
+        # PASS 1 (HIGH PRIORITY): Fill slots with players whose PRIMARY / MAIN position matches!
+        for slot in positions:
+            clean_slot = ''.join([c for c in str(slot) if not c.isdigit()]).strip().upper()
+            for p in enriched:
+                if p['id'] in used_ids or p['player_name'] in used_names:
+                    continue
+                if p['main_pos'] == clean_slot:
                     new_players[slot] = {
                         "inv_id": p['id'],
                         "name": p['player_name'],
-                        "ovr": p['ovr']
+                        "ovr": p['ovr'],
+                        "is_alt": False
                     }
                     used_ids.add(p['id'])
                     used_names.add(p['player_name'])
-                    assigned = True
                     break
-            
-            # Stop if all slots are filled
-            if all(v is not None for v in new_players.values()):
-                break
+                    
+        # PASS 2 (SECONDARY): Fill remaining empty slots with players who officially have this slot in potentialPositions!
+        for slot in positions:
+            if new_players[slot] is not None:
+                continue
+            clean_slot = ''.join([c for c in str(slot) if not c.isdigit()]).strip().upper()
+            for p in enriched:
+                if p['id'] in used_ids or p['player_name'] in used_names:
+                    continue
+                if clean_slot in p['alt_positions']:
+                    new_players[slot] = {
+                        "inv_id": p['id'],
+                        "name": p['player_name'],
+                        "ovr": p['ovr'],
+                        "is_alt": True
+                    }
+                    used_ids.add(p['id'])
+                    used_names.add(p['player_name'])
+                    break
         
-        squad["players"] = new_players
+        # Clean dict for database
+        saved_players = {
+            slot: {"inv_id": p["inv_id"], "name": p["name"], "ovr": p["ovr"]} if p else None
+            for slot, p in new_players.items()
+        }
+        squad["players"] = saved_players
         await database.update_squad(interaction.user.id, squad)
         
         filled = sum(1 for v in new_players.values() if v)
@@ -545,16 +579,17 @@ class SquadCog(commands.Cog):
         lines = []
         for pos, p in new_players.items():
             if p:
-                lines.append(f"**{pos}** → {p['name']} ({p['ovr']})")
+                alt_tag = " `(Alt Pos)`" if p.get('is_alt') else ""
+                lines.append(f"**{pos}** → {p['name']} ({p['ovr']}){alt_tag}")
             else:
                 lines.append(f"**{pos}** → ❌ No compatible player")
         
         embed = discord.Embed(
-            title="⚡ Squad Auto-Built!",
+            title="⚡ Squad Auto-Built (Main Positions Prioritized)",
             description="\n".join(lines),
             color=discord.Color.green()
         )
-        embed.set_footer(text=f"Team OVR: {team_ovr} | {filled}/11 Positions Filled")
+        embed.set_footer(text=f"Team OVR: {team_ovr} | {filled}/11 Positions Filled • Official RenderZ positions applied")
         
         await interaction.followup.send(embed=embed)
 

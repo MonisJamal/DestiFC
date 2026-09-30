@@ -281,39 +281,80 @@ def extract_pos(item) -> str:
 
     return "ST"
 
-# ================= Alternate Position Compatibility =================
-# Players standing in their natural OR alternate positions play at 100% full OVR without penalty
-POSITION_ALTERNATES = {
-    "ST": {"ST", "CF", "CAM", "LF", "RF"},
-    "CF": {"CF", "ST", "CAM", "LF", "RF"},
-    "LF": {"LF", "CF", "ST", "LW"},
-    "RF": {"RF", "CF", "ST", "RW"},
-    "LW": {"LW", "LM", "RW", "ST", "LF"},
-    "RW": {"RW", "RM", "LW", "ST", "RF"},
-    "CAM": {"CAM", "CM", "CF", "ST", "LM", "RM"},
-    "CM": {"CM", "CDM", "CAM", "LM", "RM"},
-    "CDM": {"CDM", "CM", "CB"},
-    "LM": {"LM", "LW", "CM", "LWB", "RM"},
-    "RM": {"RM", "RW", "CM", "RWB", "LM"},
-    "CB": {"CB", "LB", "RB", "CDM"},
-    "LB": {"LB", "LWB", "CB", "LM"},
-    "RB": {"RB", "RWB", "CB", "RM"},
-    "LWB": {"LWB", "LB", "LM", "CB"},
-    "RWB": {"RWB", "RB", "RM", "CB"},
-    "GK": {"GK"}
-}
+# ================= Official RenderZ Database Position Compatibility =================
+# Players play with 100% full OVR at their primary position or any official RenderZ potentialPositions
 
-def is_position_compatible(player_natural_pos: str, slot_pos: str) -> bool:
+def get_player_official_positions(player_item) -> tuple[str, list[str]]:
     """
-    Returns True if slot_pos is the player's primary position or a natural alternate position.
+    Extracts the official main position and alternate positions (potentialPositions)
+    directly from the player's RenderZ card data.
     """
-    if not player_natural_pos or not slot_pos:
-        return True
+    if not player_item:
+        return "ST", []
+    
+    # If wrapped in DB row
+    if isinstance(player_item, dict) and 'player_data' in player_item:
+        raw_pd = player_item['player_data']
+        if isinstance(raw_pd, str):
+            try: raw_pd = json.loads(raw_pd)
+            except Exception: raw_pd = {}
+        if isinstance(raw_pd, dict):
+            player_item = {**raw_pd, **player_item}
+
+    main_pos = extract_pos(player_item)
+    
+    # Extract potentialPositions from RenderZ
+    alt_raw = (
+        player_item.get('potentialPositions') 
+        or player_item.get('potential_positions') 
+        or player_item.get('altPositions') 
+        or player_item.get('alternatePositions')
+        or []
+    )
+    if isinstance(alt_raw, str):
+        try: alt_raw = json.loads(alt_raw)
+        except Exception: alt_raw = [alt_raw]
+    
+    clean_alts = []
+    if isinstance(alt_raw, (list, tuple)):
+        for ap in alt_raw:
+            if ap:
+                clean_ap = ''.join([c for c in str(ap) if not c.isdigit()]).strip().upper()
+                if clean_ap and clean_ap != main_pos and clean_ap not in clean_alts:
+                    clean_alts.append(clean_ap)
+                    
+    return main_pos, clean_alts
+
+def check_player_position_eligibility(player_item, slot_pos: str) -> tuple[bool, bool]:
+    """
+    Returns (is_eligible, is_primary) based strictly on official RenderZ database positions.
+    - is_primary: True if slot is player's main natural position.
+    - is_eligible: True if slot is player's main position OR in their official potentialPositions.
+    """
+    if not slot_pos:
+        return True, True
     clean_slot = ''.join([c for c in str(slot_pos) if not c.isdigit()]).strip().upper()
-    clean_nat = ''.join([c for c in str(player_natural_pos) if not c.isdigit()]).strip().upper()
-    if clean_nat == clean_slot:
+    main_pos, alts = get_player_official_positions(player_item)
+    
+    if clean_slot == main_pos:
+        return True, True
+    if clean_slot in alts:
+        return True, False
+    return False, False
+
+def is_position_compatible(player_item_or_pos, slot_pos: str) -> bool:
+    """
+    Returns True if slot_pos is the player's primary position or an official RenderZ alternate position.
+    """
+    if not player_item_or_pos or not slot_pos:
         return True
-    return clean_slot in POSITION_ALTERNATES.get(clean_nat, set())
+    if isinstance(player_item_or_pos, dict):
+        eligible, _ = check_player_position_eligibility(player_item_or_pos, slot_pos)
+        return eligible
+    # String fallback
+    clean_slot = ''.join([c for c in str(slot_pos) if not c.isdigit()]).strip().upper()
+    clean_nat = ''.join([c for c in str(player_item_or_pos) if not c.isdigit()]).strip().upper()
+    return clean_nat == clean_slot
 
 # ================= Tactics & Formations Synergy =================
 TACTICS = {
