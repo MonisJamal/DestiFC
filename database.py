@@ -666,22 +666,60 @@ async def get_all_custom_draft_cards():
     except Exception:
         return []
 
-async def increment_drafts_since_walkout(user_id: int, amount: int = 1):
-    await get_user(user_id)
-    p = await get_db()
-    await p.execute(
-        'UPDATE users SET drafts_since_walkout = COALESCE(drafts_since_walkout, 0) + $1 WHERE user_id = $2',
-        amount, user_id
-    )
+async def get_draft_pity(user_id: int, pack_id: int | str = 1) -> int:
+    user = await get_user(user_id)
+    pity_data = user.get('draft_pity') or {}
+    if isinstance(pity_data, str):
+        try:
+            pity_data = json.loads(pity_data)
+        except Exception:
+            pity_data = {}
+    key = str(pack_id)
+    if isinstance(pity_data, dict) and key in pity_data:
+        return int(pity_data[key])
+    return int(user.get('drafts_since_walkout', 0))
 
-async def reset_drafts_since_walkout(user_id: int):
-    p = await get_db()
-    await p.execute('UPDATE users SET drafts_since_walkout = 0 WHERE user_id = $1', user_id)
+async def set_draft_pity(user_id: int, pack_id: int | str, count: int):
+    global _USER_CACHE
+    key = str(pack_id)
+    count = max(0, int(count))
+    
+    # Mutate in-memory cache immediately for 0ms read latency
+    if user_id in _USER_CACHE:
+        cached_user = _USER_CACHE[user_id]['data']
+        pity_data = cached_user.get('draft_pity') or {}
+        if isinstance(pity_data, str):
+            try: pity_data = json.loads(pity_data)
+            except Exception: pity_data = {}
+        elif not isinstance(pity_data, dict):
+            pity_data = {}
+        pity_data[key] = count
+        cached_user['draft_pity'] = pity_data
+        cached_user['drafts_since_walkout'] = count
 
-async def set_drafts_since_walkout(user_id: int, count: int):
-    await get_user(user_id)
     p = await get_db()
-    await p.execute('UPDATE users SET drafts_since_walkout = $1 WHERE user_id = $2', count, user_id)
+    await p.execute('''
+        UPDATE users 
+        SET draft_pity = jsonb_set(COALESCE(draft_pity, '{"1":0,"2":0,"3":0}'::jsonb), $1::text[], $2::jsonb, true),
+            drafts_since_walkout = $3
+        WHERE user_id = $4
+    ''', [key], json.dumps(count), count, user_id)
+
+async def increment_draft_pity(user_id: int, pack_id: int | str, amount: int = 1):
+    current = await get_draft_pity(user_id, pack_id)
+    await set_draft_pity(user_id, pack_id, current + amount)
+
+async def reset_draft_pity(user_id: int, pack_id: int | str):
+    await set_draft_pity(user_id, pack_id, 0)
+
+async def set_drafts_since_walkout(user_id: int, count: int, pack_id: int | str = 1):
+    await set_draft_pity(user_id, pack_id, count)
+
+async def increment_drafts_since_walkout(user_id: int, amount: int = 1, pack_id: int | str = 1):
+    await increment_draft_pity(user_id, pack_id, amount)
+
+async def reset_drafts_since_walkout(user_id: int, pack_id: int | str = 1):
+    await reset_draft_pity(user_id, pack_id)
 
 async def is_profile_private(user_id: int) -> bool:
     user = await get_user(user_id)

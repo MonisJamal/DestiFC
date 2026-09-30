@@ -317,9 +317,7 @@ class DraftCog(commands.Cog):
         pack_tier_name = "Standard"
         
         current_drafts = user.get('drafts_opened', 0)
-        pity_counter = user.get('drafts_since_walkout')
-        if pity_counter is None:
-            pity_counter = 0
+        pity_counter = await database.get_draft_pity(user_id, pack)
 
         # Helper to pick Pool A card with exact weightings (6% 122, 35% 121, 59% 120)
         def pick_pool_a_weighted(pool_a_list):
@@ -359,7 +357,7 @@ class DraftCog(commands.Cog):
             if roll <= 2.5:
                 # Pool A (2.5% base chance: 6% for 122, 35% for 121, 59% for 120)
                 is_walkout = True
-                pity_counter = 0  # RESET PITY IMMEDIATELY
+                pity_counter = 0  # RESET PITY FOR THIS DRAFT PACK IMMEDIATELY
                 tier_name = "WALKOUT 🌟🌟🌟"
                 player_data = pick_pool_a_weighted(d['pool_a'])
             elif roll <= 32.5:
@@ -386,7 +384,7 @@ class DraftCog(commands.Cog):
             database.add_vouchers(user_id, -amount),
             database.add_players_to_inventory_batch(user_id, pulled_players),
             database.increment_drafts(user_id, amount),
-            database.set_drafts_since_walkout(user_id, pity_counter)
+            database.set_draft_pity(user_id, pack, pity_counter)
         )
         card_gen_task = asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, is_anim)
 
@@ -480,7 +478,7 @@ class DraftCog(commands.Cog):
             
             pity_b = 10 - (pity_counter % 10)
             pity_a = max(0, 70 - pity_counter)
-            embed.set_footer(text=f"Drafts to Guaranteed Pool B: {pity_b} | Drafts to Guaranteed Pool A: {pity_a}")
+            embed.set_footer(text=f"Draft {pack} Pity ➔ Pool B in {pity_b} drafts | Pool A Walkout in {pity_a} drafts")
             
             if file:
                 await interaction.followup.send(embed=embed, file=file)
