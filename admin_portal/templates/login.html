@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DestiFC Control</title><link rel="stylesheet" href="/static/styles.css"></head>
+<body class="login-body"><div class="aurora aurora-one"></div><div class="aurora aurora-two"></div><div class="grain"></div><main class="login-card glass">
+  <div class="brand-mark large">D</div><p class="eyebrow">DestiFC ADMIN</p><h1>Control, beautifully.</h1><p class="muted">The private command center for your Discord economy.</p>
+  {% if flash %}<div class="inline-note {{ flash.style }}">{{ flash.message }}</div>{% endif %}
+  {% if configured %}<form method="post" action="/login"><label>Admin password<input type="password" name="password" autofocus required></label><button class="primary wide" type="submit">Unlock control <span>→</span></button></form>{% else %}<div class="inline-note error">Add <code>ADMIN_PORTAL_PASSWORD</code> and <code>ADMIN_PORTAL_SESSION_SECRET</code> to your environment, then restart the portal.</div>{% endif %}
+</main></body></html>

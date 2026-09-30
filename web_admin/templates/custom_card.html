@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Custom Cards{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Add Custom Card</h1>
+
+<div class="glass-panel" style="max-width: 800px;">
+    <form method="POST" action="{{ url_for('custom_cards') }}" enctype="multipart/form-data">
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Player Name</label>
+                <input type="text" name="name" class="apple-input" required placeholder="e.g. Lionel Messi">
+            </div>
+            
+            <div class="form-group">
+                <label>OVR Rating</label>
+                <input type="number" name="ovr" class="apple-input" required min="1" max="150" placeholder="e.g. 125">
+            </div>
+            
+            <div class="form-group">
+                <label>Position</label>
+                <input type="text" name="position" class="apple-input" required placeholder="e.g. RW">
+            </div>
+            
+            <div class="form-group">
+                <label>Quantity to Give</label>
+                <input type="number" name="quantity" class="apple-input" value="1" min="1">
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 1rem;">
+            <label>Card Image (.webp)</label>
+            <input type="file" name="card_image" class="apple-input" accept=".webp" required style="padding: 10px;">
+        </div>
+        
+        <div class="form-group" style="display: flex; align-items: center; gap: 15px; margin-top: 2rem;">
+            <label class="apple-switch">
+                <input type="checkbox" name="in_drafts" checked>
+                <span class="slider"></span>
+            </label>
+            <span style="font-weight: 500;">Available in Drafts?</span>
+        </div>
+
+        <div class="fx-layer" style="margin-top: 3rem;">
+            <button type="submit" class="box" style="border: none; background: transparent; padding: 0; margin: 0; --w: 200px; --h: 60px;">
+                <span class="text glass-btn" style="font-size: 18px;">
+                    Upload & Add
+                </span>
+                <div class="circle-overlay"></div>
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

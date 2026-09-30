@@ -32,6 +32,22 @@ class BackupCog(commands.Cog):
                     os.remove(os.path.join('backups', old_file))
                     print(f"[Backup] Deleted old backup: {old_file}")
                     
+            # Automatically push the new backups to the private GitHub repository
+            print("[Backup] Pushing latest backups to GitHub...")
+            import asyncio
+            process = await asyncio.create_subprocess_shell(
+                'git add backups/ && git commit -m "Automated Hourly DB Backup" && git push origin main',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            if process.returncode == 0:
+                print("[Backup] Successfully synced to GitHub cloud!")
+            else:
+                # If there are no changes to commit, git returns a non-zero exit code, which is fine.
+                if b"nothing to commit" not in stdout:
+                    print(f"[Backup Warning] Git push returned code {process.returncode}")
+                    
         except Exception as e:
             print(f"[Backup Error] Failed to create backup: {e}")
 

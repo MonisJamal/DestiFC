@@ -6,3 +6,11 @@ aiosqlite
 python-dotenv
 fonttools
 brotli
+fastapi
+uvicorn[standard]
+python-multipart
+jinja2
+itsdangerous
+flask
+werkzeug
+asyncpg

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin Portal{% endblock %} - DestiFC</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            DestiFC Admin
+        </div>
+        
+        <nav class="nav-links">
+            <a href="{{ url_for('index') }}" class="nav-item {% if request.endpoint == 'index' %}active{% endif %}">Dashboard</a>
+            <a href="{{ url_for('custom_cards') }}" class="nav-item {% if request.endpoint == 'custom_cards' %}active{% endif %}">Custom Cards</a>
+            <a href="{{ url_for('database_view') }}" class="nav-item {% if request.endpoint == 'database_view' %}active{% endif %}">Database</a>
+            <a href="{{ url_for('formation_editor') }}" class="nav-item {% if request.endpoint == 'formation_editor' %}active{% endif %}">Formations</a>
+        </nav>
+        <div style="margin-top: auto;">
+            <a href="{{ url_for('logout') }}" class="nav-item" style="color: #ff3b30;">
+                Logout
+            </a>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-msg {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

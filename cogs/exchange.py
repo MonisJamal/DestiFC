@@ -1,112 +1,145 @@
 import discord
+import asyncio
 from discord.ext import commands
 from discord import app_commands
-import database
 import random
-from renderz_api import query_players_by_program, search_fifarenderz
-from card_generator import generate_card
 import io
+import json
+from renderz_api import query_players_by_program, fetch_all_players_by_rating
+from card_generator import get_or_create_card_bytes
+from maps import nation_map, club_map
+import database
 
 class ExchangeCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="exchange", description="Exchange lower OVR players for a 120+ OVR Walkout!")
-    async def exchange(self, interaction: discord.Interaction):
+    async def exchange_autocomplete(self, interaction: discord.Interaction, current: str):
+        choices = [
+            app_commands.Choice(name="Standard Exchange (25 Any Cards -> 120+ Walkout)", value="standard"),
+            app_commands.Choice(name="Fodder Exchange (20x 110-116 Cards -> 117-119 Card)", value="fodder")
+        ]
+        return [c for c in choices if current.lower() in c.name.lower()]
+
+    @app_commands.command(name="exchange", description="Trade useless cards for guaranteed high OVR players!")
+    @app_commands.autocomplete(exchange_type=exchange_autocomplete)
+    async def exchange(self, interaction: discord.Interaction, exchange_type: str = "standard"):
         await interaction.response.defer()
         user_id = interaction.user.id
         
+        # Check inventory size
+        inv_size = await database.get_inventory_size(user_id)
+        if inv_size >= 1000:
+            return await interaction.followup.send("❌ Your inventory is full! You cannot open more packs until you quicksell or use cards in `/squad`.")
+            
         inventory = await database.get_inventory(user_id)
-        squad = await database.get_squad(user_id)
         
-        # Get list of inv_ids currently in the active squad
-        active_inv_ids = []
-        for pos, player in squad.get("players", {}).items():
-            if player:
-                active_inv_ids.append(player["inv_id"])
+        # Lock squad players — never sacrifice your main 11!
+        locked_ids = await database.get_squad_locked_ids(user_id)
+        inventory = [row for row in inventory if int(row.get('id', -1)) not in locked_ids and not row.get('locked', 0)]
+        
+        def get_ovr(row):
+            try:
+                if isinstance(row, dict): return int(row.get('ovr', 0))
+                return json.loads(row[1]).get('rating', 0)
+            except: return 0
+            
+        if exchange_type == "fodder":
+            cost = 20
+            # Filter for 110-116
+            fodder_cards = [row for row in inventory if 110 <= get_ovr(row) <= 116]
+            if len(fodder_cards) < cost:
+                return await interaction.followup.send(f"❌ You don't have enough Fodder cards! You need {cost} cards rated between 110-116, but you only have {len(fodder_cards)}.")
                 
-        # Filter available players
-        available_players = [p for p in inventory if p["id"] not in active_inv_ids]
-        
-        # We need 20x (112-116) and 5x (117+) to equal 25 cards total
-        tier_1_candidates = sorted([p for p in available_players if 112 <= p["ovr"] <= 116], key=lambda x: x["ovr"])
-        tier_2_candidates = sorted([p for p in available_players if p["ovr"] >= 117], key=lambda x: x["ovr"])
-        
-        if len(tier_1_candidates) < 20 or len(tier_2_candidates) < 5:
-            await interaction.followup.send(f"❌ **Exchange Requirements Not Met!**\nTo get a 120+ Walkout, you must exchange **25 Cards** total:\n• 20x Players (112-116 OVR) [You have {len(tier_1_candidates)}]\n• 5x Players (117+ OVR) [You have {len(tier_2_candidates)}]\n*(Note: Players in your active squad cannot be exchanged)*", ephemeral=True)
-            return
+            fodder_cards.sort(key=get_ovr)
+            to_delete = [row['id'] if isinstance(row, dict) else row[0] for row in fodder_cards[:cost]]
             
-        # Select the cheapest ones to consume
-        consumed = tier_1_candidates[:20] + tier_2_candidates[:5]
-        consumed_ids = [p["id"] for p in consumed]
-        
-        await database.remove_players_from_inventory(user_id, consumed_ids)
-        
-        msg = await interaction.followup.send("🔄 **SUBMITTING EXCHANGE...**\n*Consuming 25 players...*")
-        
-        import asyncio
-        await asyncio.sleep(2)
-        
-        # 120+ Pack Roll
-        roll = random.uniform(0, 100)
-        
-        if roll <= 10: min_ovr = 122
-        elif roll <= 40: min_ovr = 121
-        else: min_ovr = 120
-            
-        tier_name = "WALKOUT 🌟🌟🌟" if min_ovr == 122 else "WALKOUT 🌟🌟" if min_ovr == 121 else "WALKOUT 🌟"
-            
-        # Get ANY player of that rating
-        players = query_players_by_program("", min_rating=min_ovr, max_rating=min_ovr, size=50)
-        if not players:
-            players = query_players_by_program("PROGRAM_ANN27", min_rating=120, max_rating=122, size=10)
-            
-        player_data = random.choice(players)
-        pos = player_data.get('position', '??')
-        
-        # Maps for dynamic walkouts based on internal IDs
-        from maps import nation_map, club_map
-        
-        n_id = player_data.get('nation', {}).get('id')
-        c_id = player_data.get('club', {}).get('id')
-        
-        nation_str = nation_map.get(n_id, f"🌍 Nation ({n_id})")
-        club_str = club_map.get(c_id, f"🛡️ Club ({c_id})")
-        card_name = player_data.get('cardName') or player_data.get('lastName', 'Unknown')
+            await database.remove_players_from_inventory(user_id, to_delete)
                 
-        await msg.edit(content=f"⬛⬛⬛⬛⬛⬛⬛⬛\n🔥 🌍 **NATION REVEALED:** {nation_str}")
-        await asyncio.sleep(1.5)
-        await msg.edit(content=f"⬛⬛⬛⬛⬛⬛⬛⬛\n🔥 🌍 **NATION REVEALED:** {nation_str}\n🔥 🏃 **POSITION REVEALED:** `{pos}`")
-        await asyncio.sleep(1.5)
-        await msg.edit(content=f"⬛⬛⬛⬛⬛⬛⬛⬛\n🔥 🌍 **NATION REVEALED:** {nation_str}\n🔥 🏃 **POSITION REVEALED:** `{pos}`\n🔥 🛡️ **CLUB REVEALED:** {club_str}")
-        await asyncio.sleep(1.5)
-        
-        await database.add_player_to_inventory(user_id, player_data)
-        
-        ovr = player_data.get('rating', '?')
-        
+            # Reward: 117-119
+            roll = random.random()
+            if roll < 0.10: min_ovr = 119
+            elif roll < 0.40: min_ovr = 118
+            else: min_ovr = 117
+            
+            tier_name = "FODDER UPGRADE ✨"
+            players = await asyncio.to_thread(fetch_all_players_by_rating, min_ovr)
+            if not players:
+                players = await asyncio.to_thread(query_players_by_program, "", min_rating=min_ovr, max_rating=min_ovr, size=50)
+            
+            player_data = random.choice(players)
+            
+        else:
+            # Standard Exchange
+            cost = 25
+            if len(inventory) < cost:
+                return await interaction.followup.send(f"❌ You don't have enough cards! The Standard Exchange requires {cost} cards, but you only have {len(inventory)}.")
+                
+            inventory.sort(key=get_ovr)
+            to_delete = [row['id'] if isinstance(row, dict) else row[0] for row in inventory[:cost]]
+            
+            await database.remove_players_from_inventory(user_id, to_delete)
+                
+            roll = random.random()
+            if roll < 0.08: min_ovr = 122
+            elif roll < 0.50: min_ovr = 121
+            else: min_ovr = 120
+                
+            tier_name = "WALKOUT 🌟🌟🌟" if min_ovr == 122 else "WALKOUT 🌟🌟" if min_ovr == 121 else "WALKOUT 🌟"
+            
+            # Fetch from comprehensive pool of ALL 120-122 cards in existence
+            players = await asyncio.to_thread(fetch_all_players_by_rating, min_ovr)
+            if not players:
+                players = await asyncio.to_thread(query_players_by_program, "", min_rating=min_ovr, max_rating=min_ovr, size=100)
+                
+            player_data = random.choice(players)
+
         try:
-            image = generate_card(player_data)
-            with io.BytesIO() as image_binary:
-                image.save(image_binary, 'PNG')
-                image_binary.seek(0)
-                file = discord.File(fp=image_binary, filename='card.png')
-                
-                embed = discord.Embed(
-                    title=f"🎉 120+ {tier_name} Pack Opened!",
-                    description=f"You completed the exchange and drafted **{card_name} ({ovr})**!",
-                    color=discord.Color.gold()
-                )
-                embed.set_author(name=f"{interaction.user.display_name}'s Exchange", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
-                embed.set_image(url="attachment://card.png")
-                embed.set_footer(text="13 players consumed. 1 Walkout added to your inventory.")
-                
-                await msg.delete()
-                await interaction.followup.send(embed=embed, file=file)
-                
+            ovr = player_data.get('rating', 0)
+            card_name = player_data.get('cardName') or player_data.get('lastName', 'Unknown')
+            pos = player_data.get('position', 'ST')
+            n_id = player_data.get('nation', {}).get('id')
+            c_id = player_data.get('club', {}).get('id')
+            
+            nation_str = nation_map.get(n_id, f"🌍 Nation ({n_id})")
+            club_str = club_map.get(c_id, f"🛡️ Club ({c_id})")
+            
+            is_walkout = (isinstance(ovr, int) and ovr >= 120)
+            is_anim = is_walkout
+            image_binary, filename = await asyncio.to_thread(get_or_create_card_bytes, player_data, 3, is_anim)
+            file = discord.File(fp=image_binary, filename=filename)
+            
+            walkout_prefix = f"🔥 🌍 **{nation_str}** | 🏃 **`{pos}`** | 🛡️ **{club_str}**\n\n" if is_walkout else ""
+            desc = f"{walkout_prefix}🌟 **Exchange Walkout Reward:** **{card_name}** `({pos})` ({ovr} OVR)\n\n*Successfully swapped `{cost}` cards from your club!*"
+            
+            embed = discord.Embed(
+                title=f"🎉 {tier_name} Completed!",
+                description=desc,
+                color=discord.Color.gold() if is_walkout else discord.Color.blue()
+            )
+            embed.set_author(name=f"{interaction.user.display_name}'s Exchange", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
+            embed.set_image(url=f"attachment://{filename}")
+            embed.set_footer(text=f"{cost} players consumed • 1 card added to your inventory")
+            
+            await database.add_player_to_inventory(user_id, player_data)
+            
+            # --- Achievement & Season XP hooks ---
+            try:
+                from cogs.achievements import increment_stat, check_and_award
+                await increment_stat(user_id, "exchanges_done")
+                if ovr >= 120:
+                    await increment_stat(user_id, "walkouts_pulled")
+                await check_and_award(user_id)
+            except Exception: pass
+            try:
+                from cogs.season import add_season_xp
+                await add_season_xp(user_id, 100)
+            except Exception: pass
+            await interaction.followup.send(embed=embed, file=file)
+            
         except Exception as e:
-            await msg.delete()
-            await interaction.followup.send(f"❌ Pack opened, but failed to generate card image: {e}")
+            print(f"Error in exchange: {e}")
+            await interaction.followup.send(f"✅ Exchange successful! Drafted **{card_name} ({ovr})**, but failed to generate card image.")
 
 async def setup(bot):
     await bot.add_cog(ExchangeCog(bot))

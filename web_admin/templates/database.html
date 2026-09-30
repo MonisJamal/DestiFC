@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Database{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Database Browser</h1>
+
+<div class="glass-panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <div>
+            <h3 style="margin: 0; font-size: 20px;">Total Inventory Cards: <span style="color: var(--apple-blue);">{{ total_cards }}</span></h3>
+            <p style="margin: 5px 0 0 0; color: var(--text-light); font-size: 14px;">Showing latest custom draft cards.</p>
+        </div>
+        
+        <form method="GET" style="display: flex; gap: 10px;">
+            <input type="text" name="search" class="apple-input" placeholder="Search cards..." value="{{ search }}" style="width: 250px;">
+            <button type="submit" class="apple-input" style="width: auto; background: var(--apple-blue); color: white; border-color: var(--apple-blue); font-weight: 600; cursor: pointer;">Search</button>
+        </form>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table class="apple-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Player Data</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in custom_cards %}
+                <tr>
+                    <td>#{{ row['id'] }}</td>
+                    <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <code style="background: rgba(0,0,0,0.05); padding: 4px 8px; border-radius: 4px; font-size: 13px;">{{ row['player_data'] }}</code>
+                    </td>
+                    <td>
+                        <a href="#" style="color: var(--apple-blue); text-decoration: none; font-weight: 500;">Edit</a> |
+                        <a href="#" style="color: #ff3b30; text-decoration: none; font-weight: 500;">Delete</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" style="text-align: center; color: var(--text-light); padding: 2rem;">No custom cards found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -3,7 +3,170 @@ from discord.ext import commands
 from discord import app_commands
 import json
 
+FORMATION_MAP = {
+    "3-1-4-2": {"ST1": None, "ST2": None, "LM": None, "CM1": None, "CM2": None, "RM": None, "CDM": None, "CB1": None, "CB2": None, "CB3": None, "GK": None},
+    "3-4-1-2": {"ST1": None, "ST2": None, "CAM": None, "LM": None, "CM1": None, "CM2": None, "RM": None, "CB1": None, "CB2": None, "CB3": None, "GK": None},
+    "3-4-2-1": {"ST": None, "LF": None, "RF": None, "LM": None, "CM1": None, "CM2": None, "RM": None, "CB1": None, "CB2": None, "CB3": None, "GK": None},
+    "3-4-3 Flat": {"LW": None, "ST": None, "RW": None, "LM": None, "CM1": None, "CM2": None, "RM": None, "CB1": None, "CB2": None, "CB3": None, "GK": None},
+    "3-4-3 Diamond": {"LW": None, "ST": None, "RW": None, "CAM": None, "LM": None, "RM": None, "CDM": None, "CB1": None, "CB2": None, "CB3": None, "GK": None},
+    "3-5-1-1": {"ST": None, "CF": None, "LM": None, "CM1": None, "CDM": None, "CM2": None, "RM": None, "CB1": None, "CB2": None, "CB3": None, "GK": None},
+    "3-5-2": {"ST1": None, "ST2": None, "CAM": None, "LM": None, "CDM1": None, "CDM2": None, "RM": None, "CB1": None, "CB2": None, "CB3": None, "GK": None},
+    "4-1-2-1-2 Narrow": {"ST1": None, "ST2": None, "CAM": None, "CM1": None, "CM2": None, "CDM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-1-2-1-2 Wide": {"ST1": None, "ST2": None, "CAM": None, "LM": None, "RM": None, "CDM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-1-3-2": {"ST1": None, "ST2": None, "LM": None, "CM": None, "RM": None, "CDM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-1-4-1": {"ST": None, "LM": None, "CM1": None, "CM2": None, "RM": None, "CDM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-2-1-3": {"LW": None, "ST": None, "RW": None, "CAM": None, "CDM1": None, "CDM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-2-2-2": {"ST1": None, "ST2": None, "CAM1": None, "CAM2": None, "CDM1": None, "CDM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-2-3-1 Narrow": {"ST": None, "CAM1": None, "CAM2": None, "CAM3": None, "CDM1": None, "CDM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-2-3-1 Wide": {"ST": None, "CAM": None, "LM": None, "RM": None, "CDM1": None, "CDM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-2-4": {"LW": None, "ST1": None, "ST2": None, "RW": None, "CM1": None, "CM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-3-1-2": {"ST1": None, "ST2": None, "CAM": None, "CM1": None, "CM2": None, "CM3": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-3-2-1": {"ST": None, "LF": None, "RF": None, "CM1": None, "CM2": None, "CM3": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-3-3 Flat": {"LW": None, "ST": None, "RW": None, "CM1": None, "CM2": None, "CM3": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-3-3 Attack": {"LW": None, "ST": None, "RW": None, "CAM": None, "CM1": None, "CM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-3-3 Defend": {"LW": None, "ST": None, "RW": None, "CM": None, "CDM1": None, "CDM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-3-3 False 9": {"LW": None, "CF": None, "RW": None, "CM1": None, "CM2": None, "CDM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-3-3 Holding": {"LW": None, "ST": None, "RW": None, "CM1": None, "CM2": None, "CDM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-4-1-1 Flat": {"ST": None, "CF": None, "LM": None, "CM1": None, "CM2": None, "RM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-4-1-1 Attack": {"ST": None, "CAM": None, "LM": None, "CM1": None, "CM2": None, "RM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-4-2 Flat": {"ST1": None, "ST2": None, "LM": None, "CM1": None, "CM2": None, "RM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-4-2 Holding": {"ST1": None, "ST2": None, "LM": None, "CDM1": None, "CDM2": None, "RM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-5-1 Flat": {"ST": None, "LM": None, "CM1": None, "CM2": None, "CM3": None, "RM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-5-1 Attack": {"ST": None, "LM": None, "CAM1": None, "CAM2": None, "RM": None, "CM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "5-2-1-2": {"ST1": None, "ST2": None, "CAM": None, "CM1": None, "CM2": None, "LWB": None, "CB1": None, "CB2": None, "CB3": None, "RWB": None, "GK": None},
+    "5-2-2-1": {"LW": None, "ST": None, "RW": None, "CM1": None, "CM2": None, "LWB": None, "CB1": None, "CB2": None, "CB3": None, "RWB": None, "GK": None},
+    "5-3-2": {"ST1": None, "ST2": None, "CM1": None, "CM2": None, "CM3": None, "LWB": None, "CB1": None, "CB2": None, "CB3": None, "RWB": None, "GK": None},
+    "5-4-1 Flat": {"ST": None, "LM": None, "CM1": None, "CM2": None, "RM": None, "LWB": None, "CB1": None, "CB2": None, "CB3": None, "RWB": None, "GK": None},
+    "5-4-1 Defend": {"ST": None, "LM": None, "CDM1": None, "CDM2": None, "RM": None, "LWB": None, "CB1": None, "CB2": None, "CB3": None, "RWB": None, "GK": None}
+}
+
 import database
+from maps import extract_pos
+from cogs.market import get_price_limits, format_price_short
+
+async def formation_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    return [
+        app_commands.Choice(name=f, value=f)
+        for f in FORMATION_MAP.keys() if current.lower() in f.lower()
+    ][:25]
+
+async def squad_position_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    try:
+        squad = await database.get_squad(interaction.user.id)
+        players = squad.get("players", {})
+        choices = []
+        for pos, p in players.items():
+            occupied = f" ({p['name']} {p['ovr']})" if p else " (Empty)"
+            label = f"{pos}{occupied}"
+            if not current or current.lower() in pos.lower() or current.lower() in label.lower():
+                choices.append(app_commands.Choice(name=label[:100], value=pos))
+                if len(choices) >= 25:
+                    break
+        return choices
+    except Exception as e:
+        print("Error in squad_position_autocomplete:", e)
+        return [
+            app_commands.Choice(name=p, value=p)
+            for p in ["GK", "LB", "CB1", "CB2", "RB", "CM1", "CM2", "CAM", "LW", "ST", "RW"]
+            if not current or current.lower() in p.lower()
+        ]
+
+async def player_card_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    try:
+        inventory = await database.get_inventory(interaction.user.id)
+        if not inventory:
+            return []
+            
+        inventory = sorted(inventory, key=lambda x: x.get('ovr', 0), reverse=True)
+        choices = []
+        for p in inventory:
+            try:
+                pos = extract_pos(p)
+            except Exception:
+                pos = "ST"
+            p_name = p.get('player_name', 'Player')
+            ovr = p.get('ovr', 100)
+            pid = p.get('id', 0)
+            
+            label = f"{p_name} ({pos}) — {ovr} OVR [ID:{pid}]"
+            if not current or current.lower() in label.lower() or current.lower() in str(pid):
+                choices.append(app_commands.Choice(name=label[:100], value=str(pid)))
+                if len(choices) >= 25:
+                    break
+        return choices
+    except Exception as e:
+        print("Error in player_card_autocomplete:", e)
+        return []
+
+async def locked_card_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:
+    try:
+        inventory = await database.get_inventory(interaction.user.id)
+        choices = []
+        for p in inventory:
+            if p.get('locked', 0):
+                try:
+                    pos = extract_pos(p)
+                except Exception:
+                    pos = "ST"
+                label = f"🔒 {p.get('player_name', 'Player')} ({pos}) — {p.get('ovr', 100)} OVR [ID:{p['id']}]"
+                if not current or current.lower() in label.lower() or current.lower() in str(p['id']):
+                    choices.append(app_commands.Choice(name=label[:100], value=p['id']))
+                    if len(choices) >= 25:
+                        break
+        return choices
+    except Exception:
+        return []
+
+class InventoryPagination(discord.ui.View):
+    def __init__(self, user_id, inventory, current_page, max_pages):
+        super().__init__(timeout=60)
+        self.user_id = user_id
+        self.inventory = inventory
+        self.current_page = current_page
+        self.max_pages = max_pages
+        self.items_per_page = 15
+        
+        self.prev_button = discord.ui.Button(label="◀️ Prev", style=discord.ButtonStyle.primary, disabled=(self.current_page == 1))
+        self.next_button = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.primary, disabled=(self.current_page == self.max_pages))
+        
+        self.prev_button.callback = self.prev_page
+        self.next_button.callback = self.next_page
+        
+        self.add_item(self.prev_button)
+        self.add_item(self.next_button)
+
+    async def update_page(self, interaction: discord.Interaction):
+        self.prev_button.disabled = (self.current_page == 1)
+        self.next_button.disabled = (self.current_page == self.max_pages)
+        
+        start_idx = (self.current_page - 1) * self.items_per_page
+        end_idx = start_idx + self.items_per_page
+        
+        lines = []
+        for p in self.inventory[start_idx:end_idx]:
+            min_p, max_p = get_price_limits(p['ovr'])
+            lock_icon = "🔒 " if p.get('locked', 0) else ""
+            ovr_icon = "🔥" if p['ovr'] >= 120 else ("✨" if p['ovr'] >= 117 else "⚽")
+            pos = extract_pos(p)
+            lines.append(f"`ID:{p['id']}` {lock_icon}{ovr_icon} **{p['player_name']}** `({pos})` — `{p['ovr']} OVR` | 🪙 {format_price_short(min_p)}–{format_price_short(max_p)}")
+            
+        embed = discord.Embed(title="🎒 Player Club", description="\n".join(lines), color=discord.Color.green())
+        embed.set_footer(text=f"Page {self.current_page}/{self.max_pages} | Total Players: {len(self.inventory)}")
+        
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def prev_page(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("This is not your inventory!", ephemeral=True)
+        self.current_page -= 1
+        await self.update_page(interaction)
+
+    async def next_page(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("This is not your inventory!", ephemeral=True)
+        self.current_page += 1
+        await self.update_page(interaction)
+
 
 class SquadCog(commands.Cog):
     def __init__(self, bot):
@@ -11,14 +174,22 @@ class SquadCog(commands.Cog):
 
     squad_group = app_commands.Group(name="squad", description="Manage your starting XI")
 
-    @squad_group.command(name="view", description="View your current starting XI")
-    async def view_squad(self, interaction: discord.Interaction):
+    @squad_group.command(name="view", description="View your or another player's starting XI")
+    @app_commands.describe(user="User whose squad you want to view (leave empty for yours)")
+    async def view_squad(self, interaction: discord.Interaction, user: discord.Member = None):
         await interaction.response.defer()
-        squad = await database.get_squad(interaction.user.id)
+        target = user or interaction.user
+
+        # Privacy Check
+        if target.id != interaction.user.id and not await interaction.client.is_owner(interaction.user):
+            if await database.is_profile_private(target.id):
+                return await interaction.followup.send(f"🔒 **{target.display_name}** has set their profile to **Private**.", ephemeral=True)
+
+        squad = await database.get_squad(target.id)
         formation = squad.get("formation", "4-3-3")
         players = squad.get("players", {})
         
-        inventory = await database.get_inventory(interaction.user.id)
+        inventory = await database.get_inventory(target.id)
         inv_dict = {p['id']: p['player_data'] for p in inventory}
         
         total_ovr = 0
@@ -31,48 +202,52 @@ class SquadCog(commands.Cog):
                 
         team_ovr = round(total_ovr / 11) if count > 0 else 0
         
-        from lineup_generator import generate_lineup_image
+        from lineup_generator import generate_lineup_image, set_cached_layouts
         import io
+        import hashlib
+        import asyncio
         
         try:
-            img = generate_lineup_image(squad, inv_dict)
-            with io.BytesIO() as image_binary:
-                img.save(image_binary, 'PNG')
-                image_binary.seek(0)
-                file = discord.File(fp=image_binary, filename='lineup.png')
+            cache_key = hashlib.md5(f"{target.id}_{formation}_{json.dumps(players, sort_keys=True)}_{squad.get('theme', 'default')}".encode()).hexdigest()
+            
+            png_bytes = getattr(self, '_render_cache', {}).get(cache_key)
+            if not png_bytes:
+                custom_layouts = await database.get_formation_layouts()
+                if custom_layouts:
+                    set_cached_layouts(custom_layouts)
                 
-                embed = discord.Embed(title=f"🛡️ {interaction.user.display_name}'s Squad", description=f"**Formation:** {formation} | **Team OVR:** {team_ovr}", color=discord.Color.blue())
-                embed.set_image(url="attachment://lineup.png")
-                
-                if count < 11:
-                    embed.set_footer(text="Your squad is incomplete! Use /squad set to add players.")
+                def _render():
+                    img = generate_lineup_image(squad, inv_dict)
+                    buf = io.BytesIO()
+                    img.save(buf, format='PNG', optimize=False)
+                    return buf.getvalue()
                     
-                await interaction.followup.send(embed=embed, file=file)
+                png_bytes = await asyncio.to_thread(_render)
+                if not hasattr(self, '_render_cache'):
+                    self._render_cache = {}
+                if len(self._render_cache) < 100:
+                    self._render_cache[cache_key] = png_bytes
+
+            file = discord.File(fp=io.BytesIO(png_bytes), filename='lineup.png')
+            embed = discord.Embed(title=f"🛡️ {target.display_name}'s Squad", description=f"**Formation:** {formation} | **Team OVR:** {team_ovr}", color=discord.Color.blue())
+            embed.set_image(url="attachment://lineup.png")
+            
+            if count < 11:
+                footer_msg = "Your squad is incomplete! Use /squad set to add players." if target.id == interaction.user.id else f"{target.display_name}'s squad is incomplete ({count}/11 players)."
+                embed.set_footer(text=footer_msg)
+                
+            await interaction.followup.send(embed=embed, file=file)
         except Exception as e:
             await interaction.followup.send(f"❌ Failed to generate lineup image: {e}")
 
     @squad_group.command(name="formation", description="Change your team's formation (Warning: Resets your squad)")
-    @app_commands.choices(new_formation=[
-        app_commands.Choice(name="4-3-3 (Attack)", value="4-3-3"),
-        app_commands.Choice(name="4-4-2 (Flat)", value="4-4-2"),
-        app_commands.Choice(name="4-2-3-1 (Wide)", value="4-2-3-1"),
-        app_commands.Choice(name="3-4-3 (Flat)", value="3-4-3"),
-        app_commands.Choice(name="5-3-2 (Flat)", value="5-3-2"),
-        app_commands.Choice(name="4-1-2-1-2 (Wide)", value="4-1-2-1-2 (Wide)")
-    ])
+    @app_commands.autocomplete(new_formation=formation_autocomplete)
     async def set_formation(self, interaction: discord.Interaction, new_formation: str):
-        if new_formation == "4-3-3":
-            positions = {"LW": None, "ST": None, "RW": None, "CM1": None, "CM2": None, "CM3": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None}
-        elif new_formation == "4-4-2":
-            positions = {"ST1": None, "ST2": None, "LM": None, "CM1": None, "CM2": None, "RM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None}
-        elif new_formation == "4-2-3-1":
-            positions = {"ST": None, "CAM": None, "LM": None, "RM": None, "CDM1": None, "CDM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None}
-        elif new_formation == "3-4-3":
-            positions = {"LW": None, "ST": None, "RW": None, "LM": None, "CM1": None, "CM2": None, "RM": None, "CB1": None, "CB2": None, "CB3": None, "GK": None}
-        elif new_formation == "5-3-2":
-            positions = {"ST1": None, "ST2": None, "CM1": None, "CM2": None, "CM3": None, "LWB": None, "CB1": None, "CB2": None, "CB3": None, "RWB": None, "GK": None}
-        elif new_formation == "4-1-2-1-2 (Wide)":
-            positions = {"ST1": None, "ST2": None, "CAM": None, "LM": None, "RM": None, "CDM": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None}
+        await interaction.response.defer()
+        if new_formation not in FORMATION_MAP:
+            return await interaction.followup.send("❌ Invalid formation selected. Please use the autocomplete choices.", ephemeral=True)
+            
+        positions = FORMATION_MAP[new_formation].copy()
             
         new_squad = {
             "formation": new_formation,
@@ -80,43 +255,127 @@ class SquadCog(commands.Cog):
         }
         
         await database.update_squad(interaction.user.id, new_squad)
-        await interaction.response.send_message(f"✅ Formation changed to **{new_formation}**! Your squad has been reset, please set your players again.")
+        await interaction.followup.send(f"✅ Formation changed to **{new_formation}**! Your squad has been reset, please set your players again.")
 
-    @squad_group.command(name="set", description="Set a player in your squad")
-    async def set_player(self, interaction: discord.Interaction, position: str, inventory_id: int):
+    @squad_group.command(name="set", description="Set a player card in your starting 11 squad")
+    @app_commands.describe(position="Position slot in your formation", player="Select player card from your inventory (or type card name/ID)")
+    @app_commands.autocomplete(position=squad_position_autocomplete, player=player_card_autocomplete)
+    async def set_player(self, interaction: discord.Interaction, position: str, player: str):
+        await interaction.response.defer()
+        import re
         squad = await database.get_squad(interaction.user.id)
         players = squad.get("players", {})
         valid_positions = list(players.keys())
         
-        position = position.upper()
-        
-        if position not in valid_positions:
-            await interaction.response.send_message(f"❌ Invalid position for {squad['formation']}! Valid positions: {', '.join(valid_positions)}", ephemeral=True)
-            return
-            
-        player_row = await database.get_player_by_inv_id(interaction.user.id, inventory_id)
+        # Strip parentheses like "(Empty)" or "(Player 120)"
+        pos_clean = re.sub(r'\(.*?\)', '', position).strip().upper()
+        target_pos = None
+        if pos_clean in valid_positions:
+            target_pos = pos_clean
+        else:
+            matching_slots = [p for p in valid_positions if p == pos_clean or p.startswith(pos_clean) or pos_clean in p]
+            if matching_slots:
+                empty_slots = [p for p in matching_slots if not players.get(p)]
+                target_pos = empty_slots[0] if empty_slots else matching_slots[0]
+            else:
+                return await interaction.followup.send(f"❌ Invalid position for **{squad.get('formation', 'your squad')}**!\nValid positions: `{', '.join(valid_positions)}`", ephemeral=True)
+                
+        user_inv = await database.get_inventory(interaction.user.id)
+        if not user_inv:
+            return await interaction.followup.send("❌ Your club inventory is empty! Open some packs with `/draft` first.", ephemeral=True)
+
+        player_row = None
+        raw_query = player.strip()
+
+        # 1. Try resolving with [ID: 123] pattern
+        id_match = re.search(r'\[ID:\s*(\d+)\]', raw_query, re.IGNORECASE)
+        if id_match:
+            target_id = int(id_match.group(1))
+            for p in user_inv:
+                if p['id'] == target_id:
+                    player_row = p
+                    break
+
+        # 2. Try resolving as numerical inventory ID
+        if not player_row and raw_query.isdigit():
+            inv_id = int(raw_query)
+            for p in user_inv:
+                if p['id'] == inv_id:
+                    player_row = p
+                    break
+
+        # 3. Try flexible name/OVR search
         if not player_row:
-            await interaction.response.send_message(f"❌ You don't have a player with ID `{inventory_id}` in your inventory.", ephemeral=True)
-            return
-        # Prevent Duplicates
-        new_name = player_row['player_name']
-        for pos, active_p in players.items():
-            if active_p and pos != position:
-                if active_p['inv_id'] == inventory_id:
-                    await interaction.response.send_message(f"❌ That exact card is already equipped at **{pos}**! Remove it first.", ephemeral=True)
-                    return
-                if active_p['name'] == new_name:
-                    await interaction.response.send_message(f"❌ You already have **{new_name}** equipped at **{pos}**! You cannot have duplicate players.", ephemeral=True)
-                    return
+            tokens = raw_query.lower().split()
+            target_ovr = None
+            name_tokens = []
+            for t in tokens:
+                if t.isdigit() and len(t) in (2, 3):
+                    target_ovr = int(t)
+                else:
+                    name_tokens.append(t)
+
+            candidates = []
+            for p in user_inv:
+                p_name = p.get('player_name', '').lower()
+                if all(nt in p_name for nt in name_tokens):
+                    candidates.append(p)
+
+            if candidates:
+                if target_ovr:
+                    exact_ovr = [p for p in candidates if p.get('ovr') == target_ovr]
+                    if exact_ovr:
+                        player_row = exact_ovr[0]
+                if not player_row:
+                    candidates.sort(key=lambda x: x.get('ovr', 0), reverse=True)
+                    player_row = candidates[0]
+                
+        if not player_row:
+            return await interaction.followup.send(f"❌ Could not find a card matching '**{player}**' in your inventory.\nPlease check your `/club` or select from the autocomplete menu.", ephemeral=True)
             
-        squad["players"][position] = {
+        inventory_id = player_row['id']
+        new_name = player_row['player_name']
+        new_ovr = player_row['ovr']
+        
+        # If card was equipped in another slot, automatically unequip from that slot (move/swap)
+        repositioned_from = None
+        for pos, active_p in list(players.items()):
+            if active_p and pos != target_pos:
+                if active_p.get('inv_id') == inventory_id:
+                    players[pos] = None
+                    repositioned_from = pos
+                elif active_p.get('name') == new_name:
+                    return await interaction.followup.send(f"❌ You already have another **{new_name}** equipped at **{pos}**! You cannot have duplicate players.", ephemeral=True)
+            
+        squad["players"][target_pos] = {
             "inv_id": inventory_id,
             "name": new_name,
-            "ovr": player_row['ovr']
+            "ovr": new_ovr
         }
         
         await database.update_squad(interaction.user.id, squad)
-        await interaction.response.send_message(f"✅ Set **{new_name} ({player_row['ovr']})** as your starting {position}!")
+        reposition_note = f" (Moved from **{repositioned_from}**)" if repositioned_from else ""
+        await interaction.followup.send(f"✅ Set **{new_name} ({new_ovr} OVR)** as your starting **{target_pos}**!{reposition_note}")
+
+    @squad_group.command(name="remove", description="Remove a player from a specific squad position")
+    @app_commands.describe(position="Position slot to empty")
+    @app_commands.autocomplete(position=squad_position_autocomplete)
+    async def remove_player(self, interaction: discord.Interaction, position: str):
+        await interaction.response.defer()
+        squad = await database.get_squad(interaction.user.id)
+        players = squad.get("players", {})
+        pos_norm = position.upper().strip()
+        
+        if pos_norm not in players:
+            return await interaction.followup.send(f"❌ Invalid position `{position}` for your formation.", ephemeral=True)
+            
+        prev = players.get(pos_norm)
+        if not prev:
+            return await interaction.followup.send(f"ℹ️ Position **{pos_norm}** is already empty.", ephemeral=True)
+            
+        squad["players"][pos_norm] = None
+        await database.update_squad(interaction.user.id, squad)
+        await interaction.followup.send(f"🗑️ Removed **{prev['name']}** from **{pos_norm}**.")
 
     @squad_group.command(name="autobuild", description="Auto-fill your squad with your highest OVR players")
     async def autobuild(self, interaction: discord.Interaction):
@@ -136,7 +395,7 @@ class SquadCog(commands.Cog):
             "CF": ["CF", "ST", "CAM"],
             "LW": ["LW", "LM", "LF"], "RW": ["RW", "RM", "RF"],
             "LF": ["LF", "LW"],       "RF": ["RF", "RW"],
-            "CAM": ["CAM", "CF", "CM"],
+            "CAM": ["CAM", "CF", "CM"], "CAM1": ["CAM", "CF", "CM"], "CAM2": ["CAM", "CF", "CM"], "CAM3": ["CAM", "CF", "CM"],
             "CM": ["CM", "CAM", "CDM"], "CM1": ["CM", "CAM", "CDM"], "CM2": ["CM", "CAM", "CDM"], "CM3": ["CM", "CAM", "CDM"],
             "CDM": ["CDM", "CM"],      "CDM1": ["CDM", "CM"],     "CDM2": ["CDM", "CM"],
             "LM": ["LM", "LW"],       "RM": ["RM", "RW"],
@@ -153,37 +412,41 @@ class SquadCog(commands.Cog):
             player_pos = "ST"  # fallback
             try:
                 pd = json.loads(p['player_data']) if isinstance(p['player_data'], str) else p['player_data']
-                player_pos = pd.get('position', 'ST')
+                player_pos = str(pd.get('position', 'ST')).strip().upper()
             except: pass
             enriched.append({**p, 'pos': player_pos})
         
-        # Sort by OVR descending
+        # Sort by OVR descending, and then by OVR asc? No, just OVR desc.
+        # This guarantees highest OVR gets placed first!
         enriched.sort(key=lambda x: x['ovr'], reverse=True)
         
-        new_players = {}
+        new_players = {slot: None for slot in positions}
         used_ids = set()
         used_names = set()
         
-        for slot in positions:
-            allowed = pos_compat.get(slot, [slot])
-            best = None
-            for p in enriched:
-                if p['id'] in used_ids: continue
-                if p['player_name'] in used_names: continue
+        for p in enriched:
+            if p['id'] in used_ids: continue
+            if p['player_name'] in used_names: continue
+            
+            # Find an empty slot this player is compatible with
+            assigned = False
+            for slot in positions:
+                if new_players[slot] is not None: continue # slot is full
+                allowed = pos_compat.get(slot, [slot])
                 if p['pos'] in allowed:
-                    best = p
+                    new_players[slot] = {
+                        "inv_id": p['id'],
+                        "name": p['player_name'],
+                        "ovr": p['ovr']
+                    }
+                    used_ids.add(p['id'])
+                    used_names.add(p['player_name'])
+                    assigned = True
                     break
             
-            if best:
-                used_ids.add(best['id'])
-                used_names.add(best['player_name'])
-                new_players[slot] = {
-                    "inv_id": best['id'],
-                    "name": best['player_name'],
-                    "ovr": best['ovr']
-                }
-            else:
-                new_players[slot] = None
+            # Stop if all slots are filled
+            if all(v is not None for v in new_players.values()):
+                break
         
         squad["players"] = new_players
         await database.update_squad(interaction.user.id, squad)
@@ -208,33 +471,102 @@ class SquadCog(commands.Cog):
         
         await interaction.followup.send(embed=embed)
 
-    @app_commands.command(name="inventory", description="View all players in your club")
-    async def inventory(self, interaction: discord.Interaction, page: int = 1):
+    @app_commands.command(name="inventory", description="View your or another user's player club")
+    @app_commands.describe(user="User whose inventory you want to view (leave empty for yours)")
+    async def inventory(self, interaction: discord.Interaction, user: discord.Member = None):
         await interaction.response.defer(ephemeral=False)
-        inventory = await database.get_inventory(interaction.user.id)
+        target = user or interaction.user
+        
+        # Privacy Check
+        if target.id != interaction.user.id and not await interaction.client.is_owner(interaction.user):
+            if await database.is_profile_private(target.id):
+                return await interaction.followup.send(f"🔒 **{target.display_name}** has set their club/inventory to **Private**.", ephemeral=True)
+                
+        inventory = await database.get_inventory(target.id)
         
         if not inventory:
-            await interaction.followup.send("Your club is empty! Open some packs with `/draft`.", ephemeral=True)
+            msg = "Your club is empty! Open some packs with `/draft`." if target == interaction.user else f"**{target.display_name}**'s club is empty."
+            await interaction.followup.send(msg, ephemeral=True)
             return
             
         items_per_page = 15
         max_pages = max(1, (len(inventory) + items_per_page - 1) // items_per_page)
         
-        if page < 1 or page > max_pages:
-            await interaction.followup.send(f"❌ Invalid page! You only have {max_pages} pages.", ephemeral=True)
-            return
-            
-        start_idx = (page - 1) * items_per_page
-        end_idx = start_idx + items_per_page
+        start_idx = 0
+        end_idx = items_per_page
         
         lines = []
         for p in inventory[start_idx:end_idx]:
-            lines.append(f"`ID: {p['id']}` | **{p['player_name']}** - {p['ovr']} OVR")
+            min_p, max_p = get_price_limits(p['ovr'])
+            lock_icon = "🔒 " if p.get('locked', 0) else ""
+            ovr_icon = "🔥" if p['ovr'] >= 120 else ("✨" if p['ovr'] >= 117 else "⚽")
+            pos = extract_pos(p)
+            lines.append(f"`ID:{p['id']}` {lock_icon}{ovr_icon} **{p['player_name']}** `({pos})` — `{p['ovr']} OVR` | 🪙 {format_price_short(min_p)}–{format_price_short(max_p)}")
             
-        embed = discord.Embed(title=f"🎒 {interaction.user.display_name}'s Club", description="\n".join(lines), color=discord.Color.green())
-        embed.set_footer(text=f"Page {page}/{max_pages} | Total Players: {len(inventory)}")
+        embed = discord.Embed(title=f"🎒 {target.display_name}'s Club", description="\n".join(lines), color=discord.Color.green())
+        embed.set_footer(text=f"Page 1/{max_pages} | Total Players: {len(inventory)}")
+        
+        view = InventoryPagination(target.id, inventory, 1, max_pages)
+        await interaction.followup.send(embed=embed, view=view)
+
+
+    @squad_group.command(name="theme", description="Equip a pitch theme you have unlocked")
+    async def set_theme(self, interaction: discord.Interaction, theme_id: str):
+        await interaction.response.defer()
+        user_id = interaction.user.id
+        squad = await database.get_squad(user_id)
+        
+        unlocked = squad.get("unlocked_themes", ["default"])
+        theme_id = theme_id.lower()
+        
+        if theme_id not in unlocked:
+            return await interaction.followup.send(f"❌ You haven't unlocked the `{theme_id}` theme yet! Buy it in `/store themes`.")
             
-        await interaction.followup.send(embed=embed)
+        squad["theme"] = theme_id
+        await database.update_squad(user_id, squad)
+        await interaction.followup.send(f"✅ Successfully equipped the **{theme_id}** pitch theme! Check it out in `/squad view`.")
+
+
+    @squad_group.command(name="lock", description="Lock a player in your inventory (protects from exchange/SBC/quicksell)")
+    @app_commands.describe(inventory_id="Select player card to lock")
+    @app_commands.autocomplete(inventory_id=player_card_autocomplete)
+    async def lock_player(self, interaction: discord.Interaction, inventory_id: int):
+        await interaction.response.defer(ephemeral=True)
+        player = await database.get_player_by_inv_id(interaction.user.id, inventory_id)
+        if not player:
+            return await interaction.followup.send("❌ Player not found in your inventory.", ephemeral=True)
+        await database.lock_player(interaction.user.id, inventory_id)
+        pos = extract_pos(player)
+        await interaction.followup.send(f"🔒 **{player['player_name']} ({pos}) ({player['ovr']})** is now locked! They cannot be quick-sold, traded, or used in exchanges/SBCs.", ephemeral=True)
+
+    @squad_group.command(name="unlock", description="Unlock a locked player in your inventory")
+    @app_commands.describe(inventory_id="Select locked player card to unlock")
+    @app_commands.autocomplete(inventory_id=locked_card_autocomplete)
+    async def unlock_player(self, interaction: discord.Interaction, inventory_id: int):
+        await interaction.response.defer(ephemeral=True)
+        player = await database.get_player_by_inv_id(interaction.user.id, inventory_id)
+        if not player:
+            return await interaction.followup.send("❌ Player not found in your inventory.", ephemeral=True)
+        await database.unlock_player(interaction.user.id, inventory_id)
+        pos = extract_pos(player)
+        await interaction.followup.send(f"🔓 **{player['player_name']} ({pos}) ({player['ovr']})** is now unlocked.", ephemeral=True)
+
+    @app_commands.command(name="lock", description="Lock a player card (protects from exchange/SBC/quicksell)")
+    @app_commands.describe(inventory_id="Select player card to lock")
+    @app_commands.autocomplete(inventory_id=player_card_autocomplete)
+    async def lock_alias(self, interaction: discord.Interaction, inventory_id: int):
+        await self.lock_player(interaction, inventory_id)
+
+    @app_commands.command(name="squad_set", description="Set a player card in your starting 11 squad")
+    @app_commands.describe(position="Position slot in your formation", player="Select player card from your inventory (or type card name/ID)")
+    @app_commands.autocomplete(position=squad_position_autocomplete, player=player_card_autocomplete)
+    async def top_squad_set(self, interaction: discord.Interaction, position: str, player: str):
+        await self.set_player(interaction, position, player)
+
+    @app_commands.command(name="squad_view", description="View your or another user's current squad lineup in 3D")
+    @app_commands.describe(user="User whose squad you want to view (leave empty for yours)")
+    async def top_squad_view(self, interaction: discord.Interaction, user: discord.Member = None):
+        await self.view_squad(interaction, user)
 
 async def setup(bot):
     await bot.add_cog(SquadCog(bot))

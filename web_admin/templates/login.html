@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - DestiFC Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: radial-gradient(circle at center, var(--bg-color), var(--bg-color-alt));
+        }
+        .login-panel {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: var(--border-radius-lg);
+            padding: 3rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .login-logo {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(90deg, #1d1d1f, #86868b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="login-panel">
+    <div class="login-logo">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        DestiFC Admin
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash-msg {{ category }}" style="font-size: 14px; padding: 10px;">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+        <div class="form-group" style="text-align: left;">
+            <label style="display: none;">Admin Passcode</label>
+            <input type="password" name="password" class="apple-input" required placeholder="Enter Team Passcode" style="text-align: center; font-size: 18px; letter-spacing: 2px;">
+        </div>
+
+        <div class="fx-layer" style="margin-top: 2rem;">
+            <button type="submit" class="box" style="border: none; background: transparent; padding: 0; margin: 0 auto; --w: 100%; --h: 55px; --tr: 10%;">
+                <span class="text glass-btn" style="font-size: 16px;">
+                    Login
+                </span>
+                <div class="circle-overlay"></div>
+            </button>
+        </div>
+    </form>
+</div>
+
+</body>
+</html>

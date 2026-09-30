@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}DestiFC Control{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script defer src="/static/app.js"></script>
+</head>
+<body>
+  <div class="aurora aurora-one"></div><div class="aurora aurora-two"></div><div class="grain"></div>
+  <div class="shell">
+    <header class="topbar glass">
+      <a class="brand" href="/"><span class="brand-mark">D</span><span>DestiFC <em>Control</em></span></a>
+      <nav>
+        <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Overview</a>
+        <a href="/create-card" class="{% if request.url.path == '/create-card' %}active{% endif %}">Create card</a>
+        <a href="/cards" class="{% if request.url.path == '/cards' %}active{% endif %}">Database</a>
+        <a href="/formations" class="{% if request.url.path == '/formations' %}active{% endif %}">Formation lab</a>
+        <a href="/commands" class="{% if request.url.path == '/commands' %}active{% endif %}">Commands</a>
+      </nav>
+      <form action="/logout" method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="icon-button" title="Sign out" aria-label="Sign out">↗</button></form>
+    </header>
+    {% if flash %}<div class="toast {{ flash.style }}" data-toast>{{ flash.message }}</div>{% endif %}
+    <main>{% block content %}{% endblock %}</main>
+  </div>
+</body>
+</html>

@@ -1,4 +1,5 @@
 .env
+.env.local
 .venv/
 __pycache__/
 *.pyc
@@ -6,3 +7,16 @@ destifc.db
 destifc.db-wal
 destifc.db-shm
 .DS_Store
+node_modules/
+.next/
+*.zip
+.archive_scratch/
+assets/cache/
+patch_*.py
+test_*.py
+check_all_dbs.py
+get_schemas.py
+inspect_sqlite.py
+migrate_to_supabase.py
+rewrite_db.py
+output/
