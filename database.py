@@ -1395,6 +1395,137 @@ async def save_luck_settings(settings: dict) -> bool:
         print(f"[Database] Error in save_luck_settings: {e}")
         return False
 
+# ================= OVR Price Limits & Economy Functions =================
+
+DEFAULT_OVR_PRICES = {
+    125: {"min_price": 16000000000, "max_price": 32000000000, "quicksell": 11200000000},
+    124: {"min_price": 8000000000, "max_price": 16000000000, "quicksell": 5600000000},
+    123: {"min_price": 4000000000, "max_price": 8000000000, "quicksell": 2800000000},
+    122: {"min_price": 2000000000, "max_price": 4000000000, "quicksell": 1400000000},
+    121: {"min_price": 900000000, "max_price": 1800000000, "quicksell": 630000000},
+    120: {"min_price": 400000000, "max_price": 800000000, "quicksell": 280000000},
+    119: {"min_price": 70000000, "max_price": 140000000, "quicksell": 49000000},
+    118: {"min_price": 65000000, "max_price": 130000000, "quicksell": 45500000},
+    117: {"min_price": 60000000, "max_price": 120000000, "quicksell": 42000000},
+    116: {"min_price": 10000000, "max_price": 20000000, "quicksell": 7000000},
+    115: {"min_price": 9000000, "max_price": 18000000, "quicksell": 6300000},
+    114: {"min_price": 8000000, "max_price": 16000000, "quicksell": 5600000},
+    113: {"min_price": 7000000, "max_price": 14000000, "quicksell": 4900000},
+    112: {"min_price": 6000000, "max_price": 12000000, "quicksell": 4200000},
+    111: {"min_price": 5000000, "max_price": 10000000, "quicksell": 3500000},
+    110: {"min_price": 4000000, "max_price": 8000000, "quicksell": 2800000},
+    109: {"min_price": 3000000, "max_price": 6000000, "quicksell": 2100000},
+    108: {"min_price": 2000000, "max_price": 4000000, "quicksell": 1400000},
+    107: {"min_price": 1000000, "max_price": 2000000, "quicksell": 700000},
+    106: {"min_price": 500000, "max_price": 1000000, "quicksell": 350000},
+    105: {"min_price": 250000, "max_price": 500000, "quicksell": 175000},
+    104: {"min_price": 200000, "max_price": 400000, "quicksell": 140000},
+    103: {"min_price": 150000, "max_price": 300000, "quicksell": 105000},
+    102: {"min_price": 100000, "max_price": 200000, "quicksell": 70000},
+    101: {"min_price": 75000, "max_price": 150000, "quicksell": 52500},
+    100: {"min_price": 50000, "max_price": 100000, "quicksell": 35000},
+}
+
+_OVR_PRICES_CACHE = None
+_OVR_PRICES_CACHE_EXP = 0
+
+def _calculate_fallback_price_limits(ovr: int) -> tuple[int, int]:
+    if ovr > 122:
+        max_p = 4_000_000_000 * (2 ** (ovr - 122))
+        return max_p // 2, max_p
+    if ovr >= 107:
+        base = (ovr - 106) * 1_000_000
+        return base, base * 2
+    return 100, 200
+
+def get_price_limits_for_ovr(ovr: int) -> tuple[int, int]:
+    global _OVR_PRICES_CACHE
+    try:
+        ovr_int = int(ovr)
+    except Exception:
+        return 100, 200
+    ovr_str = str(ovr_int)
+    cache = _OVR_PRICES_CACHE or DEFAULT_OVR_PRICES
+    entry = cache.get(ovr_int) or cache.get(ovr_str)
+    if entry and isinstance(entry, dict):
+        min_p = int(entry.get('min_price', 0))
+        max_p = int(entry.get('max_price', 0))
+        if min_p > 0 and max_p > 0:
+            return min_p, max_p
+    if ovr_int in DEFAULT_OVR_PRICES:
+        d = DEFAULT_OVR_PRICES[ovr_int]
+        return d["min_price"], d["max_price"]
+    return _calculate_fallback_price_limits(ovr_int)
+
+def get_quicksell_value_for_ovr(ovr: int) -> int:
+    global _OVR_PRICES_CACHE
+    try:
+        ovr_int = int(ovr)
+    except Exception:
+        return 50
+    ovr_str = str(ovr_int)
+    cache = _OVR_PRICES_CACHE or DEFAULT_OVR_PRICES
+    entry = cache.get(ovr_int) or cache.get(ovr_str)
+    if entry and isinstance(entry, dict) and entry.get('quicksell'):
+        return int(entry['quicksell'])
+    min_p, _ = get_price_limits_for_ovr(ovr_int)
+    return max(1, int(min_p * 0.70))
+
+async def get_ovr_price_settings() -> dict:
+    global _OVR_PRICES_CACHE, _OVR_PRICES_CACHE_EXP
+    now = time.time()
+    if _OVR_PRICES_CACHE and now - _OVR_PRICES_CACHE_EXP < 30:
+        return _OVR_PRICES_CACHE
+
+    p = await get_db()
+    try:
+        row = await p.fetchrow("SELECT value FROM system_settings WHERE key = 'ovr_prices'")
+        if not row:
+            raw_defaults = {str(k): v for k, v in DEFAULT_OVR_PRICES.items()}
+            await p.execute("INSERT INTO system_settings (key, value) VALUES ('ovr_prices', $1) ON CONFLICT (key) DO NOTHING", json.dumps(raw_defaults))
+            _OVR_PRICES_CACHE = DEFAULT_OVR_PRICES
+            _OVR_PRICES_CACHE_EXP = now
+            return DEFAULT_OVR_PRICES
+        val = row['value']
+        if isinstance(val, str):
+            try: val = json.loads(val)
+            except Exception: val = {}
+        parsed = {}
+        for k, v in (val or {}).items():
+            try: parsed[int(k)] = v
+            except Exception: parsed[k] = v
+        merged = {**DEFAULT_OVR_PRICES, **parsed}
+        _OVR_PRICES_CACHE = merged
+        _OVR_PRICES_CACHE_EXP = now
+        return merged
+    except Exception as e:
+        print(f"[Database] Error in get_ovr_price_settings: {e}")
+        return DEFAULT_OVR_PRICES
+
+async def save_ovr_price_settings(prices_dict: dict) -> bool:
+    global _OVR_PRICES_CACHE, _OVR_PRICES_CACHE_EXP
+    p = await get_db()
+    try:
+        ser = {str(k): v for k, v in prices_dict.items()}
+        await p.execute('''
+            INSERT INTO system_settings (key, value, updated_at)
+            VALUES ('ovr_prices', $1, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET
+                value = EXCLUDED.value,
+                updated_at = CURRENT_TIMESTAMP
+        ''', json.dumps(ser))
+        
+        parsed = {}
+        for k, v in prices_dict.items():
+            try: parsed[int(k)] = v
+            except Exception: parsed[k] = v
+        _OVR_PRICES_CACHE = {**DEFAULT_OVR_PRICES, **parsed}
+        _OVR_PRICES_CACHE_EXP = time.time()
+        return True
+    except Exception as e:
+        print(f"[Database] Error in save_ovr_price_settings: {e}")
+        return False
+
 
 
 

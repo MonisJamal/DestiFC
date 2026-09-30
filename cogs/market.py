@@ -4,33 +4,11 @@ from discord import app_commands
 import database
 import json
 
-def get_price_limits(ovr: int):
-    OVR_MAP = {
-        122: (2_000_000_000, 4_000_000_000),      # 2B - 4B (QS: 1.5B)
-        121: (900_000_000, 1_800_000_000),        # 900M - 1.8B (QS: 675M)
-        120: (400_000_000, 800_000_000),          # 400M - 800M (QS: 300M)
-        119: (70_000_000, 140_000_000),           # 70M - 140M (QS: 52.5M)
-        118: (65_000_000, 130_000_000),           # 65M - 130M (QS: 48.75M)
-        117: (60_000_000, 120_000_000),           # 60M - 120M (QS: 45M)
-        116: (10_000_000, 20_000_000),            # 10M - 20M (QS: 7.5M)
-        115: (9_000_000, 18_000_000),             # 9M - 18M (QS: 6.75M)
-        114: (8_000_000, 16_000_000),             # 8M - 16M (QS: 6M)
-        113: (7_000_000, 14_000_000),             # 7M - 14M (QS: 5.25M)
-        112: (6_000_000, 12_000_000),             # 6M - 12M (QS: 4.5M)
-    }
-    if ovr in OVR_MAP:
-        return OVR_MAP[ovr]
-    if ovr > 122:
-        max_p = 4_000_000_000 * (2 ** (ovr - 122))
-        return max_p // 2, max_p
-    if ovr >= 107:
-        base = (ovr - 106) * 1_000_000
-        return base, base * 2
-    return 100, 200
+def get_price_limits(ovr: int) -> tuple[int, int]:
+    return database.get_price_limits_for_ovr(ovr)
 
 def get_quicksell_value(ovr: int) -> int:
-    min_p, _ = get_price_limits(ovr)
-    return max(1, int(min_p * 0.70))
+    return database.get_quicksell_value_for_ovr(ovr)
 
 def format_price_short(val: int) -> str:
     if val >= 1_000_000_000:

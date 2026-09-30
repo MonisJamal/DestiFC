@@ -316,6 +316,40 @@ class AdminCog(commands.Cog):
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
 
+    @admin_group.command(name="set_price", description="Admin: Set minimum price floor, max ceiling, and quicksell for an OVR")
+    @app_commands.describe(ovr="Card OVR rating (e.g. 120)", min_price="Min Price in Coins", max_price="Max Price in Coins (optional, defaults to 2x min)", quicksell="QuickSell Coins (optional, defaults to 70% min)")
+    async def set_ovr_price(self, interaction: discord.Interaction, ovr: int, min_price: int, max_price: int = None, quicksell: int = None):
+        if not await is_team_admin_or_owner(self.bot, interaction.user):
+            return await interaction.response.send_message("❌ **Access Denied:** Administrator command only.", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+
+        if max_price is None or max_price <= 0:
+            max_price = min_price * 2
+        if quicksell is None or quicksell <= 0:
+            quicksell = int(min_price * 0.70)
+
+        current = await database.get_ovr_price_settings()
+        current[ovr] = {
+            "min_price": min_price,
+            "max_price": max_price,
+            "quicksell": quicksell
+        }
+        await database.save_ovr_price_settings(current)
+
+        from cogs.market import format_price_short
+        embed = discord.Embed(
+            title="💰 OVR Price Updated",
+            description=(
+                f"Successfully updated price limits for **{ovr} OVR** cards:\n\n"
+                f"• **Min Price Floor:** 🪙 `{min_price:,}` ({format_price_short(min_price)})\n"
+                f"• **Max Price Ceiling:** 🪙 `{max_price:,}` ({format_price_short(max_price)})\n"
+                f"• **QuickSell Instant Value:** 🪙 `{quicksell:,}` ({format_price_short(quicksell)})\n\n"
+                f"✨ *Changes are applied immediately across Discord and the Web Admin Panel.*"
+            ),
+            color=discord.Color.gold()
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     # Top-level direct shortcuts
     @app_commands.command(name="give_card", description="Admin: Give a player card to a user by name and OVR")
     @app_commands.describe(user="Target user", player_name="Player name to search", ovr="Exact OVR", quantity="How many copies (default 1)")
