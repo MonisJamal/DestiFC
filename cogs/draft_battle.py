@@ -32,6 +32,18 @@ LAST_CACHE_TIME = 0
 def get_draft_pool():
     global DRAFT_POOL_CACHE, LAST_CACHE_TIME
     now = time.time()
+    
+    # Check if database official cache has cards (instant RAM lookup)
+    if database._OFFICIAL_CARDS_CACHE:
+        all_ram_cards = []
+        for r, cards in database._OFFICIAL_CARDS_CACHE.items():
+            if r >= 108:
+                all_ram_cards.extend(cards)
+        if all_ram_cards:
+            DRAFT_POOL_CACHE = all_ram_cards
+            LAST_CACHE_TIME = now
+            return DRAFT_POOL_CACHE
+
     if not DRAFT_POOL_CACHE or now - LAST_CACHE_TIME > 1800:
         try:
             pool = []
@@ -109,6 +121,30 @@ def calculate_draft_chemistry(players: dict):
     final_ovr = round(avg_ovr + chem_boost)
     return round(avg_ovr), chem_boost, final_ovr
 
+def generate_ai_draft_squad():
+    """Generates a competitive 11-man AI Draft squad."""
+    formation = random.choice(DRAFT_FORMATIONS)
+    slots = FORMATION_SLOTS[formation]
+    players = {}
+    for slot in slots:
+        choices = sample_position_cards(slot, 5)
+        chosen = max(choices, key=lambda x: x.get('rating', 110))
+        players[slot] = chosen
+    avg_ovr, chem_boost, final_ovr = calculate_draft_chemistry(players)
+    return {
+        "formation": formation,
+        "players": players,
+        "ovr": final_ovr
+    }
+
+class AIDraftUser:
+    def __init__(self):
+        self.id = 0
+        self.display_name = "DestiFC AI Bot 🤖"
+        self.mention = "**DestiFC AI Bot 🤖**"
+        self.bot = True
+        self.avatar = type("Avatar", (), {"url": "https://cdn.discordapp.com/embed/avatars/0.png"})()
+        self.display_avatar = self.avatar
 
 # ================= UI Views =================
 
@@ -124,8 +160,8 @@ class DraftPickDropdown(discord.ui.Select):
             club = p.get("club", {}).get("name", "Club")
             nation = p.get("nation", {}).get("name", "Nation")
             options.append(discord.SelectOption(
-                label=f"{ovr} {name} ({pos})",
-                description=f"{club} | {nation}",
+                label=f"{ovr} {name} ({pos})"[:100],
+                description=f"{club} | {nation}"[:100],
                 value=str(i),
                 emoji="⭐" if ovr >= 120 else "⚽"
             ))
@@ -169,7 +205,7 @@ class SinglePlayerDraftView(discord.ui.View):
             avg_ovr, chem_boost, final_ovr = calculate_draft_chemistry(self.picked_players)
             embed = discord.Embed(
                 title=f"✅ Draft Squad Completed!",
-                description=f"**Formation:** `{self.formation}`\n**Base OVR:** `{avg_ovr}` | **Chemistry Boost:** `+{chem_boost}`\n**Final Team OVR:** 🌟 **{final_ovr}**\n\n*Waiting for your opponent to complete their squad...*",
+                description=f"**Formation:** `{self.formation}`\n**Base OVR:** `{avg_ovr}` | **Chemistry Boost:** `+{chem_boost}`\n**Final Team OVR:** 🌟 **{final_ovr}**\n\n*Simulating match highlights... Check the battle channel!*",
                 color=discord.Color.green()
             )
             await interaction.response.edit_message(embed=embed, view=None)
@@ -210,7 +246,7 @@ class FormationSelectView(discord.ui.View):
 
 
 class DraftBattleRoomView(discord.ui.View):
-    def __init__(self, challenger: discord.Member, opponent: discord.Member, wager: int, bot, message: discord.Message = None, channel_id: int = None):
+    def __init__(self, challenger: discord.Member, opponent: discord.Member, wager: int, bot, message: discord.Message = None, channel_id: int = None, is_solo: bool = False):
         super().__init__(timeout=300)
         self.challenger = challenger
         self.opponent = opponent
@@ -218,10 +254,11 @@ class DraftBattleRoomView(discord.ui.View):
         self.bot = bot
         self.message = message
         self.channel_id = channel_id or (message.channel.id if (message and message.channel) else None)
+        self.is_solo = is_solo
         self.draft_data = {}
         self.drafting_status = {
             challenger.id: "⏳ Not started",
-            opponent.id: "⏳ Not started"
+            opponent.id: ("🤖 AI Ready" if is_solo else "⏳ Not started")
         }
         self.update_buttons()
 
@@ -230,29 +267,39 @@ class DraftBattleRoomView(discord.ui.View):
         
         btn_a_label = f"🔵 {self.challenger.display_name}'s Board"
         btn_a_style = discord.ButtonStyle.primary if self.challenger.id not in self.draft_data else discord.ButtonStyle.secondary
-        btn_a = discord.ui.Button(label=btn_a_label, style=btn_a_style, custom_id="draft_btn_a", disabled=(self.challenger.id in self.draft_data))
+        btn_a = discord.ui.Button(label=btn_a_label[:80], style=btn_a_style, custom_id="draft_btn_a", disabled=(self.challenger.id in self.draft_data))
         btn_a.callback = self.on_click_a
         self.add_item(btn_a)
 
-        btn_b_label = f"🔴 {self.opponent.display_name}'s Board"
-        btn_b_style = discord.ButtonStyle.danger if self.opponent.id not in self.draft_data else discord.ButtonStyle.secondary
-        btn_b = discord.ui.Button(label=btn_b_label, style=btn_b_style, custom_id="draft_btn_b", disabled=(self.opponent.id in self.draft_data))
-        btn_b.callback = self.on_click_b
-        self.add_item(btn_b)
+        if not self.is_solo:
+            btn_b_label = f"🔴 {self.opponent.display_name}'s Board"
+            btn_b_style = discord.ButtonStyle.danger if self.opponent.id not in self.draft_data else discord.ButtonStyle.secondary
+            btn_b = discord.ui.Button(label=btn_b_label[:80], style=btn_b_style, custom_id="draft_btn_b", disabled=(self.opponent.id in self.draft_data))
+            btn_b.callback = self.on_click_b
+            self.add_item(btn_b)
+
+            # Auto-fill button if opponent is AFK
+            if self.challenger.id in self.draft_data and self.opponent.id not in self.draft_data:
+                auto_btn = discord.ui.Button(label="🤖 Auto-Draft for Opponent & Play", style=discord.ButtonStyle.success, custom_id="draft_btn_auto")
+                auto_btn.callback = self.on_auto_fill
+                self.add_item(auto_btn)
 
     def generate_status_embed(self):
         wager_text = f"\n🪙 **Coin Wager:** `{self.wager:,}` Coins each (Winner takes `{self.wager * 2:,}`)" if self.wager > 0 else ""
         
+        opp_name = self.opponent.mention if not self.is_solo else "**DestiFC AI Bot 🤖**"
+        opp_display = self.opponent.display_name if not self.is_solo else "DestiFC AI Bot 🤖"
+        
         embed = discord.Embed(
             title="⚔️ DRAFT BATTLE IN PROGRESS!",
-            description=f"**{self.challenger.mention}** VS **{self.opponent.mention}**{wager_text}\n\n"
+            description=f"**{self.challenger.mention}** VS {opp_name}{wager_text}\n\n"
                         f"👉 **Click your personal button below** to enter your private draft room and draft your 11-man squad!\n\n"
                         f"### 📋 Squad Status:\n"
                         f"🔵 **{self.challenger.display_name}:** {self.drafting_status.get(self.challenger.id, '⏳ Waiting')}\n"
-                        f"🔴 **{self.opponent.display_name}:** {self.drafting_status.get(self.opponent.id, '⏳ Waiting')}",
+                        f"🔴 **{opp_display}:** {self.drafting_status.get(self.opponent.id, '⏳ Waiting')}",
             color=discord.Color.gold()
         )
-        embed.set_footer(text="Both players have 5 minutes to draft. Opponents cannot see your picks!")
+        embed.set_footer(text="Draft your 11 superstars! The match simulates immediately once ready.")
         return embed
 
     async def on_click_a(self, interaction: discord.Interaction):
@@ -271,6 +318,8 @@ class DraftBattleRoomView(discord.ui.View):
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def on_click_b(self, interaction: discord.Interaction):
+        if self.is_solo:
+            return await interaction.response.send_message("🤖 Opponent is AI in solo mode!", ephemeral=True)
         if interaction.user.id != self.opponent.id:
             return await interaction.response.send_message(f"❌ This button is reserved for {self.opponent.mention}!", ephemeral=True)
         if self.opponent.id in self.draft_data:
@@ -284,6 +333,17 @@ class DraftBattleRoomView(discord.ui.View):
             color=discord.Color.red()
         )
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    async def on_auto_fill(self, interaction: discord.Interaction):
+        if interaction.user.id != self.challenger.id:
+            return await interaction.response.send_message("❌ Only the challenger can trigger auto-draft!", ephemeral=True)
+        
+        await interaction.response.send_message("🤖 Auto-drafting squad for opponent...", ephemeral=True)
+        ai_squad = generate_ai_draft_squad()
+        self.draft_data[self.opponent.id] = ai_squad
+        self.drafting_status[self.opponent.id] = f"✅ **Auto-Drafted!** (🌟 {ai_squad['ovr']} OVR)"
+        self.stop()
+        await self.simulate_match(interaction)
 
     async def on_formation_selected(self, interaction: discord.Interaction, user: discord.User, formation: str):
         draft_view = SinglePlayerDraftView(user, formation, self.on_player_completed)
@@ -312,6 +372,20 @@ class DraftBattleRoomView(discord.ui.View):
                 await interaction.message.edit(embed=self.generate_status_embed(), view=self)
         except Exception as e:
             print("[DraftBattle] Error editing draft room message:", e)
+
+        # If Solo Mode -> Auto-draft AI and simulate match immediately!
+        if self.is_solo:
+            ai_squad = generate_ai_draft_squad()
+            self.draft_data[self.opponent.id] = ai_squad
+            self.drafting_status[self.opponent.id] = f"✅ **Ready!** (🌟 {ai_squad['ovr']} OVR)"
+            self.stop()
+            try:
+                await self.simulate_match(interaction)
+            except Exception as e:
+                print(f"[DraftBattle] Error simulating solo match: {e}")
+                import traceback
+                traceback.print_exc()
+            return
 
         # If both players finished -> simulate match!
         if len(self.draft_data) >= 2:
@@ -344,35 +418,127 @@ class DraftBattleRoomView(discord.ui.View):
         attackers_a = [p.get("cardName", p.get("lastName", "Striker")) for pos, p in data_a.get("players", {}).items() if any(k in pos for k in ["ST", "RW", "LW", "CAM", "CF"])] or [user_a.display_name]
         attackers_b = [p.get("cardName", p.get("lastName", "Striker")) for pos, p in data_b.get("players", {}).items() if any(k in pos for k in ["ST", "RW", "LW", "CAM", "CF"])] or [user_b.display_name]
 
+        midfielders_a = [p.get("cardName", p.get("lastName", "Midfielder")) for pos, p in data_a.get("players", {}).items() if any(k in pos for k in ["CM", "CDM", "CAM", "LM", "RM"])] or attackers_a
+        midfielders_b = [p.get("cardName", p.get("lastName", "Midfielder")) for pos, p in data_b.get("players", {}).items() if any(k in pos for k in ["CM", "CDM", "CAM", "LM", "RM"])] or attackers_b
+
+        goals_breakdown_a = {}
+        goals_breakdown_b = {}
+        assists_breakdown_a = {}
+        assists_breakdown_b = {}
+
         # 5 match chances
         for minute in [15, 34, 52, 73, 88]:
             roll = random.random()
             if roll < base_a_prob:
                 score_a += 1
                 scorer = random.choice(attackers_a)
-                events.append(f"⏱️ **{minute}'** ⚽ **GOAL!** {scorer} finds the net for **{user_a.display_name}**!")
+                goals_breakdown_a[scorer] = goals_breakdown_a.get(scorer, 0) + 1
+                
+                # Assign assist
+                assister_candidates = [m for m in midfielders_a if m != scorer] or attackers_a
+                assister = random.choice(assister_candidates) if assister_candidates else None
+                if assister:
+                    assists_breakdown_a[assister] = assists_breakdown_a.get(assister, 0) + 1
+                    events.append(f"⏱️ **{minute}'** ⚽ **GOAL!** {scorer} finds the net! (Assist: {assister})")
+                else:
+                    events.append(f"⏱️ **{minute}'** ⚽ **GOAL!** {scorer} scores a solo stunner for **{user_a.display_name}**!")
             elif roll > 0.65:
                 score_b += 1
                 scorer = random.choice(attackers_b)
-                events.append(f"⏱️ **{minute}'** ⚽ **GOAL!** {scorer} scores a screamer for **{user_b.display_name}**!")
+                goals_breakdown_b[scorer] = goals_breakdown_b.get(scorer, 0) + 1
+                
+                assister_candidates = [m for m in midfielders_b if m != scorer] or attackers_b
+                assister = random.choice(assister_candidates) if assister_candidates else None
+                if assister:
+                    assists_breakdown_b[assister] = assists_breakdown_b.get(assister, 0) + 1
+                    events.append(f"⏱️ **{minute}'** ⚽ **GOAL!** {scorer} strikes! (Assist: {assister})")
+                else:
+                    events.append(f"⏱️ **{minute}'** ⚽ **GOAL!** {scorer} scores a screamer for **{user_b.display_name}**!")
             else:
                 events.append(f"⏱️ **{minute}'** 🧤 Crucial save in the box keeps the scoreline tight!")
 
-        # Record DB Result
+        # Record DB Result for PVP & ELO
+        if not self.is_solo:
+            try:
+                await database.record_draft_battle_result(user_a.id, user_b.id, score_a, score_b, self.wager)
+            except Exception as e:
+                print("[DraftBattle] Error recording draft battle DB result:", e)
+        else:
+            # Solo Rewards
+            if score_a > score_b:
+                await database.add_coins(user_a.id, 5_000_000)
+                try:
+                    from cogs.season import add_season_xp
+                    await add_season_xp(user_a.id, 50)
+                except Exception: pass
+
+        # Record Player Performance Stats for User A's Squad
         try:
-            await database.record_draft_battle_result(user_a.id, user_b.id, score_a, score_b, self.wager)
+            stats_list_a = []
+            for pos, p in data_a.get("players", {}).items():
+                p_name = p.get("cardName") or p.get("lastName") or pos
+                clean_pos = ''.join([c for c in pos if not c.isdigit()]).strip().upper()
+                is_df_gk = any(k in clean_pos for k in ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB'])
+                cs = 1 if (is_df_gk and score_b == 0) else 0
+                g_count = goals_breakdown_a.get(p_name, 0)
+                a_count = assists_breakdown_a.get(p_name, 0)
+                base_rating = 7.0 + (g_count * 1.2) + (a_count * 0.8) + (0.5 if score_a > score_b else (-0.5 if score_b > score_a else 0))
+                rating = round(min(10.0, max(5.5, base_rating)), 1)
+                stats_list_a.append({
+                    "player_name": p_name,
+                    "position": clean_pos,
+                    "ovr": p.get("rating", 110),
+                    "goals": g_count,
+                    "assists": a_count,
+                    "clean_sheets": cs,
+                    "yellow_cards": 0,
+                    "red_cards": 0,
+                    "rating": rating,
+                    "is_motm": 1 if (score_a >= score_b and g_count >= 1) else 0
+                })
+            await database.record_player_match_stats(user_a.id, stats_list_a)
+
+            # Record for User B if human
+            if not self.is_solo and user_b.id != 0:
+                stats_list_b = []
+                for pos, p in data_b.get("players", {}).items():
+                    p_name = p.get("cardName") or p.get("lastName") or pos
+                    clean_pos = ''.join([c for c in pos if not c.isdigit()]).strip().upper()
+                    is_df_gk = any(k in clean_pos for k in ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB'])
+                    cs = 1 if (is_df_gk and score_a == 0) else 0
+                    g_count = goals_breakdown_b.get(p_name, 0)
+                    a_count = assists_breakdown_b.get(p_name, 0)
+                    base_rating = 7.0 + (g_count * 1.2) + (a_count * 0.8) + (0.5 if score_b > score_a else (-0.5 if score_a > score_b else 0))
+                    rating = round(min(10.0, max(5.5, base_rating)), 1)
+                    stats_list_b.append({
+                        "player_name": p_name,
+                        "position": clean_pos,
+                        "ovr": p.get("rating", 110),
+                        "goals": g_count,
+                        "assists": a_count,
+                        "clean_sheets": cs,
+                        "yellow_cards": 0,
+                        "red_cards": 0,
+                        "rating": rating,
+                        "is_motm": 1 if (score_b > score_a and g_count >= 1) else 0
+                    })
+                await database.record_player_match_stats(user_b.id, stats_list_b)
         except Exception as e:
-            print("[DraftBattle] Error recording draft battle DB result:", e)
+            print(f"[DraftBattle] Error recording player stats: {e}")
 
         # Winner summary
         if score_a > score_b:
             result_title = f"🏆 {user_a.display_name} WINS THE DRAFT BATTLE!"
-            winner_desc = f"👑 **{user_a.display_name}** defeated **{user_b.display_name}** (`{score_a} - {score_b}`)!\n📈 **{user_a.display_name}**: `+25 ELO` | `+3 Points`\n📉 **{user_b.display_name}**: `-15 ELO` | `+1 Point`"
+            winner_desc = f"👑 **{user_a.display_name}** defeated **{user_b.display_name}** (`{score_a} - {score_b}`)!\n📈 **{user_a.display_name}**: `+25 ELO` | `+3 Points`"
+            if not self.is_solo:
+                winner_desc += f"\n📉 **{user_b.display_name}**: `-15 ELO` | `+1 Point`"
+            else:
+                winner_desc += f"\n💰 **Reward:** `+5,000,000 Coins` | `+50 Season XP`"
             color = discord.Color.green()
         elif score_b > score_a:
             result_title = f"🏆 {user_b.display_name} WINS THE DRAFT BATTLE!"
             winner_desc = f"👑 **{user_b.display_name}** defeated **{user_a.display_name}** (`{score_b} - {score_a}`)!\n📈 **{user_b.display_name}**: `+25 ELO` | `+3 Points`\n📉 **{user_a.display_name}**: `-15 ELO` | `+1 Point`"
-            color = discord.Color.green()
+            color = discord.Color.red()
         else:
             result_title = f"🤝 DRAFT BATTLE ENDED IN A DRAW!"
             winner_desc = f"Both teams finished level (`{score_a} - {score_b}`)!\n📈 Both players receive `+5 ELO` & `+1 Point`."
@@ -388,7 +554,7 @@ class DraftBattleRoomView(discord.ui.View):
         )
         match_embed.add_field(name=f"🔵 {user_a.display_name}'s Draft", value=f"Formation: `{data_a.get('formation', 'N/A')}`\nRating: 🌟 **{ovr_a} OVR**", inline=True)
         match_embed.add_field(name=f"🔴 {user_b.display_name}'s Draft", value=f"Formation: `{data_b.get('formation', 'N/A')}`\nRating: 🌟 **{ovr_b} OVR**", inline=True)
-        match_embed.set_footer(text="DestiFC Draft Battles • Use /draftbattle leaderboard to check rankings")
+        match_embed.set_footer(text="DestiFC Draft Battles • Stats & records recorded to /club_stats")
 
         squad_a = {"formation": data_a.get("formation", "4-3-3 Attack"), "players": {pos: {"name": p.get("cardName", p.get("lastName", pos)), "ovr": p.get("rating", 110)} for pos, p in data_a.get("players", {}).items()}}
         squad_b = {"formation": data_b.get("formation", "4-3-3 Attack"), "players": {pos: {"name": p.get("cardName", p.get("lastName", pos)), "ovr": p.get("rating", 110)} for pos, p in data_b.get("players", {}).items()}}
@@ -433,29 +599,24 @@ class DraftBattleRoomView(discord.ui.View):
             print("[DraftBattle] Error ending lobby view:", e)
 
         # Post results with ping into target channel
+        ping_content = f"🔔 {user_a.mention} {user_b.mention} — **Your Draft Battle Match is Complete!**" if not self.is_solo else f"🔔 {user_a.mention} — **Your Solo Draft Battle is Complete!**"
+        
         if target_channel:
             try:
                 if file:
                     file.fp.seek(0)
-                    await target_channel.send(
-                        content=f"🔔 {user_a.mention} {user_b.mention} — **Your Draft Battle Match is Complete!**",
-                        embed=match_embed,
-                        file=file
-                    )
+                    await target_channel.send(content=ping_content, embed=match_embed, file=file)
                 else:
-                    await target_channel.send(
-                        content=f"🔔 {user_a.mention} {user_b.mention} — **Your Draft Battle Match is Complete!**",
-                        embed=match_embed
-                    )
+                    await target_channel.send(content=ping_content, embed=match_embed)
             except Exception as e:
                 print("[DraftBattle] Error sending result message:", e)
         else:
-            print(f"[DraftBattle] Warning: Could not resolve target_channel (channel_id={self.channel_id}) to post match results.")
+            print(f"[DraftBattle] Warning: Could not resolve target_channel (channel_id={self.channel_id})")
 
         if interaction:
             try:
                 ch_mention = target_channel.mention if target_channel else "the channel"
-                await interaction.followup.send(f"🏁 **Draft Battle Finished!** Check {ch_mention} to view full highlights and final score!", ephemeral=True)
+                await interaction.followup.send(f"🏁 **Draft Battle Finished!** Check {ch_mention} to view the match highlights and final score!", ephemeral=True)
             except Exception:
                 pass
 
@@ -491,7 +652,7 @@ class DraftBattleChallengeView(discord.ui.View):
         self.stop()
 
         ch_id = interaction.channel_id or self.channel_id
-        room_view = DraftBattleRoomView(self.challenger, self.opponent, self.wager, self.bot, interaction.message, channel_id=ch_id)
+        room_view = DraftBattleRoomView(self.challenger, self.opponent, self.wager, self.bot, interaction.message, channel_id=ch_id, is_solo=False)
         await interaction.response.edit_message(embed=room_view.generate_status_embed(), view=room_view)
 
     @discord.ui.button(label="Decline ❌", style=discord.ButtonStyle.danger)
@@ -516,18 +677,27 @@ class DraftBattleCog(commands.Cog):
 
     draftbattle_group = app_commands.Group(name="draftbattle", description="FC FUT Draft Battles 1v1 Mode")
 
-    @app_commands.command(name="draft_challenge", description="Challenge another user to a live 1v1 Draft Battle with 110+ OVR cards")
-    @app_commands.describe(user="Opponent to challenge", wager="Optional coin wager (winner takes all)")
-    async def draft_challenge(self, interaction: discord.Interaction, user: discord.Member, wager: int = 0):
-        await self.challenge(interaction, user, wager)
+    @app_commands.command(name="draft_challenge", description="Challenge another user or AI to a live Draft Battle with 110+ OVR cards")
+    @app_commands.describe(user="Opponent to challenge (leave empty to play Solo vs AI)", wager="Optional coin wager for PvP (winner takes all)")
+    async def draft_challenge(self, interaction: discord.Interaction, user: discord.Member = None, wager: int = 0):
+        if user is None or user.id == interaction.user.id or user.bot:
+            # Solo Draft Challenge vs AI
+            ai_user = AIDraftUser()
+            room_view = DraftBattleRoomView(interaction.user, ai_user, 0, self.bot, channel_id=interaction.channel_id, is_solo=True)
+            embed = discord.Embed(
+                title="⚔️ SOLO DRAFT CHALLENGE (VS AI)",
+                description=(
+                    f"Welcome {interaction.user.mention}! Draft your ultimate 11-player squad to take on the **DestiFC AI Bot 🤖**!\n\n"
+                    f"👉 **Click '🔵 {interaction.user.display_name}'s Board' below** to start drafting!"
+                ),
+                color=discord.Color.gold()
+            )
+            embed.set_footer(text="Pick your formation and 11 superstars. Match simulates upon squad completion!")
+            msg = await interaction.response.send_message(embed=embed, view=room_view)
+            room_view.message = await interaction.original_response()
+            return
 
-    @draftbattle_group.command(name="challenge", description="Challenge another user to a live 1v1 Draft Battle with 110+ OVR cards")
-    @app_commands.describe(user="Opponent to challenge", wager="Optional coin wager (winner takes all)")
-    async def challenge(self, interaction: discord.Interaction, user: discord.Member, wager: int = 0):
-        if user.id == interaction.user.id:
-            return await interaction.response.send_message("❌ You cannot challenge yourself!", ephemeral=True)
-        if user.bot:
-            return await interaction.response.send_message("❌ You cannot challenge a bot to a draft battle!", ephemeral=True)
+        # PvP Draft Battle
         if wager < 0:
             return await interaction.response.send_message("❌ Wager cannot be negative.", ephemeral=True)
 
@@ -537,16 +707,25 @@ class DraftBattleCog(commands.Cog):
                 return await interaction.response.send_message(f"❌ You don't have enough coins for a **{wager:,}** coin wager! Your balance: **{user_data.get('coins', 0):,}**", ephemeral=True)
 
         view = DraftBattleChallengeView(interaction.user, user, wager, self.bot, channel_id=interaction.channel_id)
-        view.channel = interaction.channel
         wager_text = f"\n🪙 **Coin Wager:** `{wager:,}` Coins (Winner takes `{wager * 2:,}`)" if wager > 0 else ""
 
         embed = discord.Embed(
             title="⚔️ DRAFT BATTLE CHALLENGE!",
-            description=f"{user.mention}, you have been challenged to an **FC Draft Battle 1v1** by **{interaction.user.mention}**!\n\n🎮 **Format:**\n• Pick Formations & 110+ OVR Superstars\n• Chemistry Synergy Boosts\n• Live 90-Minute Simulated Match\n• ELO & Leaderboard Points{wager_text}\n\n*Click Accept below within 60 seconds to enter the draft room:*",
+            description=f"{user.mention}, you have been challenged to an **FC Draft Battle 1v1** by **{interaction.user.mention}**!\n\n🎮 **Format:**\n• Pick Formations & 110+ OVR Superstars\n• Chemistry Synergy Boosts\n• Live Simulated Match with Highlights\n• ELO & Player Stats Tracking{wager_text}\n\n*Click Accept below within 60 seconds to enter the draft room:*",
             color=discord.Color.gold()
         )
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
         await interaction.response.send_message(content=user.mention, embed=embed, view=view)
+        view.message = await interaction.original_response()
+
+    @draftbattle_group.command(name="solo", description="Play a Solo Draft Battle against the DestiFC AI")
+    async def solo_draft(self, interaction: discord.Interaction):
+        await self.draft_challenge(interaction, user=None, wager=0)
+
+    @draftbattle_group.command(name="challenge", description="Challenge another user to a live 1v1 Draft Battle with 110+ OVR cards")
+    @app_commands.describe(user="Opponent to challenge", wager="Optional coin wager (winner takes all)")
+    async def challenge(self, interaction: discord.Interaction, user: discord.Member, wager: int = 0):
+        await self.draft_challenge(interaction, user=user, wager=wager)
 
     @draftbattle_group.command(name="leaderboard", description="View the Top 10 Draft Battle Champions ranked by ELO Rating")
     async def leaderboard(self, interaction: discord.Interaction):
@@ -554,7 +733,7 @@ class DraftBattleCog(commands.Cog):
         lb = await database.get_draft_battle_leaderboard(10)
 
         if not lb:
-            return await interaction.followup.send("🏆 No Draft Battle matches recorded yet! Use `/draftbattle challenge @user` to play the first match.")
+            return await interaction.followup.send("🏆 No Draft Battle matches recorded yet! Use `/draft_challenge` to play the first match.")
 
         desc = ""
         medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]

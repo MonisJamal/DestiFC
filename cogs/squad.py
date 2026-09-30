@@ -112,6 +112,33 @@ async def locked_card_autocomplete(interaction: discord.Interaction, current: st
     except Exception:
         return []
 
+async def player_stats_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    choices = []
+    try:
+        # 1. First add current starting XI
+        squad = await database.get_squad(interaction.user.id)
+        for pos, p in squad.get("players", {}).items():
+            if p and (not current or current.lower() in p.get("name", "").lower()):
+                p_name = p.get("name")
+                choices.append(app_commands.Choice(name=f"⚽ {p_name} ({pos} - {p.get('ovr', '')}) [Starting XI]"[:100], value=p_name))
+        
+        # 2. Add players from player_stats table
+        stats = await database.get_user_player_stats(interaction.user.id)
+        existing_names = {c.value.lower() for c in choices}
+        for st in stats:
+            p_name = st.get("player_name", "")
+            if p_name.lower() not in existing_names and (not current or current.lower() in p_name.lower()):
+                pos = st.get("position", "")
+                goals = st.get("goals", 0)
+                matches = st.get("matches_played", 0)
+                choices.append(app_commands.Choice(name=f"📊 {p_name} ({pos}) — {goals}G ({matches}M)"[:100], value=p_name))
+                if len(choices) >= 25:
+                    break
+    except Exception as e:
+        print("Error in player_stats_autocomplete:", e)
+    return choices[:25]
+
+
 class InventoryPagination(discord.ui.View):
     def __init__(self, user_id, inventory, current_page, max_pages):
         super().__init__(timeout=60)
@@ -563,5 +590,176 @@ class SquadCog(commands.Cog):
     async def top_squad_view(self, interaction: discord.Interaction, user: discord.Member = None):
         await self.view_squad(interaction, user)
 
+    @app_commands.command(name="club_stats", description="View your club's personal stats leaders (Top Scorer, Assists, Ratings, Clean Sheets, Cards)")
+    @app_commands.describe(user="User whose club stats you want to view (leave empty for yours)")
+    async def club_stats(self, interaction: discord.Interaction, user: discord.Member = None):
+        await interaction.response.defer()
+        target = user or interaction.user
+
+        if target.id != interaction.user.id and not await interaction.client.is_owner(interaction.user):
+            if await database.is_profile_private(target.id):
+                return await interaction.followup.send(f"🔒 **{target.display_name}** has set their club profile to **Private**.", ephemeral=True)
+
+        leaders = await database.get_club_leader_stats(target.id)
+        if not leaders or leaders.get("tracked_count", 0) == 0:
+            embed = discord.Embed(
+                title=f"📊 {target.display_name}'s Club Performance",
+                description=(
+                    "❌ **No match statistics recorded yet!**\n\n"
+                    "Play Division Rivals with `/play @user` or Draft Battles with `/draft_challenge` "
+                    "to start tracking your squad's goals, assists, clean sheets, and ratings!"
+                ),
+                color=discord.Color.blue()
+            )
+            embed.set_thumbnail(url=target.display_avatar.url)
+            return await interaction.followup.send(embed=embed)
+
+        ts = leaders.get("top_scorer")
+        ta = leaders.get("top_assists")
+        br = leaders.get("best_rating")
+        cs = leaders.get("top_clean_sheets")
+        my = leaders.get("most_yellows")
+        mr = leaders.get("most_reds")
+
+        embed = discord.Embed(
+            title=f"👑 {target.display_name}'s Club Stats & Records",
+            description=f"Performance summary for **{leaders.get('tracked_count', 0)}** tracked players across **{leaders.get('total_matches', 0)}** matches.",
+            color=discord.Color.gold()
+        )
+        embed.set_thumbnail(url=target.display_avatar.url)
+
+        # 1. Top Goalscorer (Golden Boot)
+        if ts:
+            gpg = round(ts['goals'] / max(1, ts['matches_played']), 2)
+            embed.add_field(
+                name="⚽ Golden Boot (Top Scorer)",
+                value=f"👑 **{ts['player_name']}** `({ts['position']})`\n🥅 **{ts['goals']} Goals** in {ts['matches_played']} matches (`{gpg}` GPG)",
+                inline=False
+            )
+        else:
+            embed.add_field(name="⚽ Golden Boot (Top Scorer)", value="*No goals scored yet*", inline=False)
+
+        # 2. Playmaker (Most Assists)
+        if ta:
+            apg = round(ta['assists'] / max(1, ta['matches_played']), 2)
+            embed.add_field(
+                name="🎯 Master Playmaker (Most Assists)",
+                value=f"🪄 **{ta['player_name']}** `({ta['position']})`\n🅰️ **{ta['assists']} Assists** in {ta['matches_played']} matches (`{apg}` APG)",
+                inline=False
+            )
+        else:
+            embed.add_field(name="🎯 Master Playmaker", value="*No assists recorded yet*", inline=False)
+
+        # 3. Best Average Match Rating
+        if br:
+            embed.add_field(
+                name="⭐ Highest Match Rating",
+                value=f"🌟 **{br['player_name']}** `({br['position']})`\n📊 **{br['avg_rating']} / 10.0** Average Rating ({br['motm_count']}x MOTM)",
+                inline=True
+            )
+
+        # 4. Clean Sheet Leader (Defenders & GK only)
+        if cs:
+            cs_pct = round((cs['clean_sheets'] / max(1, cs['matches_played'])) * 100)
+            embed.add_field(
+                name="🧤 Wall of the Club (Clean Sheets)",
+                value=f"🧱 **{cs['player_name']}** `({cs['position']})`\n🛡️ **{cs['clean_sheets']} Clean Sheets** (`{cs_pct}%` CS rate)",
+                inline=True
+            )
+        else:
+            embed.add_field(
+                name="🧤 Wall of the Club (Clean Sheets)",
+                value="*No clean sheets yet (DF/GK)*",
+                inline=True
+            )
+
+        # 5. Discipline & Cards
+        discipline_parts = []
+        if my and my['yellow_cards'] > 0:
+            discipline_parts.append(f"🟨 **{my['player_name']}**: `{my['yellow_cards']}` Yellows")
+        if mr and mr['red_cards'] > 0:
+            discipline_parts.append(f"🟥 **{mr['player_name']}**: `{mr['red_cards']}` Reds")
+        
+        disc_text = " • ".join(discipline_parts) if discipline_parts else "😇 Clean record! No disciplinary cards."
+        embed.add_field(name="🟨🟥 Disciplinary Record", value=disc_text, inline=False)
+
+        # 6. Overall Club Totals
+        embed.add_field(
+            name="📊 Club Overview",
+            value=f"🏟️ **Matches:** `{leaders.get('total_matches', 0)}` | ⚽ **Total Goals:** `{leaders.get('total_goals', 0)}` | 🎯 **Total Assists:** `{leaders.get('total_assists', 0)}`",
+            inline=False
+        )
+
+        embed.set_footer(text="Use /player_stats [player] to inspect individual player cards")
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="stats", description="View club performance records (Top Scorer, Assists, Ratings, Clean Sheets)")
+    @app_commands.describe(user="User whose club stats you want to view (leave empty for yours)")
+    async def stats_alias(self, interaction: discord.Interaction, user: discord.Member = None):
+        await self.club_stats(interaction, user)
+
+    @app_commands.command(name="player_stats", description="View lifetime match statistics of a specific player in your squad or club")
+    @app_commands.describe(player="Select or search player name", user="Target user (leave empty for yourself)")
+    @app_commands.autocomplete(player=player_stats_autocomplete)
+    async def player_stats(self, interaction: discord.Interaction, player: str, user: discord.Member = None):
+        await interaction.response.defer()
+        target = user or interaction.user
+
+        if target.id != interaction.user.id and not await interaction.client.is_owner(interaction.user):
+            if await database.is_profile_private(target.id):
+                return await interaction.followup.send(f"🔒 **{target.display_name}** has set their club profile to **Private**.", ephemeral=True)
+
+        stats_rows = await database.get_user_player_stats(target.id, player)
+        
+        if not stats_rows:
+            squad = await database.get_squad(target.id)
+            found_card = None
+            for pos, p in squad.get("players", {}).items():
+                if p and player.lower() in p.get("name", "").lower():
+                    found_card = {"player_name": p["name"], "position": pos, "ovr": p.get("ovr", 100), "matches_played": 0, "goals": 0, "assists": 0, "clean_sheets": 0, "yellow_cards": 0, "red_cards": 0, "avg_rating": "N/A", "motm_count": 0}
+                    break
+            
+            if not found_card:
+                return await interaction.followup.send(f"❌ No match statistics found for **{player}** in {target.display_name}'s club.\nPlay matches with `/play` or `/draft_challenge` to track stats!", ephemeral=True)
+            stats = found_card
+        else:
+            stats = stats_rows[0]
+
+        p_name = stats.get("player_name", player)
+        pos = stats.get("position", "N/A")
+        ovr = stats.get("ovr", 100)
+        matches = stats.get("matches_played", 0)
+        goals = stats.get("goals", 0)
+        assists = stats.get("assists", 0)
+        clean_sheets = stats.get("clean_sheets", 0)
+        yellows = stats.get("yellow_cards", 0)
+        reds = stats.get("red_cards", 0)
+        avg_rating = stats.get("avg_rating", "N/A")
+        motm = stats.get("motm_count", 0)
+
+        gpg = round(goals / max(1, matches), 2) if matches > 0 else 0
+        apg = round(assists / max(1, matches), 2) if matches > 0 else 0
+
+        is_def_gk = any(k in str(pos).upper() for k in ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB'])
+        cs_line = f"🧤 **Clean Sheets:** `{clean_sheets}`" + (f" (`{round((clean_sheets/max(1, matches))*100)}%` CS Rate)" if (is_def_gk and matches > 0) else " *(Only tracked for GK & Defenders)*")
+
+        embed = discord.Embed(
+            title=f"📋 {p_name} — Lifetime Player Card",
+            description=f"🏃 **Position:** `{pos}` | 🌟 **Rating:** `{ovr} OVR`\n🛡️ **Club:** {target.display_name}'s XI",
+            color=discord.Color.blue()
+        )
+        embed.set_author(name=f"{target.display_name}'s Player Stats", icon_url=target.display_avatar.url)
+
+        embed.add_field(name="🏟️ Appearances", value=f"**{matches}** Matches Played", inline=True)
+        embed.add_field(name="⭐ Match Rating", value=f"**{avg_rating} / 10.0**\n🎖️ `{motm}x` MOTM", inline=True)
+        embed.add_field(name="⚽ Goals Scored", value=f"**{goals}** Goals\n`{gpg}` Goals / Match", inline=True)
+        embed.add_field(name="🎯 Assists", value=f"**{assists}** Assists\n`{apg}` Assists / Match", inline=True)
+        embed.add_field(name="🧤 Defensive Record", value=cs_line, inline=False)
+        embed.add_field(name="🟨 Discipline", value=f"🟨 **{yellows}** Yellow Cards | 🟥 **{reds}** Red Cards", inline=False)
+
+        embed.set_footer(text="DestiFC Player Performance Tracker • Stats update after every match")
+        await interaction.followup.send(embed=embed)
+
 async def setup(bot):
     await bot.add_cog(SquadCog(bot))
+

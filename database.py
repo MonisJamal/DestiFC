@@ -432,6 +432,10 @@ async def set_store_player_shop(items: list):
     for item in items:
         exp = _parse_timestamp(item.get("expires_at"))
         await p.execute(
+            "INSERT INTO store_player_shop (player_data, price, expires_at) VALUES ($1, $2, $3)",
+            json.dumps(item['player_data']), item['price'], exp
+        )
+
 _EXCHANGE_POOL_CACHE = None
 
 async def get_active_exchange_pool():
@@ -795,5 +799,147 @@ async def get_max_official_ovr() -> int:
         return int(max_r) if max_r else 122
     except Exception:
         return 122
+
+# ================= Player Performance Stats =================
+
+async def record_player_match_stats(user_id: int, stats_list: list[dict]):
+    """
+    Records detailed post-match stats for an array of players for a user.
+    """
+    if not stats_list:
+        return
+    p = await get_db()
+    for s in stats_list:
+        p_name = s.get("player_name") or s.get("name") or "Player"
+        p_id = str(s.get("player_id") or s.get("id") or "")
+        pos = str(s.get("position") or s.get("pos") or "CM").upper()
+        ovr = int(s.get("ovr") or s.get("rating") or 100)
+        goals = int(s.get("goals") or 0)
+        assists = int(s.get("assists") or 0)
+        clean_sheets = int(s.get("clean_sheets") or 0)
+        yellows = int(s.get("yellow_cards") or s.get("yellows") or 0)
+        reds = int(s.get("red_cards") or s.get("reds") or 0)
+        rating = float(s.get("rating") or 6.0)
+        motm = int(s.get("is_motm") or 0)
+
+        try:
+            await p.execute('''
+                INSERT INTO player_stats (
+                    user_id, player_name, player_id, position, ovr,
+                    matches_played, goals, assists, clean_sheets,
+                    yellow_cards, red_cards, total_rating, motm_count
+                ) VALUES ($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10, $11, $12)
+                ON CONFLICT (user_id, player_name) DO UPDATE SET
+                    player_id = COALESCE(NULLIF(EXCLUDED.player_id, ''), player_stats.player_id),
+                    position = COALESCE(EXCLUDED.position, player_stats.position),
+                    ovr = GREATEST(COALESCE(player_stats.ovr, 0), EXCLUDED.ovr),
+                    matches_played = player_stats.matches_played + 1,
+                    goals = player_stats.goals + EXCLUDED.goals,
+                    assists = player_stats.assists + EXCLUDED.assists,
+                    clean_sheets = player_stats.clean_sheets + EXCLUDED.clean_sheets,
+                    yellow_cards = player_stats.yellow_cards + EXCLUDED.yellow_cards,
+                    red_cards = player_stats.red_cards + EXCLUDED.red_cards,
+                    total_rating = player_stats.total_rating + EXCLUDED.total_rating,
+                    motm_count = player_stats.motm_count + EXCLUDED.motm_count
+            ''', user_id, p_name, p_id, pos, ovr, goals, assists, clean_sheets, yellows, reds, rating, motm)
+        except Exception as e:
+            print(f"[Database] Error recording stats for {p_name}: {e}")
+
+async def get_user_player_stats(user_id: int, player_name: str = None) -> list[dict]:
+    """
+    Fetches stats for a specific player or all players belonging to a user.
+    """
+    p = await get_db()
+    try:
+        if player_name:
+            rows = await p.fetch('''
+                SELECT user_id, player_name, player_id, position, ovr,
+                       matches_played, goals, assists, clean_sheets,
+                       yellow_cards, red_cards, total_rating, motm_count,
+                       ROUND(CAST(total_rating / NULLIF(matches_played, 0) AS NUMERIC), 2) as avg_rating
+                FROM player_stats
+                WHERE user_id = $1 AND LOWER(player_name) = LOWER($2)
+            ''', user_id, player_name.strip())
+            if not rows:
+                rows = await p.fetch('''
+                    SELECT user_id, player_name, player_id, position, ovr,
+                           matches_played, goals, assists, clean_sheets,
+                           yellow_cards, red_cards, total_rating, motm_count,
+                           ROUND(CAST(total_rating / NULLIF(matches_played, 0) AS NUMERIC), 2) as avg_rating
+                    FROM player_stats
+                    WHERE user_id = $1 AND player_name ILIKE $2
+                    ORDER BY matches_played DESC LIMIT 5
+                ''', user_id, f"%{player_name.strip()}%")
+        else:
+            rows = await p.fetch('''
+                SELECT user_id, player_name, player_id, position, ovr,
+                       matches_played, goals, assists, clean_sheets,
+                       yellow_cards, red_cards, total_rating, motm_count,
+                       ROUND(CAST(total_rating / NULLIF(matches_played, 0) AS NUMERIC), 2) as avg_rating
+                FROM player_stats
+                WHERE user_id = $1
+                ORDER BY goals DESC, matches_played DESC
+            ''', user_id)
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[Database] Error fetching player stats: {e}")
+        return []
+
+async def get_club_leader_stats(user_id: int) -> dict:
+    """
+    Calculates top club performers:
+    - Top Scorer (Golden Boot)
+    - Playmaker (Most Assists)
+    - Highest Average Rating (Min 1 match)
+    - Clean Sheet Leader (Defenders CB/LB/RB/LWB/RWB & GK only)
+    - Disciplinary Records (Yellow & Red cards)
+    """
+    p = await get_db()
+    try:
+        all_players = await p.fetch('''
+            SELECT user_id, player_name, player_id, position, ovr,
+                   matches_played, goals, assists, clean_sheets,
+                   yellow_cards, red_cards, total_rating, motm_count,
+                   ROUND(CAST(total_rating / NULLIF(matches_played, 0) AS NUMERIC), 2) as avg_rating
+            FROM player_stats
+            WHERE user_id = $1 AND matches_played > 0
+        ''', user_id)
+        
+        if not all_players:
+            return {}
+
+        players = [dict(r) for r in all_players]
+
+        top_scorer = max(players, key=lambda x: (x['goals'], x['matches_played'])) if any(x['goals'] > 0 for x in players) else None
+        top_assists = max(players, key=lambda x: (x['assists'], x['matches_played'])) if any(x['assists'] > 0 for x in players) else None
+        best_rating = max(players, key=lambda x: (float(x['avg_rating'] or 0), x['matches_played'])) if players else None
+        
+        # Clean sheets only for defenders and GK
+        defenders_gk = [p for p in players if any(k in str(p.get('position', '')).upper() for k in ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB'])]
+        top_clean_sheets = max(defenders_gk, key=lambda x: (x['clean_sheets'], x['matches_played'])) if (defenders_gk and any(x['clean_sheets'] > 0 for x in defenders_gk)) else None
+        
+        most_yellows = max(players, key=lambda x: (x['yellow_cards'], x['matches_played'])) if any(x['yellow_cards'] > 0 for x in players) else None
+        most_reds = max(players, key=lambda x: (x['red_cards'], x['matches_played'])) if any(x['red_cards'] > 0 for x in players) else None
+
+        total_club_goals = sum(p['goals'] for p in players)
+        total_club_assists = sum(p['assists'] for p in players)
+        total_matches = max(p['matches_played'] for p in players) if players else 0
+
+        return {
+            "top_scorer": top_scorer,
+            "top_assists": top_assists,
+            "best_rating": best_rating,
+            "top_clean_sheets": top_clean_sheets,
+            "most_yellows": most_yellows,
+            "most_reds": most_reds,
+            "total_goals": total_club_goals,
+            "total_assists": total_club_assists,
+            "total_matches": total_matches,
+            "tracked_count": len(players)
+        }
+    except Exception as e:
+        print(f"[Database] Error in get_club_leader_stats: {e}")
+        return {}
+
 
 

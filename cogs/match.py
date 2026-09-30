@@ -434,6 +434,73 @@ class MatchCog(commands.Cog):
                 fan_change_str = f"**{player_b.display_name}** gained **+10,000 Fans**\n**{player_a.display_name}** lost **-8,000 Fans**"
                 bonus_b_str = "💰 **+10,000,000 Coins**\n🎫 **+1x Draft Voucher**"
 
+            # Record detailed player stats to database for both teams
+            try:
+                # Team A Assists & Stats
+                assists_pool_a = [p['name'] for p in starters_a if p['pos'] in ['CAM', 'CM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF']]
+                team_a_assists = {}
+                for g in all_goals:
+                    if g[0] == player_a:
+                        candidates = [p for p in assists_pool_a if p != g[2]]
+                        if candidates:
+                            assister = random.choice(candidates)
+                            team_a_assists[assister] = team_a_assists.get(assister, 0) + 1
+
+                stats_list_a = []
+                for r in ratings_a:
+                    p_name = r['name']
+                    pos = r['pos']
+                    is_df_gk = any(k in pos for k in ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB'])
+                    cs = 1 if (is_df_gk and current_score_b == 0) else 0
+                    y_card = 1 if (yellows_a > 0 and random.random() < 0.25) else 0
+                    stats_list_a.append({
+                        "player_name": p_name,
+                        "position": pos,
+                        "ovr": r.get('ovr', 100),
+                        "goals": r.get('goals', 0),
+                        "assists": team_a_assists.get(p_name, 0),
+                        "clean_sheets": cs,
+                        "yellow_cards": y_card,
+                        "red_cards": 0,
+                        "rating": r.get('rating', 6.0),
+                        "is_motm": 1 if (p_name == motm_entry['name'] and motm_team == player_a.display_name) else 0
+                    })
+                await database.record_player_match_stats(player_a.id, stats_list_a)
+
+                # Team B Assists & Stats
+                assists_pool_b = [p['name'] for p in starters_b if p['pos'] in ['CAM', 'CM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF']]
+                team_b_assists = {}
+                for g in all_goals:
+                    if g[0] == player_b:
+                        candidates = [p for p in assists_pool_b if p != g[2]]
+                        if candidates:
+                            assister = random.choice(candidates)
+                            team_b_assists[assister] = team_b_assists.get(assister, 0) + 1
+
+                stats_list_b = []
+                for r in ratings_b:
+                    p_name = r['name']
+                    pos = r['pos']
+                    is_df_gk = any(k in pos for k in ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB'])
+                    cs = 1 if (is_df_gk and current_score_a == 0) else 0
+                    y_card = 1 if (yellows_b > 0 and random.random() < 0.25) else 0
+                    stats_list_b.append({
+                        "player_name": p_name,
+                        "position": pos,
+                        "ovr": r.get('ovr', 100),
+                        "goals": r.get('goals', 0),
+                        "assists": team_b_assists.get(p_name, 0),
+                        "clean_sheets": cs,
+                        "yellow_cards": y_card,
+                        "red_cards": 0,
+                        "rating": r.get('rating', 6.0),
+                        "is_motm": 1 if (p_name == motm_entry['name'] and motm_team == player_b.display_name) else 0
+                    })
+                await database.record_player_match_stats(player_b.id, stats_list_b)
+            except Exception as e:
+                print(f"[Match] Error recording player stats: {e}")
+
+
             # Check promotions
             def check_promo(old_fans, change, old_highest):
                 new_fans = max(0, old_fans + change)
