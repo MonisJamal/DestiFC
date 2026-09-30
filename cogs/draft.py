@@ -321,8 +321,6 @@ class DraftCog(commands.Cog):
         if pity_counter is None:
             pity_counter = 0
 
-        custom_draft_pool = await database.get_all_custom_draft_cards()
-
         # Helper to pick Pool A card with exact weightings (6% 122, 35% 121, 59% 120)
         def pick_pool_a_weighted(pool_a_list):
             if not pool_a_list:
@@ -358,13 +356,7 @@ class DraftCog(commands.Cog):
                 if roll > 32.5:
                     roll = random.uniform(2.6, 32.5)  # Force Pool B
             
-            if custom_draft_pool and random.random() < 0.03:
-                player_data = random.choice(custom_draft_pool)
-                is_walkout = (player_data.get('rating', 0) >= 120)
-                tier_name = "CUSTOM LEGEND 👑" if is_walkout else "CUSTOM ELITE 💎"
-                if is_walkout:
-                    pity_counter = 0
-            elif roll <= 2.5:
+            if roll <= 2.5:
                 # Pool A (2.5% base chance: 6% for 122, 35% for 121, 59% for 120)
                 is_walkout = True
                 pity_counter = 0  # RESET PITY IMMEDIATELY

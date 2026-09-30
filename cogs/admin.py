@@ -134,62 +134,6 @@ class AdminCog(commands.Cog):
         await interaction.followup.send(f"Found {len(players)} results. Select the exact version to grant to {target.mention}:", view=view)
 
 
-    @admin_group.command(name="add_custom_to_drafts", description="Create a custom card and add it to the global draft pool!")
-    async def add_custom_to_drafts(
-        self, 
-        interaction: discord.Interaction, 
-        name: str, 
-        ovr: int, 
-        position: str, 
-        player_image: discord.Attachment,
-        background_image: discord.Attachment = None,
-        nation_id: int = 38,
-        club_id: int = 112139
-    ):
-        await interaction.response.defer()
-        
-        # Validate images
-        if not player_image.content_type.startswith('image/'):
-            return await interaction.followup.send("❌ The player image must be an image file.")
-            
-        bg_url = background_image.url if background_image else "https://images-v2.renderz.app/bg_23_backgrounds_27_ANNIVERSARY27_LIVE_STATIC?verify=1"
-        
-        import time
-        custom_id = -int(time.time()) # Unique negative ID
-        
-        player_data = {
-            "id": custom_id,
-            "assetId": custom_id,
-            "cardName": name,
-            "lastName": name,
-            "rating": ovr,
-            "position": position.upper(),
-            "nation": {"id": nation_id},
-            "club": {"id": club_id},
-            "images": {
-                "playerCardImage": player_image.url,
-                "playerCardBackground": bg_url
-            },
-            "stats": {
-                "acc": ovr, "spd": ovr, "str": ovr, "fin": ovr, "sta": ovr, "sho": ovr, "dri": ovr, "def": ovr, "pas": ovr, "phy": ovr
-            },
-            "is_custom": True
-        }
-        
-        # Add to global draft pool
-        await database.add_custom_draft_card(player_data)
-        
-        # Generate the card preview
-        try:
-            image = generate_card(player_data, scale=4, animated=False)
-            image_binary, filename = save_card_to_bytes(image)
-            file = discord.File(fp=image_binary, filename=filename)
-            
-            embed = discord.Embed(title="🌐 Added to Global Drafts!", description=f"Successfully injected the custom **{ovr} {name}** into the global draft pool! Players now have a random chance to pull this card from standard packs.", color=discord.Color.blue())
-            embed.set_image(url=f"attachment://{filename}")
-            await interaction.followup.send(embed=embed, file=file)
-        except Exception as e:
-            await interaction.followup.send(f"✅ Added {name} to global drafts, but couldn't generate preview image: {e}")
 
 
     @admin_group.command(name="restore_cards", description="Admin: Restore specific cards to a user by name and OVR")
