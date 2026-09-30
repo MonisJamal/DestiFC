@@ -117,6 +117,17 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
     if card_cache_key in _MEMORY_CARD_CACHE:
         return _MEMORY_CARD_CACHE[card_cache_key]
 
+    clean_id = "".join([c for c in player_id if c.isalnum() or c in ('-', '_')])
+    disk_card_file = os.path.join(CARD_CACHE_DIR, f"{clean_id}_{rating}_{SCALE}.png")
+    if not animated and os.path.exists(disk_card_file):
+        try:
+            img = Image.open(disk_card_file).convert("RGBA")
+            if len(_MEMORY_CARD_CACHE) < 500:
+                _MEMORY_CARD_CACHE[card_cache_key] = img.copy()
+            return img
+        except Exception:
+            pass
+
     images = player.get("images") or {}
     anim = player.get("animation") or {}
     colors = anim.get("colors") or {}
@@ -268,6 +279,11 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
             print(f"Error generating animated frames: {e}")
 
     card.alpha_composite(overlay)
+    if not animated:
+        try:
+            card.save(disk_card_file, "PNG")
+        except Exception:
+            pass
     if len(_MEMORY_CARD_CACHE) < 500:
         _MEMORY_CARD_CACHE[card_cache_key] = card.copy()
     return card

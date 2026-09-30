@@ -202,18 +202,45 @@ class SquadCog(commands.Cog):
         await interaction.response.defer()
         target = user or interaction.user
 
-        # Privacy Check
+        # Parallel fetch squad, privacy, and layouts
         if target.id != interaction.user.id and not await interaction.client.is_owner(interaction.user):
-            if await database.is_profile_private(target.id):
+            is_priv, squad, layouts = await asyncio.gather(
+                database.is_profile_private(target.id),
+                database.get_squad(target.id),
+                database.get_formation_layouts()
+            )
+            if is_priv:
                 return await interaction.followup.send(f"🔒 **{target.display_name}** has set their profile to **Private**.", ephemeral=True)
+        else:
+            squad, layouts = await asyncio.gather(
+                database.get_squad(target.id),
+                database.get_formation_layouts()
+            )
 
-        squad = await database.get_squad(target.id)
-        formation = squad.get("formation", "4-3-3")
+        formation = squad.get("formation", "4-3-3 Flat")
         players = squad.get("players", {})
         
-        inventory = await database.get_inventory(target.id)
-        inv_dict = {p['id']: p['player_data'] for p in inventory}
+        # Targeted fetch: only get the 11 equipped inventory cards instead of downloading full inventory
+        inv_ids = [int(p['inv_id']) for p in players.values() if p and p.get('inv_id') is not None]
         
+        inv_dict = {}
+        if inv_ids:
+            cached_inv = database._USER_INVENTORY_CACHE.get(target.id)
+            if cached_inv:
+                for row in cached_inv.get("data", []):
+                    if row.get("id") in inv_ids:
+                        inv_dict[row["id"]] = row.get("player_data")
+            
+            missing_ids = [iid for iid in inv_ids if iid not in inv_dict]
+            if missing_ids:
+                p = await database.get_db()
+                rows = await p.fetch('SELECT id, player_data FROM inventory WHERE user_id = $1 AND id = ANY($2::bigint[])', target.id, missing_ids)
+                for r in rows:
+                    try:
+                        pdata = json.loads(r['player_data']) if isinstance(r['player_data'], str) else r['player_data']
+                        inv_dict[r['id']] = pdata
+                    except Exception: pass
+
         total_ovr = 0
         count = 0
         
@@ -227,16 +254,17 @@ class SquadCog(commands.Cog):
         from lineup_generator import generate_lineup_image, set_cached_layouts
         import io
         import hashlib
-        import asyncio
         
         try:
             cache_key = hashlib.md5(f"{target.id}_{formation}_{json.dumps(players, sort_keys=True)}_{squad.get('theme', 'default')}".encode()).hexdigest()
             
-            png_bytes = getattr(self, '_render_cache', {}).get(cache_key)
+            if not hasattr(self, '_render_cache'):
+                self._render_cache = {}
+
+            png_bytes = self._render_cache.get(cache_key)
             if not png_bytes:
-                custom_layouts = await database.get_formation_layouts()
-                if custom_layouts:
-                    set_cached_layouts(custom_layouts)
+                if layouts:
+                    set_cached_layouts(layouts)
                 
                 def _render():
                     img = generate_lineup_image(squad, inv_dict)
@@ -245,8 +273,6 @@ class SquadCog(commands.Cog):
                     return buf.getvalue()
                     
                 png_bytes = await asyncio.to_thread(_render)
-                if not hasattr(self, '_render_cache'):
-                    self._render_cache = {}
                 if len(self._render_cache) < 100:
                     self._render_cache[cache_key] = png_bytes
 
