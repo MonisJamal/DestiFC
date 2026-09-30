@@ -138,6 +138,41 @@ class SignatureBoxCog(commands.Cog):
         if not box.get('is_active', True):
             return await interaction.followup.send("⚠️ The Signature Box is currently closed or under maintenance.", ephemeral=True)
 
+        now_dt = datetime.datetime.now(datetime.timezone.utc)
+
+        # Check if start time is set and in the future
+        starts_at = box.get('starts_at')
+        if starts_at:
+            try:
+                st_str = str(starts_at).replace('Z', '+00:00')
+                st_dt = datetime.datetime.fromisoformat(st_str)
+                if st_dt.tzinfo is None:
+                    st_dt = st_dt.replace(tzinfo=datetime.timezone.utc)
+                if st_dt > now_dt:
+                    ts = int(st_dt.timestamp())
+                    return await interaction.followup.send(
+                        f"⏳ **Upcoming Signature Box Event!**\nThis box will unlock <t:{ts}:R> (<t:{ts}:F>). Stay tuned!",
+                        ephemeral=True
+                    )
+            except Exception as e:
+                print(f"[Signature Box starts_at parse error]: {e}")
+
+        # Check if expiration date has passed
+        expires_at = box.get('expires_at')
+        if expires_at:
+            try:
+                exp_str = str(expires_at).replace('Z', '+00:00')
+                exp_dt = datetime.datetime.fromisoformat(exp_str)
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=datetime.timezone.utc)
+                if exp_dt < now_dt:
+                    return await interaction.followup.send(
+                        "⌛ **Event Expired!**\nThis Signature Box event has concluded. Stay tuned for the next release!",
+                        ephemeral=True
+                    )
+            except Exception as e:
+                print(f"[Signature Box expires_at parse error]: {e}")
+
         user_box = await database.get_user_signature_box(interaction.user.id)
         embed = self.generate_box_embed(interaction.user, box, user_box)
         view = SignatureBoxView(interaction.user, box, user_box, self)

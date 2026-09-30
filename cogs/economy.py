@@ -26,13 +26,23 @@ class PenaltyView(discord.ui.View):
         
         if gk_dive == direction:
             await interaction.response.edit_message(
-                content=f"🧤 **GK dived {gk_dive} and SAVED your shot to the {direction}!**\n❌ **Skill Game Failed!** You get 0 vouchers. Try again in an hour!",
+                content=f"🧤 **GK dived {gk_dive} and SAVED your shot to the {direction}!**\n❌ **Skill Game Failed!** You get 0 rewards. Try again when cooldown expires!",
                 view=self
             )
         else:
-            await database.add_vouchers(interaction.user.id, 1)
+            eco = await database.get_economy_config()
+            vouchers = int(eco.get('penalty_reward_vouchers', 1))
+            coins = int(eco.get('penalty_reward_coins', 3_000_000))
+            if vouchers > 0: await database.add_vouchers(interaction.user.id, vouchers)
+            if coins > 0: await database.add_coins(interaction.user.id, coins)
+            
+            rew_txt = []
+            if vouchers > 0: rew_txt.append(f"**{vouchers}x Draft Voucher{'s' if vouchers > 1 else ''} 🎫**")
+            if coins > 0: rew_txt.append(f"**+{coins:,} Coins 💰**")
+            reward_str = " and ".join(rew_txt) if rew_txt else "Bragging rights!"
+
             await interaction.response.edit_message(
-                content=f"⚽ **You shot {direction}, GK dived {gk_dive}... GOAL!!!**\n🎯 **Skill Game Passed!** You earned **1x Draft Voucher 🎫**!",
+                content=f"⚽ **You shot {direction}, GK dived {gk_dive}... GOAL!**\n🎯 **Skill Game Passed!** You earned {reward_str}!",
                 view=self
             )
             
@@ -64,10 +74,20 @@ class FreeKickView(discord.ui.View):
         # 70% success probability
         success = random.random() < 0.70
         if success:
-            await database.add_vouchers(interaction.user.id, 1)
+            eco = await database.get_economy_config()
+            vouchers = int(eco.get('freekick_reward_vouchers', 1))
+            coins = int(eco.get('freekick_reward_coins', 4_000_000))
+            if vouchers > 0: await database.add_vouchers(interaction.user.id, vouchers)
+            if coins > 0: await database.add_coins(interaction.user.id, coins)
+            
+            rew_txt = []
+            if vouchers > 0: rew_txt.append(f"**{vouchers}x Draft Voucher{'s' if vouchers > 1 else ''} 🎫**")
+            if coins > 0: rew_txt.append(f"**+{coins:,} Coins 💰**")
+            reward_str = " and ".join(rew_txt) if rew_txt else "Bragging rights!"
+
             msg = (
                 f"🎯 **WHAT A STRIKE!** Your **{technique}** sailed right into the top corner off the crossbar!\n"
-                f"🎉 **Challenge Passed!** You earned **1x Draft Voucher 🎫**!"
+                f"🎉 **Challenge Passed!** You earned {reward_str}!"
             )
         else:
             block_type = random.choice(["smashed against the defensive wall", "was tipped over the bar by the keeper", "clipped the outside of the post"])
@@ -102,13 +122,23 @@ class DribbleView(discord.ui.View):
         for child in self.children:
             child.disabled = True
 
-        # 65% success rate for 2 vouchers
+        # 65% success rate
         success = random.random() < 0.65
         if success:
-            await database.add_vouchers(interaction.user.id, 2)
+            eco = await database.get_economy_config()
+            vouchers = int(eco.get('dribble_reward_vouchers', 2))
+            coins = int(eco.get('dribble_reward_coins', 5_000_000))
+            if vouchers > 0: await database.add_vouchers(interaction.user.id, vouchers)
+            if coins > 0: await database.add_coins(interaction.user.id, coins)
+            
+            rew_txt = []
+            if vouchers > 0: rew_txt.append(f"**{vouchers}x Draft Voucher{'s' if vouchers > 1 else ''} 🎫**")
+            if coins > 0: rew_txt.append(f"**+{coins:,} Coins 💰**")
+            reward_str = " and ".join(rew_txt) if rew_txt else "Bragging rights!"
+
             msg = (
                 f"🕺 **FILTHY SKILLS!** You pulled off a stunning **{move}**, sending two defenders sliding the wrong way!\n"
-                f"🔥 **Gauntlet Cleared!** You earned **2x Draft Vouchers 🎫**!"
+                f"🔥 **Gauntlet Cleared!** You earned {reward_str}!"
             )
         else:
             msg = (
@@ -144,10 +174,20 @@ class GKHeroView(discord.ui.View):
 
         success = random.random() < 0.68
         if success:
-            await database.add_vouchers(interaction.user.id, 1)
+            eco = await database.get_economy_config()
+            vouchers = int(eco.get('gk_reward_vouchers', 1))
+            coins = int(eco.get('gk_reward_coins', 4_000_000))
+            if vouchers > 0: await database.add_vouchers(interaction.user.id, vouchers)
+            if coins > 0: await database.add_coins(interaction.user.id, coins)
+            
+            rew_txt = []
+            if vouchers > 0: rew_txt.append(f"**{vouchers}x Draft Voucher{'s' if vouchers > 1 else ''} 🎫**")
+            if coins > 0: rew_txt.append(f"**+{coins:,} Coins 💰**")
+            reward_str = " and ".join(rew_txt) if rew_txt else "Bragging rights!"
+
             msg = (
                 f"🧤 **UNBELIEVABLE SAVE!** You pulled off a miraculous **{dive}** to deny a guaranteed goal!\n"
-                f"👑 **Clean Sheet Kept!** You earned **1x Draft Voucher 🎫**!"
+                f"👑 **Clean Sheet Kept!** You earned {reward_str}!"
             )
         else:
             msg = (
@@ -183,10 +223,20 @@ class VolleyView(discord.ui.View):
 
         success = random.random() < 0.70
         if success:
-            await database.add_vouchers(interaction.user.id, 1)
+            eco = await database.get_economy_config()
+            vouchers = int(eco.get('volley_reward_vouchers', 1))
+            coins = int(eco.get('volley_reward_coins', 4_000_000))
+            if vouchers > 0: await database.add_vouchers(interaction.user.id, vouchers)
+            if coins > 0: await database.add_coins(interaction.user.id, coins)
+            
+            rew_txt = []
+            if vouchers > 0: rew_txt.append(f"**{vouchers}x Draft Voucher{'s' if vouchers > 1 else ''} 🎫**")
+            if coins > 0: rew_txt.append(f"**+{coins:,} Coins 💰**")
+            reward_str = " and ".join(rew_txt) if rew_txt else "Bragging rights!"
+
             msg = (
                 f"🚀 **PUSKAS WORTHY!** You executed an exquisite **{strike}** on the full volley into the top netting!\n"
-                f"🎯 **Challenge Completed!** You earned **1x Draft Voucher 🎫**!"
+                f"🎯 **Challenge Completed!** You earned {reward_str}!"
             )
         else:
             msg = (
@@ -289,8 +339,18 @@ class TriviaView(discord.ui.View):
 
             correct = (chosen == self.question_data["answer"])
             if correct:
-                await database.add_vouchers(interaction.user.id, 1)
-                msg = f"🧠 **CORRECT!** The answer was **{self.question_data['answer']}**.\n🎯 **Quiz Passed!** You earned **1x Draft Voucher 🎫**!"
+                eco = await database.get_economy_config()
+                vouchers = int(eco.get('trivia_reward_vouchers', 1))
+                coins = int(eco.get('trivia_reward_coins', 5_000_000))
+                if vouchers > 0: await database.add_vouchers(interaction.user.id, vouchers)
+                if coins > 0: await database.add_coins(interaction.user.id, coins)
+                
+                rew_txt = []
+                if vouchers > 0: rew_txt.append(f"**{vouchers}x Draft Voucher{'s' if vouchers > 1 else ''} 🎫**")
+                if coins > 0: rew_txt.append(f"**+{coins:,} Coins 💰**")
+                reward_str = " and ".join(rew_txt) if rew_txt else "Bragging rights!"
+
+                msg = f"🧠 **CORRECT!** The answer was **{self.question_data['answer']}**.\n🎯 **Quiz Passed!** You earned {reward_str}!"
             else:
                 msg = f"❌ **WRONG!** You chose **{chosen}**, but the correct answer was **{self.question_data['answer']}**!\nBetter luck next time."
 
@@ -304,41 +364,47 @@ class EconomyCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="quest_daily", description="Claim your daily login Draft Vouchers")
+    @app_commands.command(name="quest_daily", description="Claim your daily login Draft Vouchers & Coins")
     async def quest_daily(self, interaction: discord.Interaction):
         await interaction.response.defer()
         user_id = interaction.user.id
         current_time = int(time.time())
-        cooldown = 86400  # 24 hours
+        eco_cfg = await database.get_economy_config()
+        cooldown = int(eco_cfg.get('daily_cooldown_hours', 24)) * 3600
 
         p = await database.get_db()
         last_daily = await p.fetchval('SELECT last_quest_daily FROM users WHERE user_id = $1', user_id) or 0
 
-        if current_time - last_daily < cooldown:
+        if cooldown > 0 and (current_time - last_daily < cooldown):
             remaining = cooldown - (current_time - last_daily)
             hours, rem = divmod(remaining, 3600)
             mins, _ = divmod(rem, 60)
-            return await interaction.followup.send(f"⏳ You already claimed your daily vouchers! Come back in **{int(hours)}h {int(mins)}m**.")
+            return await interaction.followup.send(f"⏳ You already claimed your daily reward! Come back in **{int(hours)}h {int(mins)}m**.")
 
-        await p.execute('UPDATE users SET vouchers = vouchers + 3, last_quest_daily = $1 WHERE user_id = $2', current_time, user_id)
+        daily_vouchers = int(eco_cfg.get('daily_vouchers', 2))
+        min_coins = int(eco_cfg.get('daily_coins_min', 5_000_000))
+        max_coins = int(eco_cfg.get('daily_coins_max', 20_000_000))
+        daily_coins = random.randint(min(min_coins, max_coins), max(min_coins, max_coins)) if max_coins > 0 else 0
 
-        await interaction.followup.send("🎁 **Daily Quest Claimed!** You received **3x Draft Vouchers 🎫** for logging in today!")
+        await p.execute('UPDATE users SET vouchers = vouchers + $1, coins = coins + $2, last_quest_daily = $3 WHERE user_id = $4', daily_vouchers, daily_coins, current_time, user_id)
 
-    @app_commands.command(name="quest_skill_game", description="Play a Penalty Shootout skill game for a voucher")
+        await interaction.followup.send(f"🎁 **Daily Reward Claimed!** You received **{daily_vouchers}x Draft Vouchers 🎫** and **+{daily_coins:,} Coins 💰**!")
+
+    @app_commands.command(name="quest_skill_game", description="Play a Penalty Shootout skill game for vouchers and coins")
     async def quest_skill_game(self, interaction: discord.Interaction):
         user_id = interaction.user.id
         current_time = int(time.time())
-        cooldown = 3600  # 1 hour
+        eco_cfg = await database.get_economy_config()
+        cooldown = int(eco_cfg.get('penalty_cooldown_mins', 60)) * 60
 
         p = await database.get_db()
         last_skill = await p.fetchval('SELECT last_quest_skill FROM users WHERE user_id = $1', user_id) or 0
 
-        if current_time - last_skill < cooldown:
+        if cooldown > 0 and (current_time - last_skill < cooldown):
             remaining = cooldown - (current_time - last_skill)
             mins, secs = divmod(remaining, 60)
             return await interaction.response.send_message(f"⏳ Penalty Shootout is on cooldown! Come back in **{int(mins)}m {int(secs)}s**.", ephemeral=True)
 
-        p = await database.get_db()
         await p.execute('UPDATE users SET last_quest_skill = $1 WHERE user_id = $2', current_time, user_id)
 
         view = PenaltyView(interaction.user.id)
@@ -348,40 +414,40 @@ class EconomyCog(commands.Cog):
     async def quest_freekick(self, interaction: discord.Interaction):
         user_id = interaction.user.id
         current_time = int(time.time())
-        cooldown = 5400  # 1.5 hours
+        eco_cfg = await database.get_economy_config()
+        cooldown = int(eco_cfg.get('freekick_cooldown_mins', 90)) * 60
 
         p = await database.get_db()
         last_fk = await p.fetchval('SELECT last_quest_freekick FROM users WHERE user_id = $1', user_id) or 0
 
-        if current_time - last_fk < cooldown:
+        if cooldown > 0 and (current_time - last_fk < cooldown):
             remaining = cooldown - (current_time - last_fk)
             hours, rem = divmod(remaining, 3600)
             mins, _ = divmod(rem, 60)
             time_str = f"{int(hours)}h {int(mins)}m" if hours > 0 else f"{int(mins)}m"
             return await interaction.response.send_message(f"⏳ Free Kick Master is on cooldown! Come back in **{time_str}**.", ephemeral=True)
 
-        p = await database.get_db()
         await p.execute('UPDATE users SET last_quest_freekick = $1 WHERE user_id = $2', current_time, user_id)
 
         view = FreeKickView(interaction.user.id)
         await interaction.response.send_message("🎯 **Free Kick Master!**\nBall is placed 25 yards out. Choose your shooting technique:", view=view)
 
-    @app_commands.command(name="quest_dribble", description="Take on defenders in the Dribbling Gauntlet for 2x Vouchers")
+    @app_commands.command(name="quest_dribble", description="Take on defenders in the Dribbling Gauntlet")
     async def quest_dribble(self, interaction: discord.Interaction):
         user_id = interaction.user.id
         current_time = int(time.time())
-        cooldown = 7200  # 2 hours
+        eco_cfg = await database.get_economy_config()
+        cooldown = int(eco_cfg.get('dribble_cooldown_mins', 120)) * 60
 
         p = await database.get_db()
         last_dr = await p.fetchval('SELECT last_quest_dribble FROM users WHERE user_id = $1', user_id) or 0
 
-        if current_time - last_dr < cooldown:
+        if cooldown > 0 and (current_time - last_dr < cooldown):
             remaining = cooldown - (current_time - last_dr)
             hours, rem = divmod(remaining, 3600)
             mins, _ = divmod(rem, 60)
             return await interaction.response.send_message(f"⏳ Dribbling Gauntlet is on cooldown! Come back in **{int(hours)}h {int(mins)}m**.", ephemeral=True)
 
-        p = await database.get_db()
         await p.execute('UPDATE users SET last_quest_dribble = $1 WHERE user_id = $2', current_time, user_id)
 
         view = DribbleView(interaction.user.id)
@@ -391,17 +457,17 @@ class EconomyCog(commands.Cog):
     async def quest_trivia(self, interaction: discord.Interaction):
         user_id = interaction.user.id
         current_time = int(time.time())
-        cooldown = 3600  # 1 hour
+        eco_cfg = await database.get_economy_config()
+        cooldown = int(eco_cfg.get('trivia_cooldown_mins', 60)) * 60
 
         p = await database.get_db()
         last_tr = await p.fetchval('SELECT last_quest_trivia FROM users WHERE user_id = $1', user_id) or 0
 
-        if current_time - last_tr < cooldown:
+        if cooldown > 0 and (current_time - last_tr < cooldown):
             remaining = cooldown - (current_time - last_tr)
             mins, secs = divmod(remaining, 60)
             return await interaction.response.send_message(f"⏳ Football Trivia is on cooldown! Come back in **{int(mins)}m {int(secs)}s**.", ephemeral=True)
 
-        p = await database.get_db()
         await p.execute('UPDATE users SET last_quest_trivia = $1 WHERE user_id = $2', current_time, user_id)
 
         q_data = random.choice(TRIVIA_QUESTIONS)
@@ -412,19 +478,19 @@ class EconomyCog(commands.Cog):
     async def quest_gk(self, interaction: discord.Interaction):
         user_id = interaction.user.id
         current_time = int(time.time())
-        cooldown = 5400  # 1.5 hours
+        eco_cfg = await database.get_economy_config()
+        cooldown = int(eco_cfg.get('gk_cooldown_mins', 90)) * 60
 
         p = await database.get_db()
         last_gk = await p.fetchval('SELECT last_quest_gk FROM users WHERE user_id = $1', user_id) or 0
 
-        if current_time - last_gk < cooldown:
+        if cooldown > 0 and (current_time - last_gk < cooldown):
             remaining = cooldown - (current_time - last_gk)
             hours, rem = divmod(remaining, 3600)
             mins, _ = divmod(rem, 60)
             time_str = f"{int(hours)}h {int(mins)}m" if hours > 0 else f"{int(mins)}m"
             return await interaction.response.send_message(f"⏳ Goalkeeper Hero is on cooldown! Come back in **{time_str}**.", ephemeral=True)
 
-        p = await database.get_db()
         await p.execute('UPDATE users SET last_quest_gk = $1 WHERE user_id = $2', current_time, user_id)
 
         view = GKHeroView(interaction.user.id)
@@ -434,19 +500,19 @@ class EconomyCog(commands.Cog):
     async def quest_volley(self, interaction: discord.Interaction):
         user_id = interaction.user.id
         current_time = int(time.time())
-        cooldown = 5400  # 1.5 hours
+        eco_cfg = await database.get_economy_config()
+        cooldown = int(eco_cfg.get('volley_cooldown_mins', 90)) * 60
 
         p = await database.get_db()
         last_vl = await p.fetchval('SELECT last_quest_volley FROM users WHERE user_id = $1', user_id) or 0
 
-        if current_time - last_vl < cooldown:
+        if cooldown > 0 and (current_time - last_vl < cooldown):
             remaining = cooldown - (current_time - last_vl)
             hours, rem = divmod(remaining, 3600)
             mins, _ = divmod(rem, 60)
             time_str = f"{int(hours)}h {int(mins)}m" if hours > 0 else f"{int(mins)}m"
             return await interaction.response.send_message(f"⏳ Cross & Volley is on cooldown! Come back in **{time_str}**.", ephemeral=True)
 
-        p = await database.get_db()
         await p.execute('UPDATE users SET last_quest_volley = $1 WHERE user_id = $2', current_time, user_id)
 
         view = VolleyView(interaction.user.id)
@@ -456,12 +522,13 @@ class EconomyCog(commands.Cog):
     async def quest_h2h(self, interaction: discord.Interaction):
         user_id = interaction.user.id
         current_time = int(time.time())
-        cooldown = 7200  # 2 hours
+        eco_cfg = await database.get_economy_config()
+        cooldown = int(eco_cfg.get('h2h_ai_cooldown_mins', 120)) * 60
 
         p = await database.get_db()
         last_h2h = await p.fetchval('SELECT last_quest_h2h FROM users WHERE user_id = $1', user_id) or 0
 
-        if current_time - last_h2h < cooldown:
+        if cooldown > 0 and (current_time - last_h2h < cooldown):
             remaining = cooldown - (current_time - last_h2h)
             hours, rem = divmod(remaining, 3600)
             mins, _ = divmod(rem, 60)
@@ -469,7 +536,6 @@ class EconomyCog(commands.Cog):
 
         await interaction.response.defer()
 
-        p = await database.get_db()
         await p.execute('UPDATE users SET last_quest_h2h = $1 WHERE user_id = $2', current_time, user_id)
 
         is_win = random.random() < 0.50
@@ -494,8 +560,17 @@ class EconomyCog(commands.Cog):
             pass
 
         if is_win:
-            await database.add_vouchers(interaction.user.id, 2)
-            msg = f"⚔️ **H2H Victory!** You beat the AI `{score_str}` and earned **2x Draft Vouchers 🎫**!"
+            vouchers = int(eco_cfg.get('h2h_ai_reward_vouchers', 2))
+            coins = int(eco_cfg.get('h2h_ai_reward_coins', 10_000_000))
+            if vouchers > 0: await database.add_vouchers(interaction.user.id, vouchers)
+            if coins > 0: await database.add_coins(interaction.user.id, coins)
+            
+            rew_txt = []
+            if vouchers > 0: rew_txt.append(f"**{vouchers}x Draft Voucher{'s' if vouchers > 1 else ''} 🎫**")
+            if coins > 0: rew_txt.append(f"**+{coins:,} Coins 💰**")
+            reward_str = " and ".join(rew_txt) if rew_txt else "Bragging rights!"
+
+            msg = f"⚔️ **H2H Victory!** You beat the AI `{score_str}` and earned {reward_str}!"
             if recap: msg += f"\n\n🎙️ *\"{recap}\"*"
             await interaction.followup.send(msg)
         else:
@@ -503,23 +578,62 @@ class EconomyCog(commands.Cog):
             if recap: msg += f"\n\n🎙️ *\"{recap}\"*"
             await interaction.followup.send(msg)
 
-    @app_commands.command(name="quests", description="View all available skill games & quests to earn Draft Vouchers")
+    @app_commands.command(name="quests", description="View all available skill games & quests to earn rewards")
     async def quests_list(self, interaction: discord.Interaction):
+        eco = await database.get_economy_config()
         embed = discord.Embed(
             title="📜 DestiFC Quests & Skill Games", 
-            description="Play interactive mini-games and complete daily quests to earn **Draft Vouchers 🎫** to open packs!",
-            color=discord.Color.gold()
+            description="Play interactive mini-games and complete quests to earn **Draft Vouchers 🎫** and **Coins 💰**!",
+            color=0xd946ef
         )
-        embed.add_field(name="🎁 `/quest_daily`", value="**Reward:** 3x Vouchers 🎫 | **Cooldown:** 24h\nGuaranteed login reward every single day.", inline=False)
-        embed.add_field(name="⚡ `/quest_dribble`", value="**Reward:** 2x Vouchers 🎫 | **Cooldown:** 2h\nDribbling Gauntlet — Beat 2 defenders with skill moves.", inline=False)
-        embed.add_field(name="⚔️ `/quest_h2h`", value="**Reward:** 2x Vouchers 🎫 | **Cooldown:** 2h\nHead-to-Head match against dynamic AI.", inline=False)
-        embed.add_field(name="🥅 `/quest_skill_game`", value="**Reward:** 1x Voucher 🎫 | **Cooldown:** 1h\nPenalty Shootout — Pick your corner and score.", inline=False)
-        embed.add_field(name="🎯 `/quest_freekick`", value="**Reward:** 1x Voucher 🎫 | **Cooldown:** 1.5h\nFree Kick Master — Top corner curl or knuckleball.", inline=False)
-        embed.add_field(name="🧠 `/quest_trivia`", value="**Reward:** 1x Voucher 🎫 | **Cooldown:** 1h\nFootball IQ Quiz — 4-choice trivia within 25 seconds.", inline=False)
-        embed.add_field(name="🧤 `/quest_gk`", value="**Reward:** 1x Voucher 🎫 | **Cooldown:** 1.5h\nGoalkeeper Hero — Make a 1v1 match-saving dive.", inline=False)
-        embed.add_field(name="🚀 `/quest_volley`", value="**Reward:** 1x Voucher 🎫 | **Cooldown:** 1.5h\nCross & Volley — Bicycle kicks, volleys & bullet headers.", inline=False)
         
-        embed.set_footer(text="Play quests regularly to maximize your voucher income!")
+        def fmt_mins(m):
+            if m <= 0: return "Instant"
+            if m < 60: return f"{m}m"
+            return f"{m//60}h" if m % 60 == 0 else f"{m/60:.1f}h"
+
+        embed.add_field(
+            name="🎁 `/quest_daily`", 
+            value=f"**Reward:** {eco.get('daily_vouchers', 2)}x Vouchers 🎫 + {eco.get('daily_coins_min', 5_000_000):,} - {eco.get('daily_coins_max', 20_000_000):,} Coins 💰\n**Cooldown:** {eco.get('daily_cooldown_hours', 24)}h\nGuaranteed login reward every single day.", 
+            inline=False
+        )
+        embed.add_field(
+            name="⚡ `/quest_dribble`", 
+            value=f"**Reward:** {eco.get('dribble_reward_vouchers', 2)}x Vouchers 🎫 + {eco.get('dribble_reward_coins', 5_000_000):,} Coins 💰\n**Cooldown:** {fmt_mins(eco.get('dribble_cooldown_mins', 120))}\nDribbling Gauntlet — Beat defenders with skill moves.", 
+            inline=False
+        )
+        embed.add_field(
+            name="⚔️ `/quest_h2h`", 
+            value=f"**Reward:** {eco.get('h2h_ai_reward_vouchers', 2)}x Vouchers 🎫 + {eco.get('h2h_ai_reward_coins', 10_000_000):,} Coins 💰\n**Cooldown:** {fmt_mins(eco.get('h2h_ai_cooldown_mins', 120))}\nHead-to-Head match against dynamic AI.", 
+            inline=False
+        )
+        embed.add_field(
+            name="🥅 `/quest_skill_game`", 
+            value=f"**Reward:** {eco.get('penalty_reward_vouchers', 1)}x Voucher 🎫 + {eco.get('penalty_reward_coins', 3_000_000):,} Coins 💰\n**Cooldown:** {fmt_mins(eco.get('penalty_cooldown_mins', 60))}\nPenalty Shootout — Pick your corner and score.", 
+            inline=False
+        )
+        embed.add_field(
+            name="🎯 `/quest_freekick`", 
+            value=f"**Reward:** {eco.get('freekick_reward_vouchers', 1)}x Voucher 🎫 + {eco.get('freekick_reward_coins', 4_000_000):,} Coins 💰\n**Cooldown:** {fmt_mins(eco.get('freekick_cooldown_mins', 90))}\nFree Kick Master — Top corner curl or knuckleball.", 
+            inline=False
+        )
+        embed.add_field(
+            name="🧠 `/quest_trivia`", 
+            value=f"**Reward:** {eco.get('trivia_reward_vouchers', 1)}x Voucher 🎫 + {eco.get('trivia_reward_coins', 5_000_000):,} Coins 💰\n**Cooldown:** {fmt_mins(eco.get('trivia_cooldown_mins', 60))}\nFootball IQ Quiz — 4-choice trivia within 25 seconds.", 
+            inline=False
+        )
+        embed.add_field(
+            name="🧤 `/quest_gk`", 
+            value=f"**Reward:** {eco.get('gk_reward_vouchers', 1)}x Voucher 🎫 + {eco.get('gk_reward_coins', 4_000_000):,} Coins 💰\n**Cooldown:** {fmt_mins(eco.get('gk_cooldown_mins', 90))}\nGoalkeeper Hero — Make a 1v1 match-saving dive.", 
+            inline=False
+        )
+        embed.add_field(
+            name="🚀 `/quest_volley`", 
+            value=f"**Reward:** {eco.get('volley_reward_vouchers', 1)}x Voucher 🎫 + {eco.get('volley_reward_coins', 4_000_000):,} Coins 💰\n**Cooldown:** {fmt_mins(eco.get('volley_cooldown_mins', 90))}\nCross & Volley — Bicycle kicks, volleys & bullet headers.", 
+            inline=False
+        )
+        
+        embed.set_footer(text="Play quests regularly to maximize your rewards!")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="starterpack", description="Claim your one-time starter pack!")

@@ -160,6 +160,7 @@ async def setup():
             subtitle TEXT DEFAULT '10 Exclusive Limited Time Rewards',
             is_active BOOLEAN DEFAULT true,
             banner_url TEXT DEFAULT '',
+            starts_at TIMESTAMP,
             expires_at TIMESTAMP,
             signature_card_data JSONB,
             rewards_json JSONB,
@@ -180,6 +181,9 @@ async def setup():
             value JSONB,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        ALTER TABLE signature_box_config ADD COLUMN IF NOT EXISTS starts_at TIMESTAMP;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS last_match_time BIGINT DEFAULT 0;
     ''')
     print("✅ Supabase PostgreSQL Connected and Verified!")
 
@@ -1532,6 +1536,7 @@ DEFAULT_ECONOMY_CONFIG = {
     "daily_coins_min": 5_000_000,
     "daily_coins_max": 20_000_000,
     "daily_vouchers": 2,
+    "daily_cooldown_hours": 24,
     "daily_streak_multiplier": 0.10,
     "daily_walkout_chance": 0.15,
     "work_coins_min": 2_000_000,
@@ -1543,7 +1548,28 @@ DEFAULT_ECONOMY_CONFIG = {
     "trade_tax_percent": 5.0,
     "max_market_listings": 10,
     "starter_coins": 50_000_000,
-    "starter_vouchers": 10
+    "starter_vouchers": 10,
+    "dribble_reward_vouchers": 2,
+    "dribble_reward_coins": 5_000_000,
+    "dribble_cooldown_mins": 120,
+    "trivia_reward_vouchers": 1,
+    "trivia_reward_coins": 5_000_000,
+    "trivia_cooldown_mins": 60,
+    "freekick_reward_vouchers": 1,
+    "freekick_reward_coins": 4_000_000,
+    "freekick_cooldown_mins": 90,
+    "gk_reward_vouchers": 1,
+    "gk_reward_coins": 4_000_000,
+    "gk_cooldown_mins": 90,
+    "volley_reward_vouchers": 1,
+    "volley_reward_coins": 4_000_000,
+    "volley_cooldown_mins": 90,
+    "h2h_ai_reward_vouchers": 2,
+    "h2h_ai_reward_coins": 10_000_000,
+    "h2h_ai_cooldown_mins": 120,
+    "penalty_reward_vouchers": 1,
+    "penalty_reward_coins": 3_000_000,
+    "penalty_cooldown_mins": 60
 }
 
 _ECONOMY_CACHE = None
@@ -1603,6 +1629,10 @@ DEFAULT_GAMEPLAY_CONFIG = {
     "match_win_fans": 25,
     "match_draw_fans": 0,
     "match_loss_fans": -15,
+    "match_win_xp": 75,
+    "match_challenge_timeout_secs": 60,
+    "match_cooldown_mins": 0,
+    "match_sim_step_delay_secs": 0,
     "draft_battle_entry_fee": 0,
     "draft_battle_winner_coins": 50_000_000,
     "draft_battle_winner_vouchers": 5,

@@ -12,8 +12,8 @@ from maps import TACTICS
 ACTIVE_MATCH_USERS = set()
 
 class MatchRequestView(discord.ui.View):
-    def __init__(self, challenger: discord.Member, opponent: discord.Member, cog, squad_a, squad_b, fans_a, fans_b, ovr_a, ovr_b):
-        super().__init__(timeout=60)
+    def __init__(self, challenger: discord.Member, opponent: discord.Member, cog, squad_a, squad_b, fans_a, fans_b, ovr_a, ovr_b, timeout_secs: int = 60):
+        super().__init__(timeout=timeout_secs)
         self.challenger = challenger
         self.opponent = opponent
         self.cog = cog
@@ -23,6 +23,7 @@ class MatchRequestView(discord.ui.View):
         self.fans_b = fans_b
         self.ovr_a = ovr_a
         self.ovr_b = ovr_b
+        self.timeout_secs = timeout_secs
         self.message = None
         self.accepted = False
 
@@ -35,7 +36,7 @@ class MatchRequestView(discord.ui.View):
             child.disabled = True
         if self.message:
             try:
-                await self.message.edit(content=f"⏱️ **Match Challenge Expired!** {self.opponent.display_name} did not respond within 60 seconds.", view=self)
+                await self.message.edit(content=f"⏱️ **Match Challenge Expired!** {self.opponent.display_name} did not respond within {self.timeout_secs} seconds.", view=self)
             except Exception:
                 pass
 
@@ -134,6 +135,18 @@ class MatchCog(commands.Cog):
             return await interaction.response.send_message(f"❌ **{opponent.display_name}** is already in an active match or pending challenge! Please wait for them to finish.", ephemeral=True)
             
         await interaction.response.defer()
+
+        gp_cfg = await database.get_gameplay_config()
+        cooldown_mins = int(gp_cfg.get('match_cooldown_mins', 0))
+        if cooldown_mins > 0:
+            import time
+            now = int(time.time())
+            cooldown_secs = cooldown_mins * 60
+            p = await database.get_db()
+            last_match_a = await p.fetchval('SELECT last_match_time FROM users WHERE user_id = $1', interaction.user.id) or 0
+            if now - last_match_a < cooldown_secs:
+                rem = cooldown_secs - (now - last_match_a)
+                return await interaction.followup.send(f"⏳ Match cooldown active! You can challenge again in **{int(rem // 60)}m {int(rem % 60)}s**.")
         
         squad_a = await database.get_squad(interaction.user.id)
         squad_b = await database.get_squad(opponent.id)
@@ -154,10 +167,11 @@ class MatchCog(commands.Cog):
         ACTIVE_MATCH_USERS.add(interaction.user.id)
         ACTIVE_MATCH_USERS.add(opponent.id)
         
-        view = MatchRequestView(interaction.user, opponent, self, squad_a, squad_b, fans_a, fans_b, ovr_a, ovr_b)
+        timeout_secs = int(gp_cfg.get('match_challenge_timeout_secs', 60))
+        view = MatchRequestView(interaction.user, opponent, self, squad_a, squad_b, fans_a, fans_b, ovr_a, ovr_b, timeout_secs=timeout_secs)
         
         msg = await interaction.followup.send(
-            f"⚔️ **DIVISION RIVALS CHALLENGE!** ⚔️\n\n**{interaction.user.display_name} ({ovr_a})** [{self.get_division(fans_a)}]\n🆚\n**{opponent.display_name} ({ovr_b})** [{self.get_division(fans_b)}]\n\nHey {opponent.mention}, you have been challenged! Do you accept?",
+            f"⚔️ **DIVISION RIVALS CHALLENGE!** ⚔️\n\n**{interaction.user.display_name} ({ovr_a})** [{self.get_division(fans_a)}]\n🆚\n**{opponent.display_name} ({ovr_b})** [{self.get_division(fans_b)}]\n\nHey {opponent.mention}, you have been challenged! Do you accept? *(Expires in {timeout_secs}s)*",
             view=view
         )
         view.message = msg
@@ -527,16 +541,26 @@ class MatchCog(commands.Cog):
             # INSTANT SCOREBOARD PRESENTATION (0 delay)
             await interaction.edit_original_response(content=None, embed=embed, view=None)
 
+            gp_cfg = await database.get_gameplay_config()
+            step_delay = float(gp_cfg.get('match_sim_step_delay_secs', 0))
+            if step_delay > 0:
+                await asyncio.sleep(min(step_delay, 10.0))
+
             # Background task: Database saves & rewards
             async def _bg_save_and_ai():
                 try:
-                    gp_cfg = await database.get_gameplay_config()
+                    import time
+                    now = int(time.time())
+                    p = await database.get_db()
+                    await p.execute('UPDATE users SET last_match_time = $1 WHERE user_id = $2 OR user_id = $3', now, player_a.id, player_b.id)
+
                     win_coins = gp_cfg.get('match_win_coins', 25_000_000)
                     draw_coins = gp_cfg.get('match_draw_coins', 10_000_000)
                     loss_coins = gp_cfg.get('match_loss_coins', 5_000_000)
                     win_fans = gp_cfg.get('match_win_fans', 25)
                     draw_fans = gp_cfg.get('match_draw_fans', 0)
                     loss_fans = gp_cfg.get('match_loss_fans', -15)
+                    win_xp = int(gp_cfg.get('match_win_xp', 75))
 
                     if winner is None:
                         await database.add_fans(player_a.id, draw_fans)
@@ -554,7 +578,7 @@ class MatchCog(commands.Cog):
                             await increment_stat(player_a.id, "matches_won")
                             await check_and_award(player_a.id)
                             from cogs.season import add_season_xp
-                            await add_season_xp(player_a.id, 75)
+                            await add_season_xp(player_a.id, win_xp)
                         except Exception: pass
                     else:
                         await database.add_fans(player_b.id, win_fans)
@@ -567,7 +591,7 @@ class MatchCog(commands.Cog):
                             await increment_stat(player_b.id, "matches_won")
                             await check_and_award(player_b.id)
                             from cogs.season import add_season_xp
-                            await add_season_xp(player_b.id, 75)
+                            await add_season_xp(player_b.id, win_xp)
                         except Exception: pass
 
                     # Team A Assists & Stats
