@@ -55,11 +55,9 @@ async def squad_position_autocomplete(interaction: discord.Interaction, current:
         squad = await database.get_squad(interaction.user.id)
         players = squad.get("players", {})
         choices = []
-        for pos, p in players.items():
-            occupied = f" ({p['name']} {p['ovr']})" if p else " (Empty)"
-            label = f"{pos}{occupied}"
-            if not current or current.lower() in pos.lower() or current.lower() in label.lower():
-                choices.append(app_commands.Choice(name=label[:100], value=pos))
+        for pos in players.keys():
+            if not current or current.lower() in pos.lower():
+                choices.append(app_commands.Choice(name=pos, value=pos))
                 if len(choices) >= 25:
                     break
         return choices
