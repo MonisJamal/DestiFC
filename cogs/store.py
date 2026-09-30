@@ -132,7 +132,7 @@ class StoreCog(commands.Cog):
         """Rotates the 3 Pool A player store offers (scheduled every 4 hours or forced by admin)."""
         try:
             shop_items = await database.get_store_player_shop()
-            now = datetime.datetime.now()
+            now = datetime.datetime.now(datetime.timezone.utc)
             now_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
             needs_refresh = force
@@ -241,11 +241,11 @@ class StoreCog(commands.Cog):
             return await interaction.followup.send("❌ The Player Shop is currently refreshing. Please try again in a few moments.")
 
         # Calculate time remaining
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         expires_str = offers[0].get("expires_at", "")
         time_rem_str = "4 hours"
         try:
-            exp_dt = datetime.datetime.strptime(expires_str, "%Y-%m-%d %H:%M:%S")
+            exp_dt = datetime.datetime.strptime(expires_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
             diff = exp_dt - now
             if diff.total_seconds() > 0:
                 hours, remainder = divmod(int(diff.total_seconds()), 3600)

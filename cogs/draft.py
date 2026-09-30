@@ -24,7 +24,7 @@ class DraftCog(commands.Cog):
     async def draft_rotator(self):
         try:
             drafts = await database.get_active_drafts()
-            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             
             needs_refresh = False
             if not drafts:
@@ -37,7 +37,7 @@ class DraftCog(commands.Cog):
                         break
                         
             if needs_refresh:
-                print("[Draft] Rotating and generating new 1-Hour Draft Pools with ALL cards in existence...")
+                print("[Draft] Rotating and generating new 2-Hour Draft Pools with ALL cards in existence...")
                 
                 # Fetch ALL 122, 121, and 120 cards in existence
                 pool_122 = await asyncio.to_thread(fetch_all_players_by_rating, 122, True)
@@ -81,7 +81,7 @@ class DraftCog(commands.Cog):
                 
                 new_drafts = {}
                 # 2-Hour draft rotation for active pool refreshes
-                expires = (datetime.datetime.now() + datetime.timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
+                expires = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
                 
                 used_featured_ids = set()
                 for i in range(1, 4):
@@ -140,9 +140,8 @@ class DraftCog(commands.Cog):
             
         d = drafts.get(pack) or drafts.get(str(pack))
         
-        # Convert server string time to Discord Local Time format
-        import datetime
-        dt = datetime.datetime.strptime(d['expires_at'], "%Y-%m-%d %H:%M:%S")
+        # Convert UTC string time to Discord Local Time format
+        dt = datetime.datetime.strptime(d['expires_at'], "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
         unix = int(dt.timestamp())
         expires_display = f"<t:{unix}:f> (<t:{unix}:R>)"
         
