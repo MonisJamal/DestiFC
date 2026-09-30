@@ -267,12 +267,16 @@ class ExchangeCog(commands.Cog):
                 await self.exchange_rotator()
                 pool = await database.get_active_exchange_pool()
 
-            # Reward roll: 122 (6%), 121 (35%), 120 (59%)
+            # Reward roll dynamically configured via Admin Panel Luck Settings
+            luck = await database.get_luck_settings()
+            top_rate = float(luck.get("exchange_top_rate", 5.0) or 5.0)
+            mid_rate = float(luck.get("exchange_mid_rate", 35.0) or 35.0)
+            
             roll = random.uniform(0, 100)
-            if roll < 6.0 and pool.get("cards_122"):
+            if roll < top_rate and pool.get("cards_122"):
                 player_data = random.choice(pool["cards_122"])
                 tier_name = "GRAND MASTER WALKOUT 👑👑👑"
-            elif roll < 41.0 and pool.get("cards_121"):
+            elif roll < (top_rate + mid_rate) and pool.get("cards_121"):
                 player_data = random.choice(pool["cards_121"])
                 tier_name = "ELITE MASTER WALKOUT 🌟🌟"
             elif pool.get("cards_120"):

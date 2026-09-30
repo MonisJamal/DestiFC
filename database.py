@@ -153,6 +153,33 @@ async def setup():
             market_buys INTEGER DEFAULT 0,
             daily_streak INTEGER DEFAULT 0
         );
+
+        CREATE TABLE IF NOT EXISTS signature_box_config (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            title TEXT DEFAULT 'FC SIGNATURE BOX',
+            subtitle TEXT DEFAULT '10 Exclusive Limited Time Rewards',
+            is_active BOOLEAN DEFAULT true,
+            banner_url TEXT DEFAULT '',
+            expires_at TIMESTAMP,
+            signature_card_data JSONB,
+            rewards_json JSONB,
+            draw_costs_json JSONB,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_signature_box (
+            user_id BIGINT PRIMARY KEY,
+            box_id INTEGER DEFAULT 1,
+            claimed_reward_ids JSONB DEFAULT '[]',
+            draws_completed INTEGER DEFAULT 0,
+            last_drawn_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value JSONB,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     ''')
     print("✅ Supabase PostgreSQL Connected and Verified!")
 
@@ -1094,6 +1121,252 @@ async def get_club_leader_stats(user_id: int) -> dict:
     except Exception as e:
         print(f"[Database] Error in get_club_leader_stats: {e}")
         return {}
+
+# ================= Signature Box Functions =================
+
+DEFAULT_SIGNATURE_BOX = {
+    "id": 1,
+    "title": "FC SIGNATURE BOX",
+    "subtitle": "Exclusive 10-Reward Limited Box Draw",
+    "is_active": True,
+    "banner_url": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80",
+    "expires_at": (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S"),
+    "signature_card_data": {
+        "id": "sig_zidane_124",
+        "cardName": "Zinedine Zidane",
+        "firstName": "Zinedine",
+        "lastName": "Zidane",
+        "rating": 124,
+        "position": "CAM",
+        "club": {"id": 243, "name": "Real Madrid"},
+        "nation": {"id": 18, "name": "France"},
+        "source": "SIGNATURE_BOX",
+        "is_signature_box": True,
+        "is_custom": True,
+        "performance_boost": 1.25,
+        "custom_background_url": "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=800&q=80",
+        "stats": {"PAC": 130, "SHO": 138, "PAS": 145, "DRI": 142, "DEF": 115, "PHY": 128}
+    },
+    "rewards_json": [
+        {"id": 1, "tier": "bad", "name": "50,000,000 Coins", "type": "coins", "amount": 50000000, "icon": "🪙", "base_weight": 22.0},
+        {"id": 2, "tier": "bad", "name": "5 Draft Vouchers", "type": "vouchers", "amount": 5, "icon": "🎟️", "base_weight": 22.0},
+        {"id": 3, "tier": "mid", "name": "250,000,000 Coins", "type": "coins", "amount": 250000000, "icon": "💰", "base_weight": 11.0},
+        {"id": 4, "tier": "mid", "name": "20 Draft Vouchers", "type": "vouchers", "amount": 20, "icon": "🎟️", "base_weight": 11.0},
+        {"id": 5, "tier": "mid", "name": "500 Gems", "type": "gems", "amount": 500, "icon": "💎", "base_weight": 11.0},
+        {"id": 6, "tier": "mid", "name": "100,000 Fans", "type": "fans", "amount": 100000, "icon": "👥", "base_weight": 11.0},
+        {"id": 7, "tier": "mid", "name": "1x 115-118 Elite Pack", "type": "pack", "amount": 1, "pack_rating_min": 115, "pack_rating_max": 118, "icon": "📦", "base_weight": 8.0},
+        {"id": 8, "tier": "good", "name": "2,500,000,000 Coins (2.5B)", "type": "coins", "amount": 2500000000, "icon": "👑", "base_weight": 2.0},
+        {"id": 9, "tier": "good", "name": "75 Draft Vouchers", "type": "vouchers", "amount": 75, "icon": "🎫", "base_weight": 2.0},
+        {"id": 10, "tier": "good", "name": "🌟 124 OVR Signature Zidane", "type": "signature_card", "amount": 1, "icon": "🌟", "base_weight": 1.0}
+    ],
+    "draw_costs_json": [
+        {"draw": 1, "currency": "coins", "amount": 50000000},
+        {"draw": 2, "currency": "coins", "amount": 100000000},
+        {"draw": 3, "currency": "coins", "amount": 200000000},
+        {"draw": 4, "currency": "coins", "amount": 350000000},
+        {"draw": 5, "currency": "coins", "amount": 550000000},
+        {"draw": 6, "currency": "coins", "amount": 800000000},
+        {"draw": 7, "currency": "coins", "amount": 1100000000},
+        {"draw": 8, "currency": "coins", "amount": 1500000000},
+        {"draw": 9, "currency": "coins", "amount": 2000000000},
+        {"draw": 10, "currency": "coins", "amount": 2500000000}
+    ]
+}
+
+_SIG_BOX_CACHE = None
+_SIG_BOX_CACHE_EXP = 0
+
+async def get_signature_box_config() -> dict:
+    global _SIG_BOX_CACHE, _SIG_BOX_CACHE_EXP
+    now = time.time()
+    if _SIG_BOX_CACHE and now - _SIG_BOX_CACHE_EXP < 30:
+        return _SIG_BOX_CACHE
+
+    p = await get_db()
+    try:
+        row = await p.fetchrow('SELECT * FROM signature_box_config WHERE id = 1')
+        if not row:
+            # Seed default config
+            sb = DEFAULT_SIGNATURE_BOX
+            await p.execute('''
+                INSERT INTO signature_box_config (id, title, subtitle, is_active, banner_url, expires_at, signature_card_data, rewards_json, draw_costs_json)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ON CONFLICT (id) DO NOTHING
+            ''', sb['id'], sb['title'], sb['subtitle'], sb['is_active'], sb['banner_url'],
+                 datetime.datetime.strptime(sb['expires_at'], "%Y-%m-%d %H:%M:%S"),
+                 json.dumps(sb['signature_card_data']), json.dumps(sb['rewards_json']), json.dumps(sb['draw_costs_json']))
+            _SIG_BOX_CACHE = sb
+            _SIG_BOX_CACHE_EXP = now
+            return sb
+        
+        data = dict(row)
+        for k in ['signature_card_data', 'rewards_json', 'draw_costs_json']:
+            if isinstance(data.get(k), str):
+                try: data[k] = json.loads(data[k])
+                except Exception: pass
+        if data.get('expires_at'):
+            data['expires_at'] = data['expires_at'].strftime("%Y-%m-%d %H:%M:%S")
+        _SIG_BOX_CACHE = data
+        _SIG_BOX_CACHE_EXP = now
+        return data
+    except Exception as e:
+        print(f"[Database] Error in get_signature_box_config: {e}")
+        return DEFAULT_SIGNATURE_BOX
+
+async def save_signature_box_config(config: dict) -> bool:
+    global _SIG_BOX_CACHE, _SIG_BOX_CACHE_EXP
+    p = await get_db()
+    try:
+        exp_dt = None
+        if config.get('expires_at'):
+            try:
+                exp_dt = datetime.datetime.strptime(str(config['expires_at']).strip(), "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                try:
+                    exp_dt = datetime.datetime.fromisoformat(str(config['expires_at']).replace('Z', '+00:00'))
+                except Exception:
+                    exp_dt = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=7)
+
+        await p.execute('''
+            INSERT INTO signature_box_config (id, title, subtitle, is_active, banner_url, expires_at, signature_card_data, rewards_json, draw_costs_json, updated_at)
+            VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+            ON CONFLICT (id) DO UPDATE SET
+                title = EXCLUDED.title,
+                subtitle = EXCLUDED.subtitle,
+                is_active = EXCLUDED.is_active,
+                banner_url = EXCLUDED.banner_url,
+                expires_at = EXCLUDED.expires_at,
+                signature_card_data = EXCLUDED.signature_card_data,
+                rewards_json = EXCLUDED.rewards_json,
+                draw_costs_json = EXCLUDED.draw_costs_json,
+                updated_at = CURRENT_TIMESTAMP
+        ''', config.get('title', 'FC SIGNATURE BOX'),
+             config.get('subtitle', 'Exclusive 10-Reward Box Draw'),
+             bool(config.get('is_active', True)),
+             config.get('banner_url', ''),
+             exp_dt,
+             json.dumps(config.get('signature_card_data', {})),
+             json.dumps(config.get('rewards_json', [])),
+             json.dumps(config.get('draw_costs_json', [])))
+        _SIG_BOX_CACHE = None
+        _SIG_BOX_CACHE_EXP = 0
+        return True
+    except Exception as e:
+        print(f"[Database] Error in save_signature_box_config: {e}")
+        return False
+
+async def get_user_signature_box(user_id: int) -> dict:
+    p = await get_db()
+    try:
+        row = await p.fetchrow('SELECT * FROM user_signature_box WHERE user_id = $1', user_id)
+        if not row:
+            await p.execute('INSERT INTO user_signature_box (user_id, box_id, claimed_reward_ids, draws_completed) VALUES ($1, 1, $2, 0) ON CONFLICT (user_id) DO NOTHING', user_id, json.dumps([]))
+            return {"user_id": user_id, "box_id": 1, "claimed_reward_ids": [], "draws_completed": 0}
+        data = dict(row)
+        if isinstance(data.get('claimed_reward_ids'), str):
+            try: data['claimed_reward_ids'] = json.loads(data['claimed_reward_ids'])
+            except Exception: data['claimed_reward_ids'] = []
+        return data
+    except Exception as e:
+        print(f"[Database] Error in get_user_signature_box: {e}")
+        return {"user_id": user_id, "box_id": 1, "claimed_reward_ids": [], "draws_completed": 0}
+
+async def record_user_signature_box_draw(user_id: int, reward_id: int):
+    p = await get_db()
+    try:
+        user_box = await get_user_signature_box(user_id)
+        claimed = list(user_box.get('claimed_reward_ids', []))
+        if reward_id not in claimed:
+            claimed.append(reward_id)
+        draws = int(user_box.get('draws_completed', 0)) + 1
+        await p.execute('''
+            INSERT INTO user_signature_box (user_id, box_id, claimed_reward_ids, draws_completed, last_drawn_at)
+            VALUES ($1, 1, $2, $3, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id) DO UPDATE SET
+                claimed_reward_ids = EXCLUDED.claimed_reward_ids,
+                draws_completed = EXCLUDED.draws_completed,
+                last_drawn_at = CURRENT_TIMESTAMP
+        ''', user_id, json.dumps(claimed), draws)
+    except Exception as e:
+        print(f"[Database] Error recording signature box draw: {e}")
+
+async def reset_user_signature_box(user_id: int = None):
+    p = await get_db()
+    try:
+        if user_id:
+            await p.execute('UPDATE user_signature_box SET claimed_reward_ids = $1, draws_completed = 0 WHERE user_id = $2', json.dumps([]), user_id)
+        else:
+            await p.execute('UPDATE user_signature_box SET claimed_reward_ids = $1, draws_completed = 0', json.dumps([]))
+        return True
+    except Exception as e:
+        print(f"[Database] Error resetting user signature box: {e}")
+        return False
+
+# ================= Luck Settings Functions =================
+
+DEFAULT_LUCK_SETTINGS = {
+    "draft_pool_a_rate": 2.5,
+    "draft_pool_b_rate": 30.0,
+    "draft_pool_c_rate": 67.5,
+    "walkout_122_share": 6.0,
+    "walkout_121_share": 35.0,
+    "walkout_120_share": 59.0,
+    "pity_pool_a_threshold": 70,
+    "pity_pool_b_interval": 10,
+    "global_luck_multiplier": 1.0,
+    "exchange_top_rate": 5.0,
+    "exchange_mid_rate": 35.0,
+    "exchange_base_rate": 60.0
+}
+
+_LUCK_CACHE = None
+_LUCK_CACHE_EXP = 0
+
+async def get_luck_settings() -> dict:
+    global _LUCK_CACHE, _LUCK_CACHE_EXP
+    now = time.time()
+    if _LUCK_CACHE and now - _LUCK_CACHE_EXP < 30:
+        return _LUCK_CACHE
+
+    p = await get_db()
+    try:
+        row = await p.fetchrow("SELECT value FROM system_settings WHERE key = 'luck_settings'")
+        if not row:
+            await p.execute("INSERT INTO system_settings (key, value) VALUES ('luck_settings', $1) ON CONFLICT (key) DO NOTHING", json.dumps(DEFAULT_LUCK_SETTINGS))
+            _LUCK_CACHE = DEFAULT_LUCK_SETTINGS
+            _LUCK_CACHE_EXP = now
+            return DEFAULT_LUCK_SETTINGS
+        val = row['value']
+        if isinstance(val, str):
+            try: val = json.loads(val)
+            except Exception: val = DEFAULT_LUCK_SETTINGS
+        res = {**DEFAULT_LUCK_SETTINGS, **(val if isinstance(val, dict) else {})}
+        _LUCK_CACHE = res
+        _LUCK_CACHE_EXP = now
+        return res
+    except Exception as e:
+        print(f"[Database] Error in get_luck_settings: {e}")
+        return DEFAULT_LUCK_SETTINGS
+
+async def save_luck_settings(settings: dict) -> bool:
+    global _LUCK_CACHE, _LUCK_CACHE_EXP
+    p = await get_db()
+    try:
+        merged = {**DEFAULT_LUCK_SETTINGS, **settings}
+        await p.execute('''
+            INSERT INTO system_settings (key, value, updated_at)
+            VALUES ('luck_settings', $1, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET
+                value = EXCLUDED.value,
+                updated_at = CURRENT_TIMESTAMP
+        ''', json.dumps(merged))
+        _LUCK_CACHE = merged
+        _LUCK_CACHE_EXP = time.time()
+        return True
+    except Exception as e:
+        print(f"[Database] Error in save_luck_settings: {e}")
+        return False
+
 
 
 

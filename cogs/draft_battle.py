@@ -444,11 +444,26 @@ class DraftBattleRoomView(discord.ui.View):
         score_b = 0
         events = []
 
-        attackers_a = [p.get("cardName", p.get("lastName", "Striker")) for pos, p in data_a.get("players", {}).items() if any(k in pos for k in ["ST", "RW", "LW", "CAM", "CF"])] or [user_a.display_name]
-        attackers_b = [p.get("cardName", p.get("lastName", "Striker")) for pos, p in data_b.get("players", {}).items() if any(k in pos for k in ["ST", "RW", "LW", "CAM", "CF"])] or [user_b.display_name]
+        def is_boosted_card(p_dict):
+            if not isinstance(p_dict, dict): return False
+            p_id = str(p_dict.get('id') or p_dict.get('assetId') or '')
+            src = str(p_dict.get('source') or '').upper()
+            return bool(p_dict.get('is_custom') or p_dict.get('is_signature_box') or 'CUSTOM' in src or 'SIGNATURE' in src or p_id.startswith('custom_') or p_id.startswith('sig_'))
 
-        midfielders_a = [p.get("cardName", p.get("lastName", "Midfielder")) for pos, p in data_a.get("players", {}).items() if any(k in pos for k in ["CM", "CDM", "CAM", "LM", "RM"])] or attackers_a
-        midfielders_b = [p.get("cardName", p.get("lastName", "Midfielder")) for pos, p in data_b.get("players", {}).items() if any(k in pos for k in ["CM", "CDM", "CAM", "LM", "RM"])] or attackers_b
+        # Build candidate pools with weighted boost for custom / signature cards
+        attackers_a_cards = [p for pos, p in data_a.get("players", {}).items() if any(k in pos for k in ["ST", "RW", "LW", "CAM", "CF"])]
+        attackers_b_cards = [p for pos, p in data_b.get("players", {}).items() if any(k in pos for k in ["ST", "RW", "LW", "CAM", "CF"])]
+        
+        midfielders_a_cards = [p for pos, p in data_a.get("players", {}).items() if any(k in pos for k in ["CM", "CDM", "CAM", "LM", "RM"])]
+        midfielders_b_cards = [p for pos, p in data_b.get("players", {}).items() if any(k in pos for k in ["CM", "CDM", "CAM", "LM", "RM"])]
+
+        def pick_weighted_player(cards_list, fallback_name):
+            if not cards_list:
+                return fallback_name, False
+            weights = [2.0 if is_boosted_card(c) else 1.0 for c in cards_list]
+            chosen = random.choices(cards_list, weights=weights, k=1)[0]
+            p_name = chosen.get("cardName") or chosen.get("lastName", fallback_name)
+            return p_name, is_boosted_card(chosen)
 
         goals_breakdown_a = {}
         goals_breakdown_b = {}
@@ -460,29 +475,33 @@ class DraftBattleRoomView(discord.ui.View):
             roll = random.random()
             if roll < base_a_prob:
                 score_a += 1
-                scorer = random.choice(attackers_a)
+                scorer, is_boost = pick_weighted_player(attackers_a_cards, user_a.display_name)
                 goals_breakdown_a[scorer] = goals_breakdown_a.get(scorer, 0) + 1
                 
                 # Assign assist
-                assister_candidates = [m for m in midfielders_a if m != scorer] or attackers_a
-                assister = random.choice(assister_candidates) if assister_candidates else None
+                mid_candidates = [c for c in midfielders_a_cards if (c.get('cardName') or c.get('lastName')) != scorer] or attackers_a_cards
+                assister, _ = pick_weighted_player(mid_candidates, None) if mid_candidates else (None, False)
+                
+                aura = "⚡ **[SIGNATURE STRIKE]**" if is_boost else "⚽ **GOAL!**"
                 if assister:
                     assists_breakdown_a[assister] = assists_breakdown_a.get(assister, 0) + 1
-                    events.append(f"⏱️ **{minute}'** ⚽ **GOAL!** {scorer} finds the net! (Assist: {assister})")
+                    events.append(f"⏱️ **{minute}'** {aura} {scorer} finds the net! (Assist: {assister})")
                 else:
-                    events.append(f"⏱️ **{minute}'** ⚽ **GOAL!** {scorer} scores a solo stunner for **{user_a.display_name}**!")
+                    events.append(f"⏱️ **{minute}'** {aura} {scorer} scores a solo stunner for **{user_a.display_name}**!")
             elif roll > 0.65:
                 score_b += 1
-                scorer = random.choice(attackers_b)
+                scorer, is_boost = pick_weighted_player(attackers_b_cards, user_b.display_name)
                 goals_breakdown_b[scorer] = goals_breakdown_b.get(scorer, 0) + 1
                 
-                assister_candidates = [m for m in midfielders_b if m != scorer] or attackers_b
-                assister = random.choice(assister_candidates) if assister_candidates else None
+                mid_candidates = [c for c in midfielders_b_cards if (c.get('cardName') or c.get('lastName')) != scorer] or attackers_b_cards
+                assister, _ = pick_weighted_player(mid_candidates, None) if mid_candidates else (None, False)
+                
+                aura = "⚡ **[SIGNATURE STRIKE]**" if is_boost else "⚽ **GOAL!**"
                 if assister:
                     assists_breakdown_b[assister] = assists_breakdown_b.get(assister, 0) + 1
-                    events.append(f"⏱️ **{minute}'** ⚽ **GOAL!** {scorer} strikes! (Assist: {assister})")
+                    events.append(f"⏱️ **{minute}'** {aura} {scorer} strikes! (Assist: {assister})")
                 else:
-                    events.append(f"⏱️ **{minute}'** ⚽ **GOAL!** {scorer} scores a screamer for **{user_b.display_name}**!")
+                    events.append(f"⏱️ **{minute}'** {aura} {scorer} scores a screamer for **{user_b.display_name}**!")
             else:
                 events.append(f"⏱️ **{minute}'** 🧤 Crucial save in the box keeps the scoreline tight!")
 
@@ -501,7 +520,7 @@ class DraftBattleRoomView(discord.ui.View):
                     await add_season_xp(user_a.id, 50)
                 except Exception: pass
 
-        # Record Player Performance Stats for User A's Squad
+        # Record Player Performance Stats for User A's Squad with Custom/Signature Boost
         try:
             stats_list_a = []
             for pos, p in data_a.get("players", {}).items():
@@ -511,7 +530,8 @@ class DraftBattleRoomView(discord.ui.View):
                 cs = 1 if (is_df_gk and score_b == 0) else 0
                 g_count = goals_breakdown_a.get(p_name, 0)
                 a_count = assists_breakdown_a.get(p_name, 0)
-                base_rating = 7.0 + (g_count * 1.2) + (a_count * 0.8) + (0.5 if score_a > score_b else (-0.5 if score_b > score_a else 0))
+                boost_bonus = 1.0 if is_boosted_card(p) else 0.0
+                base_rating = 7.0 + (g_count * 1.2) + (a_count * 0.8) + (0.5 if score_a > score_b else (-0.5 if score_b > score_a else 0)) + boost_bonus
                 rating = round(min(10.0, max(5.5, base_rating)), 1)
                 stats_list_a.append({
                     "player_name": p_name,
@@ -523,7 +543,7 @@ class DraftBattleRoomView(discord.ui.View):
                     "yellow_cards": 0,
                     "red_cards": 0,
                     "rating": rating,
-                    "is_motm": 1 if (score_a >= score_b and g_count >= 1) else 0
+                    "is_motm": 1 if (score_a >= score_b and (g_count >= 1 or is_boosted_card(p))) else 0
                 })
             await database.record_player_match_stats(user_a.id, stats_list_a)
 

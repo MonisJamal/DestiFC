@@ -318,8 +318,21 @@ class DraftCog(commands.Cog):
         
         current_drafts = user.get('drafts_opened', 0)
         pity_counter = await database.get_draft_pity(user_id, pack)
+        luck = await database.get_luck_settings()
+        
+        mult = max(0.1, float(luck.get("global_luck_multiplier", 1.0) or 1.0))
+        pool_a_rate = min(99.0, max(0.1, float(luck.get("draft_pool_a_rate", 2.5) or 2.5) * mult))
+        pool_b_rate = min(99.0, max(0.1, float(luck.get("draft_pool_b_rate", 30.0) or 30.0) * mult))
+        cutoff_a = pool_a_rate
+        cutoff_b = pool_a_rate + pool_b_rate
+        
+        pity_a_thresh = int(luck.get("pity_pool_a_threshold", 70) or 70)
+        pity_b_interv = int(luck.get("pity_pool_b_interval", 10) or 10)
+        
+        share_122 = float(luck.get("walkout_122_share", 6.0) or 6.0)
+        share_121 = float(luck.get("walkout_121_share", 35.0) or 35.0)
 
-        # Helper to pick Pool A card with exact weightings (6% 122, 35% 121, 59% 120)
+        # Helper to pick Pool A card with exact weightings
         def pick_pool_a_weighted(pool_a_list):
             if not pool_a_list:
                 return {}
@@ -328,9 +341,9 @@ class DraftCog(commands.Cog):
             cards_120 = [p for p in pool_a_list if (p.get('rating') or 0) <= 120]
             
             tier_roll = random.uniform(0, 100)
-            if tier_roll < 6.0 and cards_122:
+            if tier_roll < share_122 and cards_122:
                 return random.choice(cards_122)
-            elif tier_roll < 41.0 and cards_121:
+            elif tier_roll < (share_122 + share_121) and cards_121:
                 return random.choice(cards_121)
             elif cards_120:
                 return random.choice(cards_120)
@@ -347,25 +360,25 @@ class DraftCog(commands.Cog):
             roll = random.uniform(0, 100)
             is_walkout = False
             
-            # Pity Triggers — 70th pack guaranteed Pool A, 10th pack guaranteed Pool B
-            if pity_counter >= 70:
-                roll = random.uniform(0.01, 2.49)  # Force Pool A
-            elif pity_counter % 10 == 0:
-                if roll > 32.5:
-                    roll = random.uniform(2.6, 32.5)  # Force Pool B
+            # Pity Triggers — Guaranteed Pool A on threshold, Guaranteed Pool B on interval
+            if pity_counter >= pity_a_thresh:
+                roll = random.uniform(0.01, cutoff_a - 0.01)  # Force Pool A
+            elif pity_counter % pity_b_interv == 0:
+                if roll > cutoff_b:
+                    roll = random.uniform(cutoff_a + 0.1, cutoff_b - 0.1)  # Force Pool B
             
-            if roll <= 2.5:
-                # Pool A (2.5% base chance: 6% for 122, 35% for 121, 59% for 120)
+            if roll <= cutoff_a:
+                # Pool A Walkout
                 is_walkout = True
                 pity_counter = 0  # RESET PITY FOR THIS DRAFT PACK IMMEDIATELY
                 tier_name = "WALKOUT 🌟🌟🌟"
                 player_data = pick_pool_a_weighted(d['pool_a'])
-            elif roll <= 32.5:
-                # Pool B (30% chance: 117-119)
+            elif roll <= cutoff_b:
+                # Pool B (Elite)
                 tier_name = "Elite ✨✨"
                 player_data = random.choice(d['pool_b']) if d.get('pool_b') else pick_pool_a_weighted(d['pool_a'])
             else:
-                # Pool C (67.5% chance: 110-116)
+                # Pool C (Standard)
                 tier_name = "Standard"
                 player_data = random.choice(d['pool_c']) if d.get('pool_c') else (random.choice(d.get('pool_b', d['pool_a'])))
                 
