@@ -274,12 +274,15 @@ class TradeBuilderView(discord.ui.View):
         if not self.selected_cards and self.give_coins == 0 and self.give_vouchers == 0 and self.recv_coins == 0 and self.recv_vouchers == 0:
             return await interaction.response.send_message("❌ You cannot send an empty trade proposal.", ephemeral=True)
 
+        # Defer immediately to guarantee 100% reliable 1st-click response
+        await interaction.response.defer()
+
         # Sender balance validation
         sender_data = await database.get_user(self.sender.id)
         if sender_data.get("coins", 0) < self.give_coins:
-            return await interaction.response.send_message(f"❌ You don't have enough coins! Balance: **{sender_data.get('coins', 0):,}**", ephemeral=True)
+            return await interaction.followup.send(f"❌ You don't have enough coins! Balance: **{sender_data.get('coins', 0):,}**", ephemeral=True)
         if sender_data.get("vouchers", 0) < self.give_vouchers:
-            return await interaction.response.send_message(f"❌ You don't have enough vouchers! Balance: **{sender_data.get('vouchers', 0)}**", ephemeral=True)
+            return await interaction.followup.send(f"❌ You don't have enough vouchers! Balance: **{sender_data.get('vouchers', 0)}**", ephemeral=True)
 
         # Create public trade confirmation view for recipient
         offer_lines = []
@@ -323,7 +326,7 @@ class TradeBuilderView(discord.ui.View):
             child.disabled = True
             
         try:
-            await interaction.response.edit_message(content="✅ Trade proposal dispatched!", view=self)
+            await interaction.edit_original_response(content="✅ Trade proposal dispatched!", view=self)
         except Exception:
             pass
 
@@ -356,8 +359,10 @@ class TradeCog(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         user_id = interaction.user.id
 
-        inventory = await database.get_inventory(user_id)
-        locked_ids = await database.get_squad_locked_ids(user_id)
+        inventory, locked_ids = await asyncio.gather(
+            database.get_inventory(user_id),
+            database.get_squad_locked_ids(user_id)
+        )
 
         eligible = [
             p for p in inventory

@@ -157,20 +157,34 @@ async def setup():
     print("✅ Supabase PostgreSQL Connected and Verified!")
 
 async def get_user(user_id: int) -> dict:
+    global _USER_CACHE
+    now = time.time()
+    if user_id in _USER_CACHE:
+        cached = _USER_CACHE[user_id]
+        if now - cached.get('exp', 0) < 60:
+            return cached['data']
+
     p = await get_db()
     row = await p.fetchrow('SELECT * FROM users WHERE user_id = $1', user_id)
     if row:
-        return dict(row)
-    await p.execute('INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', user_id)
-    row = await p.fetchrow('SELECT * FROM users WHERE user_id = $1', user_id)
-    if row:
-        return dict(row)
-    return {
-        "user_id": user_id, "coins": 0, "vouchers": 0, "gems": 0, "fans": 0,
-        "drafts_opened": 0, "drafts_since_walkout": 0, "is_private": 0
-    }
+        data = dict(row)
+    else:
+        await p.execute('INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', user_id)
+        row = await p.fetchrow('SELECT * FROM users WHERE user_id = $1', user_id)
+        if row:
+            data = dict(row)
+        else:
+            data = {
+                "user_id": user_id, "coins": 0, "vouchers": 0, "gems": 0, "fans": 0,
+                "drafts_opened": 0, "drafts_since_walkout": 0, "is_private": 0
+            }
+    _USER_CACHE[user_id] = {"data": data, "exp": now}
+    return data
 
 async def add_coins(user_id: int, amount: int):
+    global _USER_CACHE
+    if user_id in _USER_CACHE:
+        _USER_CACHE[user_id]['data']['coins'] = max(0, int(_USER_CACHE[user_id]['data'].get('coins', 0)) + int(amount))
     p = await get_db()
     await p.execute(
         'UPDATE users SET coins = GREATEST(0, coins + $1) WHERE user_id = $2',
@@ -181,6 +195,9 @@ async def update_coins(user_id: int, amount: int):
     await add_coins(user_id, amount)
 
 async def add_vouchers(user_id: int, amount: int):
+    global _USER_CACHE
+    if user_id in _USER_CACHE:
+        _USER_CACHE[user_id]['data']['vouchers'] = max(0, int(_USER_CACHE[user_id]['data'].get('vouchers', 0)) + int(amount))
     p = await get_db()
     await p.execute(
         'UPDATE users SET vouchers = GREATEST(0, vouchers + $1) WHERE user_id = $2',
@@ -191,6 +208,9 @@ async def update_vouchers(user_id: int, amount: int):
     await add_vouchers(user_id, amount)
 
 async def update_gems(user_id: int, amount: int):
+    global _USER_CACHE
+    if user_id in _USER_CACHE:
+        _USER_CACHE[user_id]['data']['gems'] = max(0, int(_USER_CACHE[user_id]['data'].get('gems', 0)) + int(amount))
     p = await get_db()
     await p.execute(
         'UPDATE users SET gems = GREATEST(0, gems + $1) WHERE user_id = $2',
@@ -198,6 +218,9 @@ async def update_gems(user_id: int, amount: int):
     )
 
 async def add_fans(user_id: int, amount: int):
+    global _USER_CACHE
+    if user_id in _USER_CACHE:
+        _USER_CACHE[user_id]['data']['fans'] = max(0, int(_USER_CACHE[user_id]['data'].get('fans', 0)) + int(amount))
     p = await get_db()
     await p.execute(
         'UPDATE users SET fans = GREATEST(0, fans + $1) WHERE user_id = $2',
@@ -205,6 +228,9 @@ async def add_fans(user_id: int, amount: int):
     )
 
 async def increment_drafts(user_id: int, amount: int = 1):
+    global _USER_CACHE
+    if user_id in _USER_CACHE:
+        _USER_CACHE[user_id]['data']['drafts_opened'] = int(_USER_CACHE[user_id]['data'].get('drafts_opened', 0)) + int(amount)
     p = await get_db()
     await p.execute(
         'UPDATE users SET drafts_opened = drafts_opened + $1 WHERE user_id = $2',
