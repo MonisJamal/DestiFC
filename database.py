@@ -590,3 +590,60 @@ def set_event_exchanges(events):
     global EVENT_EXCHANGES
     EVENT_EXCHANGES = events
 
+# Ultra-fast RAM cache for official cards by rating
+_OFFICIAL_CARDS_CACHE = {}
+
+async def get_official_cards_by_rating(min_rating: int, max_rating: int = None, limit: int = 100):
+    global _OFFICIAL_CARDS_CACHE
+    import random
+    if max_rating is None:
+        max_rating = min_rating
+        
+    cached_matching = []
+    for r in range(min_rating, max_rating + 1):
+        if r in _OFFICIAL_CARDS_CACHE:
+            cached_matching.extend(_OFFICIAL_CARDS_CACHE[r])
+            
+    if cached_matching:
+        return random.sample(cached_matching, min(limit, len(cached_matching)))
+        
+    try:
+        p = await get_db()
+        rows = await p.fetch('''
+            SELECT player_data FROM official_cards 
+            WHERE rating >= $1 AND rating <= $2 
+            ORDER BY RANDOM() LIMIT $3
+        ''', min_rating, max_rating, limit)
+        
+        res = []
+        for r in rows:
+            try:
+                pd = json.loads(r['player_data']) if isinstance(r['player_data'], str) else r['player_data']
+                res.append(pd)
+            except Exception:
+                pass
+        return res
+    except Exception as e:
+        print(f"Error fetching official cards by rating: {e}")
+        return []
+
+async def preload_official_cards_cache():
+    global _OFFICIAL_CARDS_CACHE
+    try:
+        p = await get_db()
+        rows = await p.fetch('SELECT rating, player_data FROM official_cards WHERE rating >= 110')
+        cache = {}
+        for r in rows:
+            rating = r['rating']
+            if rating not in cache:
+                cache[rating] = []
+            try:
+                pd = json.loads(r['player_data']) if isinstance(r['player_data'], str) else r['player_data']
+                cache[rating].append(pd)
+            except Exception:
+                pass
+        _OFFICIAL_CARDS_CACHE = cache
+        print(f"[Database] Preloaded {sum(len(v) for v in cache.values())} official cards into RAM cache!")
+    except Exception as e:
+        print(f"[Database] Card cache preload note: {e}")
+

@@ -25,6 +25,7 @@ _session.mount('http://', _adapter)
 # In-memory fast image cache
 _MEMORY_IMAGE_CACHE = {}
 _MEMORY_CARD_CACHE = {}
+_MEMORY_CARD_BYTES_CACHE = {}
 
 @lru_cache(maxsize=64)
 def get_font(name: str, size: int):

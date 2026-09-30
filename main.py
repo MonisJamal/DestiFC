@@ -17,6 +17,7 @@ class DestiFC(commands.Bot):
 
     async def setup_hook(self):
         await database.setup()
+        await database.preload_official_cards_cache()
         
         # Load cogs
         for filename in os.listdir('./cogs'):

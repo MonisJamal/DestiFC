@@ -9,8 +9,28 @@ import datetime
 import database
 from renderz_api import query_players_by_program, fetch_all_players_by_rating
 from card_generator import generate_card, save_card_to_bytes, get_or_create_card_bytes
-from maps import nation_map, club_map
+from maps import nation_map, club_map, extract_pos
 from auth import is_team_admin_or_owner
+
+def get_nation_display(player_data):
+    nation = player_data.get('nation')
+    if isinstance(nation, dict):
+        n_id = nation.get('id')
+        if n_id in nation_map: return nation_map[n_id]
+        if nation.get('name'): return f"🌍 {nation['name']}"
+    elif isinstance(nation, str):
+        return f"🌍 {nation}"
+    return "🌍 World"
+
+def get_club_display(player_data):
+    club = player_data.get('club')
+    if isinstance(club, dict):
+        c_id = club.get('id')
+        if c_id in club_map: return club_map[c_id]
+        if club.get('name'): return f"🛡️ {club['name']}"
+    elif isinstance(club, str):
+        return f"🛡️ {club}"
+    return "🛡️ Club"
 
 class DraftCog(commands.Cog):
     def __init__(self, bot):
@@ -37,12 +57,17 @@ class DraftCog(commands.Cog):
                         break
                         
             if needs_refresh:
-                print("[Draft] Rotating and generating new 2-Hour Draft Pools with ALL cards in existence...")
+                print("[Draft] Rotating and generating new 2-Hour Draft Pools from official database...")
                 
-                # Fetch ALL 122, 121, and 120 cards in existence
-                pool_122 = await asyncio.to_thread(fetch_all_players_by_rating, 122, True)
-                pool_121 = await asyncio.to_thread(fetch_all_players_by_rating, 121, True)
-                pool_120 = await asyncio.to_thread(fetch_all_players_by_rating, 120, True)
+                # Fetch 122, 121, and 120 cards from local DB cache instantly (<10ms)
+                pool_122 = await database.get_official_cards_by_rating(122, 122, 100)
+                pool_121 = await database.get_official_cards_by_rating(121, 121, 100)
+                pool_120 = await database.get_official_cards_by_rating(120, 120, 100)
+
+                # Fallback to renderz_api if DB cache is warming up
+                if not pool_122: pool_122 = await asyncio.to_thread(fetch_all_players_by_rating, 122, True)
+                if not pool_121: pool_121 = await asyncio.to_thread(fetch_all_players_by_rating, 121, True)
+                if not pool_120: pool_120 = await asyncio.to_thread(fetch_all_players_by_rating, 120, True)
 
                 def split_promo_icons(lst):
                     ev = [p for p in lst if 'ICON' not in p.get('source', '') and 'HERO' not in p.get('source', '')]
@@ -53,25 +78,8 @@ class DraftCog(commands.Cog):
                 ev121, ic121 = split_promo_icons(pool_121)
                 ev120, ic120 = split_promo_icons(pool_120)
                 
-                # Fetch random chunks for lower ratings to keep it fresh every hour
-                def fetch_random_chunk(min_r, max_r, chunks=4):
-                    import random
-                    all_p = {}
-                    for _ in range(chunks):
-                        offset = random.choice([0, 24, 48, 72, 96, 120, 144, 168, 192, 216, 240])
-                        batch = query_players_by_program("", min_rating=min_r, max_rating=max_r, size=24, from_offset=offset)
-                        if not batch: continue
-                        for p in batch:
-                            all_p[p.get('assetId')] = p
-                    return list(all_p.values())
-
-                pool_117 = []
-                for r in [117, 118, 119]:
-                    pool_117.extend(fetch_random_chunk(r, r, chunks=2))
-                    
-                pool_112 = []
-                for r in [112, 113, 114, 115, 116]:
-                    pool_112.extend(fetch_random_chunk(r, r, chunks=2))
+                pool_117 = await database.get_official_cards_by_rating(117, 119, 100)
+                pool_112 = await database.get_official_cards_by_rating(112, 116, 100)
                 
                 if not pool_122 or not pool_121 or not pool_120:
                     print("[Draft] Not enough 120+ players fetched, skipping rotation.")
@@ -286,23 +294,46 @@ class DraftCog(commands.Cog):
             await add_season_xp(user_id, 50 * amount)
         except Exception: pass
 
-        pos = highest_player.get('position', '??')
-        n_id = highest_player.get('nation', {}).get('id')
-        c_id = highest_player.get('club', {}).get('id')
-        
-        nation_str = nation_map.get(n_id, f"🌍 Nation ({n_id})")
-        club_str = club_map.get(c_id, f"🛡️ Club ({c_id})")
+        pos = extract_pos(highest_player)
+        nation_str = get_nation_display(highest_player)
+        club_str = get_club_display(highest_player)
         best_name = highest_player.get('cardName') or highest_player.get('lastName', 'Unknown')
             
         try:
             is_anim = (isinstance(highest_ovr, int) and highest_ovr >= 120)
-            image_binary, filename = await asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, is_anim)
+            is_walkout = is_walkout_pack or is_anim
+            
+            # Start image generation task concurrently with walkout sequence
+            card_gen_task = asyncio.create_task(asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, is_anim))
+            
+            if is_walkout:
+                # Step 1: Flag / Nation
+                msg = await interaction.followup.send(
+                    f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n\n*(Walking onto the stage...)*"
+                )
+                await asyncio.sleep(1.2)
+                
+                # Step 2: Position
+                await interaction.followup.edit_message(
+                    msg.id,
+                    content=f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n# 🏃 **`{pos}`**\n\n*(Entering the stadium tunnel...)*"
+                )
+                await asyncio.sleep(1.2)
+                
+                # Step 3: Club
+                await interaction.followup.edit_message(
+                    msg.id,
+                    content=f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n# 🏃 **`{pos}`**\n# {club_str.upper()}\n\n🔥 **PYROTECHNICS EXPLODING!**"
+                )
+                await asyncio.sleep(1.2)
+
+            image_binary, filename = await card_gen_task
             if not image_binary:
                 image_binary, filename = await asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, False)
                 
             file = discord.File(fp=image_binary, filename=filename or 'card.png') if image_binary else None
                 
-            walkout_prefix = f"🔥 🌍 **{nation_str}** | 🏃 **`{pos}`** | 🛡️ **{club_str}**\n" if is_walkout_pack else ""
+            walkout_prefix = f"🔥 **{nation_str}** | 🏃 **`{pos}`** | **{club_str}**\n\n" if is_walkout else ""
             desc = f"{walkout_prefix}🌟 **Featured Walkout:** **{best_name}** `({pos})` ({highest_ovr} OVR)\n\n"
             
             if amount > 1:
@@ -311,7 +342,7 @@ class DraftCog(commands.Cog):
                 for p in others[:9]:
                     name = p.get('cardName') or p.get('lastName', 'Unknown')
                     ovr = p.get('rating', 0)
-                    p_pos = p.get('position', 'UK')
+                    p_pos = extract_pos(p)
                     icon = "🔥" if ovr >= 120 else ("✨" if ovr >= 117 else "⚽")
                     desc += f"{icon} **{name}** `({p_pos})` — `{ovr} OVR`\n"
                 if len(others) > 9:
@@ -320,7 +351,7 @@ class DraftCog(commands.Cog):
             embed = discord.Embed(
                 title=f"🎉 {pack_tier_name} Pack Opened! ({amount}x)",
                 description=desc,
-                color=discord.Color.gold() if is_walkout_pack else discord.Color.blue()
+                color=discord.Color.gold() if is_walkout else discord.Color.blue()
             )
             embed.set_author(name=f"{interaction.user.display_name}'s Pack", icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
             if file and filename:
@@ -330,10 +361,16 @@ class DraftCog(commands.Cog):
             pity_a = max(0, 70 - pity_counter)
             embed.set_footer(text=f"Drafts to Guaranteed Pool B: {pity_b} | Drafts to Guaranteed Pool A: {pity_a}")
             
-            if file:
-                await interaction.followup.send(embed=embed, file=file)
+            if is_walkout:
+                if file:
+                    await interaction.followup.edit_message(msg.id, content=None, embed=embed, attachments=[file])
+                else:
+                    await interaction.followup.edit_message(msg.id, content=None, embed=embed)
             else:
-                await interaction.followup.send(embed=embed)
+                if file:
+                    await interaction.followup.send(embed=embed, file=file)
+                else:
+                    await interaction.followup.send(embed=embed)
             
         except Exception as e:
             print(f"[Draft] Error presenting pack: {e}")

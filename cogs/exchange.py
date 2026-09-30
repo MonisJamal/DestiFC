@@ -7,8 +7,28 @@ import io
 import json
 from renderz_api import query_players_by_program, fetch_all_players_by_rating
 from card_generator import get_or_create_card_bytes
-from maps import nation_map, club_map
+from maps import nation_map, club_map, extract_pos
 import database
+
+def get_nation_display(player_data):
+    nation = player_data.get('nation')
+    if isinstance(nation, dict):
+        n_id = nation.get('id')
+        if n_id in nation_map: return nation_map[n_id]
+        if nation.get('name'): return f"🌍 {nation['name']}"
+    elif isinstance(nation, str):
+        return f"🌍 {nation}"
+    return "🌍 World"
+
+def get_club_display(player_data):
+    club = player_data.get('club')
+    if isinstance(club, dict):
+        c_id = club.get('id')
+        if c_id in club_map: return club_map[c_id]
+        if club.get('name'): return f"🛡️ {club['name']}"
+    elif isinstance(club, str):
+        return f"🛡️ {club}"
+    return "🛡️ Club"
 
 class ExchangeCog(commands.Cog):
     def __init__(self, bot):
@@ -63,7 +83,9 @@ class ExchangeCog(commands.Cog):
             else: min_ovr = 117
             
             tier_name = "FODDER UPGRADE ✨"
-            players = await asyncio.to_thread(fetch_all_players_by_rating, min_ovr)
+            players = await database.get_official_cards_by_rating(min_ovr, min_ovr, 50)
+            if not players:
+                players = await asyncio.to_thread(fetch_all_players_by_rating, min_ovr)
             if not players:
                 players = await asyncio.to_thread(query_players_by_program, "", min_rating=min_ovr, max_rating=min_ovr, size=50)
             
@@ -87,8 +109,10 @@ class ExchangeCog(commands.Cog):
                 
             tier_name = "WALKOUT 🌟🌟🌟" if min_ovr == 122 else "WALKOUT 🌟🌟" if min_ovr == 121 else "WALKOUT 🌟"
             
-            # Fetch from comprehensive pool of ALL 120-122 cards in existence
-            players = await asyncio.to_thread(fetch_all_players_by_rating, min_ovr)
+            # Fetch from comprehensive pool of ALL 120-122 cards in existence from fast local DB cache
+            players = await database.get_official_cards_by_rating(min_ovr, min_ovr, 50)
+            if not players:
+                players = await asyncio.to_thread(fetch_all_players_by_rating, min_ovr)
             if not players:
                 players = await asyncio.to_thread(query_players_by_program, "", min_rating=min_ovr, max_rating=min_ovr, size=100)
                 
@@ -97,19 +121,42 @@ class ExchangeCog(commands.Cog):
         try:
             ovr = player_data.get('rating', 0)
             card_name = player_data.get('cardName') or player_data.get('lastName', 'Unknown')
-            pos = player_data.get('position', 'ST')
-            n_id = player_data.get('nation', {}).get('id')
-            c_id = player_data.get('club', {}).get('id')
+            pos = extract_pos(player_data)
             
-            nation_str = nation_map.get(n_id, f"🌍 Nation ({n_id})")
-            club_str = club_map.get(c_id, f"🛡️ Club ({c_id})")
+            nation_str = get_nation_display(player_data)
+            club_str = get_club_display(player_data)
             
             is_walkout = (isinstance(ovr, int) and ovr >= 120)
             is_anim = is_walkout
-            image_binary, filename = await asyncio.to_thread(get_or_create_card_bytes, player_data, 3, is_anim)
+            
+            # Start image generation task in background during walkout animation
+            card_gen_task = asyncio.create_task(asyncio.to_thread(get_or_create_card_bytes, player_data, 3, is_anim))
+            
+            if is_walkout:
+                # Step 1: Flag / Nation
+                msg = await interaction.followup.send(
+                    f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n\n*(Walking onto the stage...)*"
+                )
+                await asyncio.sleep(1.2)
+                
+                # Step 2: Position
+                await interaction.followup.edit_message(
+                    msg.id,
+                    content=f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n# 🏃 **`{pos}`**\n\n*(Entering the tunnel spotlight...)*"
+                )
+                await asyncio.sleep(1.2)
+                
+                # Step 3: Club
+                await interaction.followup.edit_message(
+                    msg.id,
+                    content=f"🌟 **WALKOUT INITIATED!** 🌟\n\n# {nation_str.upper()}\n# 🏃 **`{pos}`**\n# {club_str.upper()}\n\n🔥 **PYROTECHNICS EXPLODING!**"
+                )
+                await asyncio.sleep(1.2)
+
+            image_binary, filename = await card_gen_task
             file = discord.File(fp=image_binary, filename=filename)
             
-            walkout_prefix = f"🔥 🌍 **{nation_str}** | 🏃 **`{pos}`** | 🛡️ **{club_str}**\n\n" if is_walkout else ""
+            walkout_prefix = f"🔥 **{nation_str}** | 🏃 **`{pos}`** | **{club_str}**\n\n" if is_walkout else ""
             desc = f"{walkout_prefix}🌟 **Exchange Walkout Reward:** **{card_name}** `({pos})` ({ovr} OVR)\n\n*Successfully swapped `{cost}` cards from your club!*"
             
             embed = discord.Embed(
@@ -135,7 +182,11 @@ class ExchangeCog(commands.Cog):
                 from cogs.season import add_season_xp
                 await add_season_xp(user_id, 100)
             except Exception: pass
-            await interaction.followup.send(embed=embed, file=file)
+
+            if is_walkout:
+                await interaction.followup.edit_message(msg.id, content=None, embed=embed, attachments=[file])
+            else:
+                await interaction.followup.send(embed=embed, file=file)
             
         except Exception as e:
             print(f"Error in exchange: {e}")
