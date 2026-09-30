@@ -738,18 +738,35 @@ def get_tactical_coordinates(formation_name: str, slots: list) -> dict:
                 saved = v
                 break
 
-    if saved and isinstance(saved, dict):
-        saved_upper = {str(k).upper(): v for k, v in saved.items()}
+    if saved:
         tactical = {}
-        for slot in slots:
-            slot_key = str(slot).upper()
-            if slot_key in saved_upper:
-                val = saved_upper[slot_key]
-                if isinstance(val, (list, tuple)) and len(val) >= 2:
-                    tactical[slot] = (float(val[0]), float(val[1]))
-                elif isinstance(val, dict) and "x" in val and "y" in val:
-                    tactical[slot] = (float(val["x"]), float(val["y"]))
-        if len(tactical) > 0:
+        if isinstance(saved, list):
+            for item in saved:
+                if isinstance(item, dict) and "id" in item:
+                    sid = str(item["id"]).upper()
+                    raw_x = float(item.get("x", 50))
+                    raw_y = float(item.get("y", 50))
+                    nx = raw_x / 100.0 if raw_x > 1.0 else raw_x
+                    ny = raw_y / 100.0 if raw_y > 1.0 else raw_y
+                    for slot in slots:
+                        if str(slot).upper() == sid:
+                            tactical[slot] = (nx, ny)
+        elif isinstance(saved, dict):
+            saved_upper = {str(k).upper(): v for k, v in saved.items()}
+            for slot in slots:
+                slot_key = str(slot).upper()
+                if slot_key in saved_upper:
+                    val = saved_upper[slot_key]
+                    if isinstance(val, (list, tuple)) and len(val) >= 2:
+                        raw_x, raw_y = float(val[0]), float(val[1])
+                    elif isinstance(val, dict) and "x" in val and "y" in val:
+                        raw_x, raw_y = float(val["x"]), float(val["y"])
+                    else:
+                        continue
+                    nx = raw_x / 100.0 if raw_x > 1.0 else raw_x
+                    ny = raw_y / 100.0 if raw_y > 1.0 else raw_y
+                    tactical[slot] = (nx, ny)
+        if len(tactical) >= 5:
             return tactical
     coords = {}
     lines = FORMATION_LINES_FALLBACK.get(norm)
