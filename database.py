@@ -254,6 +254,29 @@ async def get_inventory(user_id: int) -> list:
     rows = await p.fetch('SELECT * FROM inventory WHERE user_id = $1 ORDER BY ovr DESC', user_id)
     return [dict(r) for r in rows]
 
+async def get_inventory_autocomplete(user_id: int, search: str = "") -> list:
+    p = await get_db()
+    clean_search = (search or "").strip()
+    if clean_search:
+        rows = await p.fetch(
+            '''SELECT id, player_name, ovr, player_data 
+               FROM inventory 
+               WHERE user_id = $1 AND (player_name ILIKE $2 OR id::text LIKE $2) 
+               ORDER BY ovr DESC, id DESC 
+               LIMIT 25''',
+            user_id, f"%{clean_search}%"
+        )
+    else:
+        rows = await p.fetch(
+            '''SELECT id, player_name, ovr, player_data 
+               FROM inventory 
+               WHERE user_id = $1 
+               ORDER BY ovr DESC, id DESC 
+               LIMIT 25''',
+            user_id
+        )
+    return [dict(r) for r in rows]
+
 async def get_inventory_size(user_id: int) -> int:
     p = await get_db()
     val = await p.fetchval('SELECT COUNT(*) FROM inventory WHERE user_id = $1', user_id)

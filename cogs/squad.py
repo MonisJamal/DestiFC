@@ -71,13 +71,12 @@ async def squad_position_autocomplete(interaction: discord.Interaction, current:
 
 async def player_card_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     try:
-        inventory = await database.get_inventory(interaction.user.id)
-        if not inventory:
+        cards = await database.get_inventory_autocomplete(interaction.user.id, current)
+        if not cards:
             return []
             
-        inventory = sorted(inventory, key=lambda x: x.get('ovr', 0), reverse=True)
         choices = []
-        for p in inventory:
+        for p in cards:
             try:
                 pos = extract_pos(p)
             except Exception:
@@ -87,10 +86,9 @@ async def player_card_autocomplete(interaction: discord.Interaction, current: st
             pid = p.get('id', 0)
             
             label = f"{p_name} ({pos}) — {ovr} OVR [ID:{pid}]"
-            if not current or current.lower() in label.lower() or current.lower() in str(pid):
-                choices.append(app_commands.Choice(name=label[:100], value=str(pid)))
-                if len(choices) >= 25:
-                    break
+            choices.append(app_commands.Choice(name=label[:100], value=str(pid)))
+            if len(choices) >= 25:
+                break
         return choices
     except Exception as e:
         print("Error in player_card_autocomplete:", e)
@@ -98,19 +96,18 @@ async def player_card_autocomplete(interaction: discord.Interaction, current: st
 
 async def locked_card_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:
     try:
-        inventory = await database.get_inventory(interaction.user.id)
+        cards = await database.get_inventory_autocomplete(interaction.user.id, current)
         choices = []
-        for p in inventory:
+        for p in cards:
             if p.get('locked', 0):
                 try:
                     pos = extract_pos(p)
                 except Exception:
                     pos = "ST"
                 label = f"🔒 {p.get('player_name', 'Player')} ({pos}) — {p.get('ovr', 100)} OVR [ID:{p['id']}]"
-                if not current or current.lower() in label.lower() or current.lower() in str(p['id']):
-                    choices.append(app_commands.Choice(name=label[:100], value=p['id']))
-                    if len(choices) >= 25:
-                        break
+                choices.append(app_commands.Choice(name=label[:100], value=p['id']))
+                if len(choices) >= 25:
+                    break
         return choices
     except Exception:
         return []
