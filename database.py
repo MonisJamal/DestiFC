@@ -337,22 +337,48 @@ async def add_players_to_inventory_batch(user_id: int, player_list: list):
         player_id = str(player_data.get('id', 'unknown'))
         player_name = player_data.get('cardName') or player_data.get('lastName', 'Unknown')
         ovr = player_data.get('rating', 0)
+        pos = str(player_data.get('position') or player_data.get('pos') or player_data.get('cardPosition') or 'ST').strip().upper()
         data_str = json.dumps(player_data)
-        records.append((user_id, player_id, player_name, ovr, data_str))
+        records.append((user_id, player_id, player_name, ovr, pos, data_str))
     
     await p.executemany(
-        'INSERT INTO inventory (user_id, player_id, player_name, ovr, player_data) VALUES ($1, $2, $3, $4, $5)',
+        'INSERT INTO inventory (user_id, player_id, player_name, ovr, position, player_data) VALUES ($1, $2, $3, $4, $5, $6)',
         records
     )
 
-async def get_inventory(user_id: int) -> list:
+async def get_inventory_light(user_id: int) -> list:
+    """Ultra fast inventory query without transferring heavy player_data JSON."""
     now = time.time()
     if user_id in _USER_INVENTORY_CACHE:
         cached = _USER_INVENTORY_CACHE[user_id]
-        if now - cached['exp'] < 20:
+        if now - cached['exp'] < 300:
             return cached['data']
     p = await get_db()
-    rows = await p.fetch('SELECT * FROM inventory WHERE user_id = $1 ORDER BY ovr DESC', user_id)
+    rows = await p.fetch(
+        'SELECT id, user_id, player_id, player_name, ovr, position, locked FROM inventory WHERE user_id = $1 ORDER BY ovr DESC, id DESC',
+        user_id
+    )
+    inv = [dict(r) for r in rows]
+    _USER_INVENTORY_CACHE[user_id] = {"data": inv, "exp": now}
+    return inv
+
+async def get_inventory(user_id: int, full: bool = False) -> list:
+    now = time.time()
+    if not full and user_id in _USER_INVENTORY_CACHE:
+        cached = _USER_INVENTORY_CACHE[user_id]
+        if now - cached['exp'] < 300:
+            return cached['data']
+    p = await get_db()
+    if full:
+        rows = await p.fetch(
+            'SELECT id, user_id, player_id, player_name, ovr, position, locked, player_data FROM inventory WHERE user_id = $1 ORDER BY ovr DESC, id DESC',
+            user_id
+        )
+    else:
+        rows = await p.fetch(
+            'SELECT id, user_id, player_id, player_name, ovr, position, locked FROM inventory WHERE user_id = $1 ORDER BY ovr DESC, id DESC',
+            user_id
+        )
     inv = [dict(r) for r in rows]
     _USER_INVENTORY_CACHE[user_id] = {"data": inv, "exp": now}
     return inv
@@ -477,10 +503,12 @@ async def get_player_by_inv_id(user_id: int, inv_id: int):
     return None
 
 async def lock_player(user_id: int, inv_id: int):
+    _USER_INVENTORY_CACHE.pop(user_id, None)
     p = await get_db()
     await p.execute('UPDATE inventory SET locked = 1 WHERE id = $1 AND user_id = $2', int(inv_id), user_id)
 
 async def unlock_player(user_id: int, inv_id: int):
+    _USER_INVENTORY_CACHE.pop(user_id, None)
     p = await get_db()
     await p.execute('UPDATE inventory SET locked = 0 WHERE id = $1 AND user_id = $2', int(inv_id), user_id)
 

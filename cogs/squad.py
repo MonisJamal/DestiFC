@@ -170,7 +170,7 @@ class InventoryPagination(discord.ui.View):
             min_p, max_p = get_price_limits(p['ovr'])
             lock_icon = "🔒 " if p.get('locked', 0) else ""
             ovr_icon = "🔥" if p['ovr'] >= 120 else ("✨" if p['ovr'] >= 117 else "⚽")
-            pos = extract_pos(p)
+            pos = p.get('position') or extract_pos(p)
             lines.append(f"`ID:{p['id']}` {lock_icon}{ovr_icon} **{p['player_name']}** `({pos})` — `{p['ovr']} OVR` | 🪙 {format_price_short(min_p)}–{format_price_short(max_p)}")
             
         embed = discord.Embed(title="🎒 Player Club", description="\n".join(lines), color=discord.Color.green())
@@ -600,12 +600,16 @@ class SquadCog(commands.Cog):
         await interaction.response.defer(ephemeral=False)
         target = user or interaction.user
         
-        # Privacy Check
+        # Parallel fetch Privacy Check and Lightweight Inventory
         if target.id != interaction.user.id and not await interaction.client.is_owner(interaction.user):
-            if await database.is_profile_private(target.id):
+            is_priv, inventory = await asyncio.gather(
+                database.is_profile_private(target.id),
+                database.get_inventory_light(target.id)
+            )
+            if is_priv:
                 return await interaction.followup.send(f"🔒 **{target.display_name}** has set their club/inventory to **Private**.", ephemeral=True)
-                
-        inventory = await database.get_inventory(target.id)
+        else:
+            inventory = await database.get_inventory_light(target.id)
         
         if not inventory:
             msg = "Your club is empty! Open some packs with `/draft`." if target == interaction.user else f"**{target.display_name}**'s club is empty."
@@ -623,7 +627,7 @@ class SquadCog(commands.Cog):
             min_p, max_p = get_price_limits(p['ovr'])
             lock_icon = "🔒 " if p.get('locked', 0) else ""
             ovr_icon = "🔥" if p['ovr'] >= 120 else ("✨" if p['ovr'] >= 117 else "⚽")
-            pos = extract_pos(p)
+            pos = p.get('position') or extract_pos(p)
             lines.append(f"`ID:{p['id']}` {lock_icon}{ovr_icon} **{p['player_name']}** `({pos})` — `{p['ovr']} OVR` | 🪙 {format_price_short(min_p)}–{format_price_short(max_p)}")
             
         embed = discord.Embed(title=f"🎒 {target.display_name}'s Club", description="\n".join(lines), color=discord.Color.green())
