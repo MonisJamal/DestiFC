@@ -445,7 +445,7 @@ class SquadCog(commands.Cog):
         new_name = player_row['player_name']
         new_ovr = player_row['ovr']
         
-        # Check position compatibility against official RenderZ positions
+        # Check position compatibility against official card positions
         is_eligible, is_primary = check_player_position_eligibility(player_row, target_pos)
         main_p, alt_ps = get_player_official_positions(player_row)
         clean_target = ''.join([c for c in str(target_pos) if not c.isdigit()]).strip().upper()
@@ -456,7 +456,7 @@ class SquadCog(commands.Cog):
                 f"❌ **Position Incompatible!**\n**{new_name}** cannot play at **{target_pos}** (`{clean_target}`).\n"
                 f"• **Main Position:** `{main_p}`\n"
                 f"• **Official Alt Positions:** `{alt_str}`\n\n"
-                f"*(Cards can only play at their main position or official alternate positions from RenderZ)*",
+                f"*(Cards can only play at their main position or official alternate positions for this card)*",
                 ephemeral=True
             )
 
@@ -512,7 +512,7 @@ class SquadCog(commands.Cog):
             await interaction.followup.send("❌ Your club is empty! Open some packs with `/draft` first.", ephemeral=True)
             return
         
-        # Parse each inventory card's official RenderZ main and alternate positions
+        # Parse each inventory card's official Official Database main and alternate positions
         enriched = []
         for p in inventory:
             main_pos, alts = get_player_official_positions(p)
@@ -590,7 +590,7 @@ class SquadCog(commands.Cog):
             description="\n".join(lines),
             color=discord.Color.green()
         )
-        embed.set_footer(text=f"Team OVR: {team_ovr} | {filled}/11 Positions Filled • Official RenderZ positions applied")
+        embed.set_footer(text=f"Team OVR: {team_ovr} | {filled}/11 Positions Filled • Official card positions applied")
         
         await interaction.followup.send(embed=embed)
 

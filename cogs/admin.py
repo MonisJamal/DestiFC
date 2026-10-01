@@ -122,7 +122,7 @@ class AdminCog(commands.Cog):
             await interaction.followup.send(f"✅ Granted {name} to {target.mention}, but couldn't generate preview image: {e}")
 
 
-    @admin_group.command(name="give_official", description="Search for an official FIFARenderZ card and give it to a user")
+    @admin_group.command(name="give_official", description="Search for an official Official Database card and give it to a user")
     async def give_official(self, interaction: discord.Interaction, target: discord.Member, search_query: str):
         await interaction.response.defer()
         
@@ -166,7 +166,7 @@ class AdminCog(commands.Cog):
                 best = min(matches, key=lambda p: abs(p.get("rating", 0) - target_ovr))
 
             if not best:
-                failed.append(f"\u274c {name} ({target_ovr}) \u2014 not found on RenderZ")
+                failed.append(f"\u274c {name} ({target_ovr}) \u2014 not found in official database")
                 continue
 
             for _ in range(qty):
@@ -205,7 +205,7 @@ class AdminCog(commands.Cog):
             best = min(matches, key=lambda p: abs(p.get("rating", 0) - ovr))
 
         if not best:
-            return await interaction.followup.send(f"❌ Could not find **{player_name}** on RenderZ.", ephemeral=True)
+            return await interaction.followup.send(f"❌ Could not find **{player_name}** in official database.", ephemeral=True)
 
         for _ in range(quantity):
             await database.add_player_to_inventory(user.id, best)

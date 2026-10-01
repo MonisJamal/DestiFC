@@ -381,13 +381,31 @@ def extract_pos(item) -> str:
 
     return "ST"
 
-# ================= Official RenderZ Database Position Compatibility =================
-# Players play with 100% full OVR at their primary position or any official RenderZ potentialPositions
+# ================= Official Card Database Position Compatibility =================
+# Players play with 100% full OVR at their primary position, official potentialPositions, or natural alternate positions
+
+NATURAL_ALT_POSITIONS = {
+    "CF": ["ST", "CAM"],
+    "ST": ["CF"],
+    "LW": ["LM", "LF", "RW"],
+    "RW": ["RM", "RF", "LW"],
+    "LM": ["LW", "RM"],
+    "RM": ["RW", "LM"],
+    "CAM": ["CM", "CF", "LM", "RM"],
+    "CM": ["CAM", "CDM"],
+    "CDM": ["CM", "CB"],
+    "CB": ["CDM", "LB", "RB"],
+    "LB": ["LWB", "LM", "RB"],
+    "RB": ["RWB", "RM", "LB"],
+    "LWB": ["LB", "LM"],
+    "RWB": ["RB", "RM"],
+    "GK": []
+}
 
 def get_player_official_positions(player_item) -> tuple[str, list[str]]:
     """
     Extracts the official main position and alternate positions (potentialPositions)
-    directly from the player's RenderZ card data.
+    directly from the player's card data.
     """
     if not player_item:
         return "ST", []
@@ -399,11 +417,15 @@ def get_player_official_positions(player_item) -> tuple[str, list[str]]:
             try: raw_pd = json.loads(raw_pd)
             except Exception: raw_pd = {}
         if isinstance(raw_pd, dict):
-            player_item = {**raw_pd, **player_item}
+            clean_item = {**raw_pd}
+            for k, v in player_item.items():
+                if k != 'player_data' and v is not None:
+                    clean_item[k] = v
+            player_item = clean_item
 
     main_pos = extract_pos(player_item)
     
-    # Extract potentialPositions from RenderZ
+    # 1. Extract potentialPositions from official card data
     alt_raw = (
         player_item.get('potentialPositions') 
         or player_item.get('potential_positions') 
@@ -423,13 +445,18 @@ def get_player_official_positions(player_item) -> tuple[str, list[str]]:
                 if clean_ap and clean_ap != main_pos and clean_ap not in clean_alts:
                     clean_alts.append(clean_ap)
                     
+    # 2. Append Natural Alternate Positions if not already included
+    for nat_ap in NATURAL_ALT_POSITIONS.get(main_pos, []):
+        if nat_ap != main_pos and nat_ap not in clean_alts:
+            clean_alts.append(nat_ap)
+            
     return main_pos, clean_alts
 
 def check_player_position_eligibility(player_item, slot_pos: str) -> tuple[bool, bool]:
     """
-    Returns (is_eligible, is_primary) based strictly on official RenderZ database positions.
+    Returns (is_eligible, is_primary) based on official database positions.
     - is_primary: True if slot is player's main natural position.
-    - is_eligible: True if slot is player's main position OR in their official potentialPositions.
+    - is_eligible: True if slot is player's main position OR in their official potentialPositions / natural alts.
     """
     if not slot_pos:
         return True, True
@@ -444,7 +471,7 @@ def check_player_position_eligibility(player_item, slot_pos: str) -> tuple[bool,
 
 def is_position_compatible(player_item_or_pos, slot_pos: str) -> bool:
     """
-    Returns True if slot_pos is the player's primary position or an official RenderZ alternate position.
+    Returns True if slot_pos is the player's primary position or an alternate position.
     """
     if not player_item_or_pos or not slot_pos:
         return True
