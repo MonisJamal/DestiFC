@@ -242,7 +242,16 @@ class DraftCog(commands.Cog):
         d = drafts.get(pack) or drafts.get(str(pack))
         
         # Convert UTC string time to Discord Local Time format
-        dt = datetime.datetime.strptime(d['expires_at'], "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+        exp_raw = d.get('expires_at', '')
+        try:
+            if isinstance(exp_raw, datetime.datetime):
+                dt = exp_raw.replace(tzinfo=datetime.timezone.utc) if exp_raw.tzinfo is None else exp_raw
+            elif exp_raw:
+                dt = datetime.datetime.strptime(str(exp_raw), "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+            else:
+                dt = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)
+        except Exception:
+            dt = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)
         unix = int(dt.timestamp())
         expires_display = f"<t:{unix}:f> (<t:{unix}:R>)"
         

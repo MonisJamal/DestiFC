@@ -18,6 +18,35 @@ _LAYOUTS_CACHE_EXP = 0
 _USER_INVENTORY_CACHE = {}  # {user_id: {"data": list, "exp": timestamp}}
 _USER_SQUAD_CACHE = {}      # {user_id: {"data": dict, "exp": timestamp}}
 _USER_CACHE = {}            # {user_id: {"data": dict, "exp": timestamp}}
+
+def flush_all_caches():
+    """Flush every in-memory cache. Call after SIGNAL_RELOAD_COGS or panel auto-fix."""
+    global _DRAFTS_CACHE, _DRAFTS_CACHE_EXP, _LAYOUTS_CACHE, _LAYOUTS_CACHE_EXP
+    global _BOT_CONFIG_CACHE, _BOT_CONFIG_CACHE_EXP, _GAMEPLAY_CACHE, _GAMEPLAY_CACHE_EXP
+    global _CUSTOM_DRAFT_CARDS_CACHE
+    _DRAFTS_CACHE = None
+    _DRAFTS_CACHE_EXP = 0
+    _LAYOUTS_CACHE = None
+    _LAYOUTS_CACHE_EXP = 0
+    _USER_INVENTORY_CACHE.clear()
+    _USER_SQUAD_CACHE.clear()
+    _USER_CACHE.clear()
+    try:
+        _BOT_CONFIG_CACHE = None  # noqa: F841 – reset handled via global
+        _BOT_CONFIG_CACHE_EXP = 0
+    except Exception:
+        pass
+    try:
+        _GAMEPLAY_CACHE = None
+        _GAMEPLAY_CACHE_EXP = 0
+    except Exception:
+        pass
+    try:
+        _CUSTOM_DRAFT_CARDS_CACHE = None
+    except Exception:
+        pass
+    print("[Database] All in-memory caches flushed!")
+
 import ssl
 
 async def get_db():
@@ -155,11 +184,6 @@ async def update_gems(user_id: int, amount: int):
     )
 
 async def add_fans(user_id: int, amount: int):
-    p = await get_db()
-    await p.execute(
-        'UPDATE users SET fans = GREATEST(0, COALESCE(fans, 0) + $1) WHERE user_id = $2',
-        int(amount), user_id
-    )
     p = await get_db()
     await p.execute(
         'UPDATE users SET fans = GREATEST(0, COALESCE(fans, 0) + $1) WHERE user_id = $2',
@@ -457,7 +481,7 @@ async def set_active_drafts(drafts_dict):
         pool_c_json = json.dumps(data.get("pool_c", []))
         await p.execute(
             "INSERT INTO global_drafts (draft_number, draft_data, pool_a, pool_b, pool_c, expires_at) VALUES ($1, $2, $3, $4, $5, $6)",
-            int(d_num), pool_a_json, pool_a_json, pool_b_json, pool_c_json, exp
+            int(d_num), json.dumps(data), pool_a_json, pool_b_json, pool_c_json, exp
         )
 
 async def get_store_player_shop():
@@ -543,7 +567,7 @@ async def update_single_draft(draft_number: int, draft_data: dict):
             pool_b = $4,
             pool_c = $5,
             expires_at = $6
-    ''', int(draft_number), pool_a_json, pool_a_json, pool_b_json, pool_c_json, exp)
+    ''', int(draft_number), json.dumps(draft_data), pool_a_json, pool_b_json, pool_c_json, exp)
     
     if _DRAFTS_CACHE is not None:
         _DRAFTS_CACHE[int(draft_number)] = draft_data

@@ -32,6 +32,43 @@ class DestiFC(commands.Bot):
             if filename.endswith('.py') and not filename.startswith('__'):
                 await self.load_extension(f'cogs.{filename[:-3]}')
 
+        # Lightweight global interaction check — only maintenance mode and per-command disable.
+        # No admin/owner API calls here (those caused the 3s timeout for non-admins).
+        @self.tree.interaction_check
+        async def global_maintenance_check(interaction: discord.Interaction) -> bool:
+            try:
+                bot_cfg = await database.get_bot_config()
+                if bot_cfg.get('maintenance_mode', False):
+                    msg = bot_cfg.get(
+                        'maintenance_message',
+                        "🛠️ DestiFC is currently undergoing scheduled maintenance. Commands are temporarily paused!"
+                    )
+                    # Admins bypass maintenance
+                    try:
+                        if await is_team_admin_or_owner(self, interaction.user):
+                            return True
+                    except Exception:
+                        pass
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(f"🔒 **Maintenance Mode Active**\n{msg}", ephemeral=True)
+                    return False
+
+                cmd = interaction.command
+                cmd_name = (cmd.name if cmd else "").lower()
+                root_name = (cmd.root_parent.name if cmd and cmd.root_parent else cmd_name).lower()
+                commands_enabled = bot_cfg.get('commands_enabled', {})
+                if (cmd_name in commands_enabled and not commands_enabled[cmd_name]) or \
+                   (root_name in commands_enabled and not commands_enabled[root_name]):
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(
+                            f"⚠️ The `/{cmd_name}` command is temporarily disabled by administrators. Please check back shortly!",
+                            ephemeral=True
+                        )
+                    return False
+            except Exception as e:
+                print(f"[Maintenance Check Error] {e}")
+            return True
+
         # Global command error handler
         @self.tree.error
         async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -103,7 +140,7 @@ class DestiFC(commands.Bot):
                 """
                 SELECT id, job_type, payload
                 FROM portal_jobs
-                WHERE status = 'pending' AND job_type IN ('SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS')
+                WHERE status = 'pending' AND job_type IN ('SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES')
                 ORDER BY created_at ASC
                 LIMIT 1
                 """
@@ -118,14 +155,15 @@ class DestiFC(commands.Bot):
                 )
 
                 if job_type == 'SIGNAL_RELOAD_COGS':
-                    print("[Remote Control] Reloading all bot cogs...")
+                    print("[Remote Control] Flushing caches and reloading all bot cogs...")
+                    database.flush_all_caches()
                     for filename in os.listdir('./cogs'):
                         if filename.endswith('.py') and not filename.startswith('__'):
                             try:
                                 await self.reload_extension(f'cogs.{filename[:-3]}')
                             except Exception as re_err:
                                 await self.load_extension(f'cogs.{filename[:-3]}')
-                    print("[Remote Control] All cogs reloaded!")
+                    print("[Remote Control] All caches flushed and cogs reloaded!")
 
                 elif job_type == 'SIGNAL_RESTART':
                     print("[Remote Control] Received restart signal from Admin Panel. Gracefully rebooting...")
@@ -138,6 +176,11 @@ class DestiFC(commands.Bot):
                     await self.close()
                     import sys
                     sys.exit(0)
+
+                elif job_type == 'SIGNAL_FLUSH_CACHES':
+                    print("[Remote Control] Flushing all in-memory caches...")
+                    database.flush_all_caches()
+                    print("[Remote Control] All caches flushed!")
         except Exception as e:
             print(f"[Remote Signal Error] {e}")
 
