@@ -142,7 +142,7 @@ class DestiFC(commands.Bot):
                     print("[Remote Control] Received restart signal from Admin Panel. Gracefully rebooting...")
                     await self.close()
                     import sys
-                    os.execv(sys.executable, ['python3'] + sys.argv)
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
 
                 elif job_type == 'SIGNAL_SHUTDOWN':
                     print("[Remote Control] Received shutdown signal from Admin Panel. Closing bot...")
