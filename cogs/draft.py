@@ -86,7 +86,9 @@ class DraftCog(commands.Cog):
                 
                 new_drafts = {}
                 # 2-Hour draft rotation for active pool refreshes
-                expires = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
+                cfg = await database.get_bot_config()
+                rot_hours = float(cfg.get('draft_rotation_hours', 2.0))
+                expires = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=rot_hours)).strftime("%Y-%m-%d %H:%M:%S")
                 
                 used_featured_ids = set()
                 for i in range(1, 4):

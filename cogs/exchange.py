@@ -65,7 +65,9 @@ class ExchangeCog(commands.Cog):
                 sampled_mid = random.sample(pool_mid, min(5, len(pool_mid)))
                 sampled_low = random.sample(pool_low, min(5, len(pool_low)))
 
-                expires = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
+                cfg = await database.get_bot_config()
+                rot_hours = float(cfg.get('exchange_rotation_hours', 2.0))
+                expires = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=rot_hours)).strftime("%Y-%m-%d %H:%M:%S")
 
                 new_exchange_pool = {
                     "ovr_top": ovr_top,

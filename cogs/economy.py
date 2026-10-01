@@ -739,7 +739,7 @@ class EconomyCog(commands.Cog):
     @app_commands.command(name="bal", description="Check your or another user's balance (shortcut)")
     @app_commands.describe(user="User whose balance you want to check (leave empty for yours)")
     async def bal(self, interaction: discord.Interaction, user: discord.Member = None):
-        await self.balance(interaction, user)
+        await self.balance.callback(self, interaction, user)
 
     @app_commands.command(name="privacy", description="Toggle whether other users can view your balance and inventory")
     async def privacy(self, interaction: discord.Interaction):

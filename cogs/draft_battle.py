@@ -790,12 +790,12 @@ class DraftBattleCog(commands.Cog):
 
     @draftbattle_group.command(name="solo", description="Play a Solo Draft Battle against the DestiFC AI")
     async def solo_draft(self, interaction: discord.Interaction):
-        await self.draft_challenge(interaction, user=None, wager=0)
+        await self.draft_challenge.callback(self, interaction, user=None, wager=0)
 
     @draftbattle_group.command(name="challenge", description="Challenge another user to a live 1v1 Draft Battle with 110+ OVR cards")
     @app_commands.describe(user="Opponent to challenge", wager="Optional coin wager (winner takes all)")
     async def challenge(self, interaction: discord.Interaction, user: discord.Member, wager: int = 0):
-        await self.draft_challenge(interaction, user=user, wager=wager)
+        await self.draft_challenge.callback(self, interaction, user=user, wager=wager)
 
     @draftbattle_group.command(name="leaderboard", description="View the Top 10 Draft Battle Champions ranked by ELO Rating")
     async def leaderboard(self, interaction: discord.Interaction):

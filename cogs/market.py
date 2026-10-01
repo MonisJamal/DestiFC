@@ -455,7 +455,7 @@ class MarketCog(commands.Cog):
 
     @market_group.command(name="sell_menu", description="Open interactive dropdown menu to list cards on the market")
     async def sell_menu(self, interaction: discord.Interaction):
-        await self.sell(interaction, inventory_id=None, price=None)
+        await self.sell.callback(self, interaction, inventory_id=None, price=None)
 
     @market_group.command(name="search", description="Search the global transfer market")
     @app_commands.describe(

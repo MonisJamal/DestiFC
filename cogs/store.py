@@ -187,7 +187,9 @@ class StoreCog(commands.Cog):
                     if len(chosen) == 3:
                         break
 
-            expires_at = (now + datetime.timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
+            cfg = await database.get_bot_config()
+            rot_hours = float(cfg.get('store_rotation_hours', 3.0))
+            expires_at = (now + datetime.timedelta(hours=rot_hours)).strftime("%Y-%m-%d %H:%M:%S")
             new_offers = []
             for i, p in enumerate(chosen, start=1):
                 price = calculate_player_store_price(p)

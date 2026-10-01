@@ -408,21 +408,21 @@ class AdminCog(commands.Cog):
     async def top_give_card(self, interaction: discord.Interaction, user: discord.Member, player_name: str, ovr: int, quantity: int = 1):
         if not await is_team_admin_or_owner(self.bot, interaction.user):
             return await interaction.response.send_message("❌ **Access Denied:** Administrator command only.", ephemeral=True)
-        await self.give(interaction, user, player_name, ovr, quantity)
+        await self.give.callback(self, interaction, user, player_name, ovr, quantity)
 
     @app_commands.command(name="give_coins", description="Admin: Grant coins to a user")
     @app_commands.describe(user="Target user", amount="Amount of coins to give")
     async def top_give_coins(self, interaction: discord.Interaction, user: discord.Member, amount: int):
         if not await is_team_admin_or_owner(self.bot, interaction.user):
             return await interaction.response.send_message("❌ **Access Denied:** Administrator command only.", ephemeral=True)
-        await self.give_coins(interaction, user, amount)
+        await self.give_coins.callback(self, interaction, user, amount)
 
     @app_commands.command(name="give_vouchers", description="Admin: Grant draft vouchers to a user")
     @app_commands.describe(user="Target user", amount="Amount of vouchers to give")
     async def top_give_vouchers(self, interaction: discord.Interaction, user: discord.Member, amount: int):
         if not await is_team_admin_or_owner(self.bot, interaction.user):
             return await interaction.response.send_message("❌ **Access Denied:** Administrator command only.", ephemeral=True)
-        await self.give_vouchers(interaction, user, amount)
+        await self.give_vouchers.callback(self, interaction, user, amount)
 
 async def setup(bot):
     await bot.add_cog(AdminCog(bot))

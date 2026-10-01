@@ -801,7 +801,7 @@ class SquadCog(commands.Cog):
     @app_commands.command(name="stats", description="View club performance records (Top Scorer, Assists, Ratings, Clean Sheets)")
     @app_commands.describe(user="User whose club stats you want to view (leave empty for yours)")
     async def stats_alias(self, interaction: discord.Interaction, user: discord.Member = None):
-        await self.club_stats(interaction, user)
+        await self.club_stats.callback(self, interaction, user)
 
     @app_commands.command(name="player_stats", description="View lifetime match statistics of a specific player in your squad or club")
     @app_commands.describe(player="Select or search player name", user="Target user (leave empty for yourself)")

@@ -402,7 +402,7 @@ class TradeCog(commands.Cog):
 
         # If no specific IDs or currency passed, route to interactive dropdown menu
         if not give_card_ids and give_coins == 0 and give_vouchers == 0 and not request_card_ids and request_coins == 0 and request_vouchers == 0:
-            return await self.trade_menu(interaction, user)
+            return await self.trade_menu.callback(self, interaction, user)
 
         await interaction.response.defer()
 
@@ -507,7 +507,7 @@ class TradeCog(commands.Cog):
     @app_commands.command(name="trade_menu", description="Open interactive trade builder menu with another user")
     @app_commands.describe(user="User you want to trade with")
     async def top_trade_menu(self, interaction: discord.Interaction, user: discord.Member):
-        await self.trade_menu(interaction, user)
+        await self.trade_menu.callback(self, interaction, user)
 
 
 async def setup(bot):
