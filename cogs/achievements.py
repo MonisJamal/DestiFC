@@ -94,8 +94,8 @@ async def check_and_award(user_id, channel=None):
         return newly_awarded
 
     stats = await get_user_stats(user_id)
-    drafts = user.get('drafts_opened', 0)
-    coins = user.get('coins', 0)
+    drafts = int(user.get('drafts_opened') or 0)
+    coins = int(user.get('coins') or 0)
 
     # Draft-based
     if drafts >= 1:
@@ -109,7 +109,7 @@ async def check_and_award(user_id, channel=None):
         if r: newly_awarded.append(r)
 
     # Inventory size
-    inv_size = await database.get_inventory_size(user_id)
+    inv_size = int(await database.get_inventory_size(user_id) or 0)
     if inv_size >= 100:
         r = await try_award(user_id, "diamond")
         if r: newly_awarded.append(r)
@@ -119,26 +119,33 @@ async def check_and_award(user_id, channel=None):
         r = await try_award(user_id, "millionaire")
         if r: newly_awarded.append(r)
 
-    # Stats-based
-    if stats.get('walkouts_pulled', 0) >= 10:
+    # Stats-based (with full null-safety)
+    walkouts = int(stats.get('walkouts_pulled') or 0)
+    matches_won = int(stats.get('matches_won') or 0)
+    exchanges = int(stats.get('exchanges_done') or 0)
+    sbcs = int(stats.get('sbcs_done') or 0)
+    buys = int(stats.get('market_buys') or 0)
+    streak = int(stats.get('daily_streak') or 0)
+
+    if walkouts >= 10:
         r = await try_award(user_id, "walkout_king")
         if r: newly_awarded.append(r)
-    if stats.get('matches_won', 0) >= 10:
+    if matches_won >= 10:
         r = await try_award(user_id, "warrior")
         if r: newly_awarded.append(r)
-    if stats.get('matches_won', 0) >= 50:
+    if matches_won >= 50:
         r = await try_award(user_id, "gladiator")
         if r: newly_awarded.append(r)
-    if stats.get('exchanges_done', 0) >= 10:
+    if exchanges >= 10:
         r = await try_award(user_id, "fodder_lord")
         if r: newly_awarded.append(r)
-    if stats.get('market_buys', 0) >= 10:
+    if buys >= 10:
         r = await try_award(user_id, "market_shark")
         if r: newly_awarded.append(r)
-    if stats.get('sbcs_done', 0) >= 20:
+    if sbcs >= 20:
         r = await try_award(user_id, "sbc_master")
         if r: newly_awarded.append(r)
-    if stats.get('daily_streak', 0) >= 7:
+    if streak >= 7:
         r = await try_award(user_id, "loyal_fan")
         if r: newly_awarded.append(r)
 
