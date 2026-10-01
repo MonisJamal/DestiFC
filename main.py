@@ -3,10 +3,10 @@
 import threading
 
 import os
-import discord
-from discord.ext import commands, tasks
-import os
 import asyncio
+import discord
+from discord import app_commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 import database
 from auth import is_team_admin_or_owner
