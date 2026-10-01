@@ -206,21 +206,21 @@ class SellPriceActionView(discord.ui.View):
 
 
 class MarketSellSelect(discord.ui.Select):
-    def __init__(self, user_id: int, eligible_cards: list):
+    def __init__(self, user_id: int, eligible_cards: list, current_page: int, max_pages: int):
         self.user_id = user_id
         self.cards_map = {str(c['id']): c for c in eligible_cards}
         
         options = []
-        for c in eligible_cards[:25]:
+        for c in eligible_cards:
             pos = extract_pos(c)
             min_p, max_p = get_price_limits(c['ovr'])
             options.append(discord.SelectOption(
-                label=f"{c['player_name']} ({pos}) — {c['ovr']} OVR",
+                label=f"{c['player_name'][:25]} ({pos}) — {c['ovr']} OVR",
                 value=str(c['id']),
                 description=f"Range: {format_price_short(min_p)} – {format_price_short(max_p)} Coins | ID: {c['id']}",
                 emoji="🔥" if c['ovr'] >= 120 else "✨" if c['ovr'] >= 117 else "⚽"
             ))
-        super().__init__(placeholder="Select a player card from your club to list...", min_values=1, max_values=1, options=options)
+        super().__init__(placeholder=f"Select a card to list (Page {current_page}/{max_pages})...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
@@ -244,9 +244,44 @@ class MarketSellSelect(discord.ui.Select):
 
 
 class MarketSellSelectView(discord.ui.View):
-    def __init__(self, user_id: int, eligible_cards: list):
+    def __init__(self, user_id: int, eligible_cards: list, current_page: int = 1):
         super().__init__(timeout=90)
-        self.add_item(MarketSellSelect(user_id, eligible_cards))
+        self.user_id = user_id
+        self.eligible_cards = eligible_cards
+        self.current_page = current_page
+        self.items_per_page = 25
+        self.max_pages = max(1, (len(eligible_cards) + self.items_per_page - 1) // self.items_per_page)
+        self.setup_components()
+
+    def setup_components(self):
+        self.clear_items()
+        start = (self.current_page - 1) * self.items_per_page
+        page_cards = self.eligible_cards[start : start + self.items_per_page]
+        
+        if page_cards:
+            self.add_item(MarketSellSelect(self.user_id, page_cards, self.current_page, self.max_pages))
+
+        # Pagination buttons
+        prev_btn = discord.ui.Button(label="◀️ Previous", style=discord.ButtonStyle.secondary, disabled=(self.current_page <= 1), row=1)
+        next_btn = discord.ui.Button(label="Next ▶️", style=discord.ButtonStyle.secondary, disabled=(self.current_page >= self.max_pages), row=1)
+        prev_btn.callback = self.prev_page
+        next_btn.callback = self.next_page
+        self.add_item(prev_btn)
+        self.add_item(next_btn)
+
+    async def prev_page(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("❌ This is not your menu.", ephemeral=True)
+        self.current_page -= 1
+        self.setup_components()
+        await interaction.response.edit_message(view=self)
+
+    async def next_page(self, interaction: discord.Interaction):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message("❌ This is not your menu.", ephemeral=True)
+        self.current_page += 1
+        self.setup_components()
+        await interaction.response.edit_message(view=self)
 
 
 # ================== Interactive QuickSell Dropdown View ==================
