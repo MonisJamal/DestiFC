@@ -22,17 +22,22 @@ class DraftCog(commands.Cog):
 
     @tasks.loop(minutes=1)
     async def draft_rotator(self):
+        await self.perform_draft_rotation(force=False)
+
+    async def perform_draft_rotation(self, force: bool = False):
         try:
             drafts = await database.get_active_drafts()
-            now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            now_dt = datetime.datetime.now(datetime.timezone.utc)
+            now_str = now_dt.strftime("%Y-%m-%d %H:%M:%S")
             
-            needs_refresh = False
+            needs_refresh = force
             if not drafts:
                 needs_refresh = True
-            else:
+            elif not force:
                 # Check if expired
                 for d in drafts.values():
-                    if not d.get("expires_at") or now > d["expires_at"]:
+                    exp = d.get("expires_at")
+                    if not exp or now_str > exp:
                         needs_refresh = True
                         break
                         
@@ -44,17 +49,17 @@ class DraftCog(commands.Cog):
                 print(f"[Draft] Rotating and generating new 2-Hour Draft Pools (Max OVR: {max_ovr})...")
                 
                 # Dynamic Pool Ratings:
-                # Pool A = Top 3 OVRs: [max_ovr, max_ovr - 1, max_ovr - 2] (e.g. 124, 123, 122)
-                # Pool B = 3 OVRs before Pool A: [max_ovr - 5, max_ovr - 3] (e.g. 119 to 121)
-                # Pool C = 5 OVRs before Pool B: [max_ovr - 10, max_ovr - 6] (e.g. 114 to 118)
+                # Pool A = Top 3 OVRs: [max_ovr, max_ovr - 1, max_ovr - 2] (e.g. 122, 121, 120)
+                # Pool B = 3 OVRs before Pool A: [max_ovr - 5, max_ovr - 3] (e.g. 117 to 119)
+                # Pool C = Broad base rating pool: [105 to max_ovr - 6] (e.g. 105 to 116)
                 ovr_a1, ovr_a2, ovr_a3 = max_ovr, max_ovr - 1, max_ovr - 2
                 min_b, max_b = max_ovr - 5, max_ovr - 3
-                min_c, max_c = max_ovr - 10, max_ovr - 6
+                min_c, max_c = max(100, max_ovr - 17), max_ovr - 6
 
                 # Fetch top 3 rating tiers for Pool A
-                pool_a1 = await database.get_official_cards_by_rating(ovr_a1, ovr_a1, 100)
-                pool_a2 = await database.get_official_cards_by_rating(ovr_a2, ovr_a2, 100)
-                pool_a3 = await database.get_official_cards_by_rating(ovr_a3, ovr_a3, 100)
+                pool_a1 = await database.get_official_cards_by_rating(ovr_a1, ovr_a1, 150)
+                pool_a2 = await database.get_official_cards_by_rating(ovr_a2, ovr_a2, 150)
+                pool_a3 = await database.get_official_cards_by_rating(ovr_a3, ovr_a3, 150)
 
                 # Fallback to renderz_api if DB cache is warming up
                 if not pool_a1: pool_a1 = await asyncio.to_thread(fetch_all_players_by_rating, ovr_a1, True)
@@ -75,8 +80,8 @@ class DraftCog(commands.Cog):
                 ev_a2, ic_a2 = split_promo_icons(pool_a2)
                 ev_a3, ic_a3 = split_promo_icons(pool_a3)
                 
-                pool_b = await database.get_official_cards_by_rating(min_b, max_b, 100)
-                pool_c = await database.get_official_cards_by_rating(min_c, max_c, 100)
+                pool_b = await database.get_official_cards_by_rating(min_b, max_b, 200)
+                pool_c = await database.get_official_cards_by_rating(min_c, max_c, 500)
                 
                 if not pool_a1 and not pool_a2 and not pool_a3:
                     print(f"[Draft] Not enough {ovr_a3}+ players fetched, skipping rotation.")
@@ -85,10 +90,10 @@ class DraftCog(commands.Cog):
                 if not pool_c: pool_c = pool_b   # fallback
                 
                 new_drafts = {}
-                # 2-Hour draft rotation for active pool refreshes
+                # Strictly 2-Hour draft rotation for active pool refreshes
                 cfg = await database.get_bot_config()
-                rot_hours = float(cfg.get('draft_rotation_hours', 2.0))
-                expires = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=rot_hours)).strftime("%Y-%m-%d %H:%M:%S")
+                rot_hours = float(cfg.get('draft_rotation_hours', 2.0) or 2.0)
+                expires = (now_dt + datetime.timedelta(hours=rot_hours)).strftime("%Y-%m-%d %H:%M:%S")
                 
                 used_featured_ids = set()
                 for i in range(1, 4):
@@ -110,8 +115,8 @@ class DraftCog(commands.Cog):
                     ]
                     new_drafts[i] = {
                         "pool_a": featured_a,
-                        "pool_b": random.sample(pool_b, min(10, len(pool_b))),
-                        "pool_c": random.sample(pool_c, min(30, len(pool_c))),
+                        "pool_b": pool_b,
+                        "pool_c": pool_c,
                         "expires_at": expires
                     }
                 await database.set_active_drafts(new_drafts)
@@ -155,11 +160,11 @@ class DraftCog(commands.Cog):
 
             ovr_a1, ovr_a2, ovr_a3 = max_ovr, max_ovr - 1, max_ovr - 2
             min_b, max_b = max_ovr - 5, max_ovr - 3
-            min_c, max_c = max_ovr - 10, max_ovr - 6
+            min_c, max_c = max(100, max_ovr - 17), max_ovr - 6
 
-            pool_a1 = await database.get_official_cards_by_rating(ovr_a1, ovr_a1, 100)
-            pool_a2 = await database.get_official_cards_by_rating(ovr_a2, ovr_a2, 100)
-            pool_a3 = await database.get_official_cards_by_rating(ovr_a3, ovr_a3, 100)
+            pool_a1 = await database.get_official_cards_by_rating(ovr_a1, ovr_a1, 150)
+            pool_a2 = await database.get_official_cards_by_rating(ovr_a2, ovr_a2, 150)
+            pool_a3 = await database.get_official_cards_by_rating(ovr_a3, ovr_a3, 150)
             if not pool_a1: pool_a1 = await asyncio.to_thread(fetch_all_players_by_rating, ovr_a1, True)
             if not pool_a2: pool_a2 = await asyncio.to_thread(fetch_all_players_by_rating, ovr_a2, True)
             if not pool_a3: pool_a3 = await asyncio.to_thread(fetch_all_players_by_rating, ovr_a3, True)
@@ -177,8 +182,8 @@ class DraftCog(commands.Cog):
             ev_a2, ic_a2 = split_promo_icons(pool_a2)
             ev_a3, ic_a3 = split_promo_icons(pool_a3)
             
-            pool_b = await database.get_official_cards_by_rating(min_b, max_b, 100)
-            pool_c = await database.get_official_cards_by_rating(min_c, max_c, 100)
+            pool_b = await database.get_official_cards_by_rating(min_b, max_b, 200)
+            pool_c = await database.get_official_cards_by_rating(min_c, max_c, 500)
             if not pool_b: pool_b = pool_a3
             if not pool_c: pool_c = pool_b
 
@@ -208,8 +213,8 @@ class DraftCog(commands.Cog):
 
             refreshed_draft = {
                 "pool_a": featured_a,
-                "pool_b": random.sample(pool_b, min(10, len(pool_b))),
-                "pool_c": random.sample(pool_c, min(30, len(pool_c))),
+                "pool_b": pool_b,
+                "pool_c": pool_c,
                 "expires_at": current_expiry  # Kept in exact sync with other drafts!
             }
 
@@ -249,7 +254,10 @@ class DraftCog(commands.Cog):
             pos = p.get('position', 'ST')
             featured_lines.append(f"🌟 **{p.get('cardName') or p.get('lastName')}** `({pos})` ({p.get('rating')} OVR) — *{prog}*")
         
-        pool_b_names = [f"{p.get('cardName') or p.get('lastName')} `({p.get('position', '??')})` ({p.get('rating')})" for p in d.get('pool_b', [])]
+        sample_b = d.get('pool_b', [])[:8]
+        pool_b_names = [f"{p.get('cardName') or p.get('lastName')} `({p.get('position', '??')})` ({p.get('rating')})" for p in sample_b]
+        if len(d.get('pool_b', [])) > 8:
+            pool_b_names.append(f"*+{len(d.get('pool_b', [])) - 8} more elits*")
         
         pa_ovrs = [p.get('rating') for p in d.get('pool_a', []) if isinstance(p.get('rating'), int)]
         pb_ovrs = [p.get('rating') for p in d.get('pool_b', []) if isinstance(p.get('rating'), int)]
@@ -260,8 +268,8 @@ class DraftCog(commands.Cog):
         pc_label = f"({min(pc_ovrs)}-{max(pc_ovrs)})" if pc_ovrs else ""
 
         embed.add_field(name=f"🌟 Featured Walkouts {pa_label}", value="\n".join(featured_lines), inline=False)
-        embed.add_field(name=f"✨ Elite Pulls {pb_label}", value=", ".join(pool_b_names), inline=False)
-        embed.add_field(name=f"🟦 Standard Pulls {pc_label}", value=f"*{len(d.get('pool_c', []))} other players possible...*", inline=False)
+        embed.add_field(name=f"✨ Elite Pulls {pb_label}", value=", ".join(pool_b_names) if pool_b_names else "Available", inline=False)
+        embed.add_field(name=f"🟦 Standard Pulls {pc_label}", value=f"*{len(d.get('pool_c', []))} diverse official cards available across all programs!*", inline=False)
         
         await interaction.followup.send(embed=embed)
 
@@ -275,8 +283,8 @@ class DraftCog(commands.Cog):
         await p.execute("DELETE FROM global_drafts")
         database._DRAFTS_CACHE = None
             
-        await self.draft_rotator()
-        await interaction.followup.send("✅ **Drafts Force-Refreshed!**")
+        await self.perform_draft_rotation(force=True)
+        await interaction.followup.send("✅ **Drafts Force-Refreshed!** All 3 draft packs have been refreshed with new card pools and a fresh 2-hour rotation timer.")
 
 
     @app_commands.command(name="draft", description="Open a specific draft pack")
