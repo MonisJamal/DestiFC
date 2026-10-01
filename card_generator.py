@@ -19,7 +19,6 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(CARD_CACHE_DIR, exist_ok=True)
 
 # High-performance persistent HTTP session with connection pooling
-_session = requests.Session(impersonate="chrome124") if hasattr(requests, "Session") and "curl_cffi" in str(requests) else requests.Session()
 
 # In-memory fast image cache
 _MEMORY_IMAGE_CACHE = {}
@@ -79,29 +78,30 @@ def get_image_from_url(url: str, size=None) -> Image.Image:
             "Referer": "https://renderz.app/",
             "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         }
-        try:
-            resp = _session.get(url, headers=headers, timeout=10.0)
-            if resp.status_code == 200:
-                img = Image.open(BytesIO(resp.content)).convert("RGBA")
-                try:
-                    img.save(disk_cache_path, "PNG")
-                except Exception:
-                    pass
-        except Exception:
+        for attempt in range(3):
             try:
-                resp = requests.get(url, headers=headers, timeout=5.0)
+                if "curl_cffi" in str(requests):
+                    resp = requests.get(url, headers=headers, timeout=15.0, impersonate='chrome124')
+                else:
+                    resp = requests.get(url, headers=headers, timeout=15.0)
+                    
                 if resp.status_code == 200:
                     img = Image.open(BytesIO(resp.content)).convert("RGBA")
+                    if img.width == 1 and img.height == 1:
+                        raise Exception("Transparent pixel detected")
+                        
                     try:
                         img.save(disk_cache_path, "PNG")
                     except Exception:
                         pass
-            except Exception:
-                return None
-    
-    if img is None:
-        return None
-
+                    break
+                elif resp.status_code == 404:
+                    break
+            except Exception as e:
+                import time
+                time.sleep(1)
+                if attempt == 2:
+                    print(f"Failed to fetch {url} after 3 attempts: {e}")
     if size and img.size != size:
         img = img.resize(size, Image.Resampling.LANCZOS)
 
