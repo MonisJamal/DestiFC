@@ -24,10 +24,11 @@ async def get_db():
     if _pool is None or getattr(_pool, '_closed', False):
         _pool = await asyncpg.create_pool(
             SUPABASE_URL,
-            min_size=2,
-            max_size=20,
-            command_timeout=20,
-            max_inactive_connection_lifetime=60.0,
+            min_size=1,
+            max_size=15,
+            command_timeout=30,
+            timeout=30,
+            max_inactive_connection_lifetime=120.0,
             statement_cache_size=0
         )
     return _pool
