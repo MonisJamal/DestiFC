@@ -95,7 +95,7 @@ class DestiFC(commands.Bot):
                 json.dumps(heartbeat_data)
             )
         except Exception as e:
-            pass
+            print(f"[Heartbeat Loop Error] {e}")
 
     @bot_heartbeat_loop.before_loop
     async def before_heartbeat_loop(self):
@@ -145,7 +145,7 @@ class DestiFC(commands.Bot):
                     import sys
                     sys.exit(0)
         except Exception as e:
-            pass
+            print(f"[Remote Signal Error] {e}")
 
     @remote_signal_listener_loop.before_loop
     async def before_signal_listener_loop(self):

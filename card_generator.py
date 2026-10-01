@@ -78,21 +78,33 @@ def get_image_from_url(url: str, size=None) -> Image.Image:
 
     if img is None:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Referer": "https://renderz.app/"
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Referer": "https://renderz.app/",
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         }
         try:
-            resp = _session.get(url, headers=headers, timeout=(0.8, 1.2))
-            resp.raise_for_status()
-            img = Image.open(BytesIO(resp.content)).convert("RGBA")
-            # Save to disk cache for future instant loads
-            try:
-                img.save(disk_cache_path, "PNG")
-            except Exception:
-                pass
+            resp = _session.get(url, headers=headers, timeout=(3.0, 6.0))
+            if resp.status_code == 200:
+                img = Image.open(BytesIO(resp.content)).convert("RGBA")
+                try:
+                    img.save(disk_cache_path, "PNG")
+                except Exception:
+                    pass
         except Exception:
-            return None
+            try:
+                resp = requests.get(url, headers=headers, timeout=5.0)
+                if resp.status_code == 200:
+                    img = Image.open(BytesIO(resp.content)).convert("RGBA")
+                    try:
+                        img.save(disk_cache_path, "PNG")
+                    except Exception:
+                        pass
+            except Exception:
+                return None
     
+    if img is None:
+        return None
+
     if size and img.size != size:
         img = img.resize(size, Image.Resampling.LANCZOS)
 
@@ -150,8 +162,23 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                 if sprite_url:
                     break
 
-    bg_url = images.get("playerCardBackground") or images.get("background") or player.get("bg_image") or player.get("playerCardBackground")
-    player_url = images.get("playerCardImage") or images.get("playerImage") or player.get("imageUrl") or player.get("image") or player.get("playerCardImage")
+    bg_url = (
+        images.get("playerCardBackground") or 
+        images.get("background") or 
+        player.get("bg_image") or 
+        player.get("playerCardBackground") or 
+        images.get("cardBackground")
+    )
+    player_url = (
+        images.get("playerCardImage") or 
+        images.get("playerImage") or 
+        player.get("imageUrl") or 
+        player.get("image") or 
+        player.get("playerCardImage") or 
+        images.get("playerCardAvatar") or 
+        images.get("playerCardSpecialAvatar") or
+        images.get("avatar")
+    )
     flag_url = images.get("flagImage") or player.get("flagImage")
     club_url = images.get("clubImage") or player.get("clubImage")
     league_url = images.get("leagueImage") or player.get("leagueImage")

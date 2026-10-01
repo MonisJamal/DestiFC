@@ -32,6 +32,22 @@ async def get_db():
         )
     return _pool
 
+async def execute(query_str: str, *args):
+    p = await get_db()
+    return await p.execute(query_str, *args)
+
+async def fetch_all(query_str: str, *args):
+    p = await get_db()
+    return await p.fetch(query_str, *args)
+
+async def fetch_one(query_str: str, *args):
+    p = await get_db()
+    return await p.fetchrow(query_str, *args)
+
+async def fetch_val(query_str: str, *args):
+    p = await get_db()
+    return await p.fetchval(query_str, *args)
+
 async def setup():
     """Initializes the database pool and verifies schema."""
     p = await get_db()
