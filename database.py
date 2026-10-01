@@ -29,11 +29,11 @@ async def get_db():
         _pool = await asyncpg.create_pool(
             SUPABASE_URL,
             ssl=ctx,
-            min_size=1,
-            max_size=15,
-            command_timeout=30,
-            timeout=30,
-            max_inactive_connection_lifetime=120.0,
+            min_size=2,
+            max_size=25,
+            command_timeout=20,
+            timeout=20,
+            max_inactive_connection_lifetime=180.0,
             statement_cache_size=0
         )
     return _pool
@@ -91,31 +91,18 @@ def _sanitize_user_dict(d: dict, user_id: int) -> dict:
     }
 
 async def get_user(user_id: int) -> dict:
-    global _USER_CACHE
-    now = time.time()
-    if user_id in _USER_CACHE:
-        cached = _USER_CACHE[user_id]
-        if now - cached.get('exp', 0) < 60:
-            return cached['data']
-
     p = await get_db()
     row = await p.fetchrow('SELECT * FROM users WHERE user_id = $1', user_id)
     if row:
-        data = _sanitize_user_dict(dict(row), user_id)
+        return _sanitize_user_dict(dict(row), user_id)
     else:
         await p.execute('INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', user_id)
         row = await p.fetchrow('SELECT * FROM users WHERE user_id = $1', user_id)
         if row:
-            data = _sanitize_user_dict(dict(row), user_id)
-        else:
-            data = _sanitize_user_dict({}, user_id)
-    _USER_CACHE[user_id] = {"data": data, "exp": now}
-    return data
+            return _sanitize_user_dict(dict(row), user_id)
+        return _sanitize_user_dict({}, user_id)
 
 async def add_coins(user_id: int, amount: int):
-    global _USER_CACHE
-    if user_id in _USER_CACHE:
-        _USER_CACHE[user_id]['data']['coins'] = max(0, int(_USER_CACHE[user_id]['data'].get('coins', 0) or 0) + int(amount))
     p = await get_db()
     await p.execute(
         'UPDATE users SET coins = GREATEST(0, COALESCE(coins, 0) + $1) WHERE user_id = $2',
@@ -126,9 +113,6 @@ async def update_coins(user_id: int, amount: int):
     await add_coins(user_id, amount)
 
 async def add_vouchers(user_id: int, amount: int):
-    global _USER_CACHE
-    if user_id in _USER_CACHE:
-        _USER_CACHE[user_id]['data']['vouchers'] = max(0, int(_USER_CACHE[user_id]['data'].get('vouchers', 0) or 0) + int(amount))
     p = await get_db()
     await p.execute(
         'UPDATE users SET vouchers = GREATEST(0, COALESCE(vouchers, 0) + $1) WHERE user_id = $2',
@@ -139,25 +123,24 @@ async def update_vouchers(user_id: int, amount: int):
     await add_vouchers(user_id, amount)
 
 async def get_daily_vouchers_bought(user_id: int) -> int:
-    user = await get_user(user_id)
-    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-    if user.get("last_voucher_buy_date") != today:
+    p = await get_db()
+    row = await p.fetchrow('SELECT daily_vouchers_bought, last_voucher_buy_date FROM users WHERE user_id = $1', user_id)
+    if not row:
         return 0
-    return int(user.get("daily_vouchers_bought", 0) or 0)
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    if row['last_voucher_buy_date'] != today:
+        return 0
+    return int(row['daily_vouchers_bought'] or 0)
 
 async def record_vouchers_bought(user_id: int, amount: int):
-    global _USER_CACHE
     today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-    user = await get_user(user_id)
-    
-    current = 0 if user.get("last_voucher_buy_date") != today else int(user.get("daily_vouchers_bought", 0) or 0)
+    p = await get_db()
+    row = await p.fetchrow('SELECT daily_vouchers_bought, last_voucher_buy_date FROM users WHERE user_id = $1', user_id)
+    current = 0
+    if row and row['last_voucher_buy_date'] == today:
+        current = int(row['daily_vouchers_bought'] or 0)
     new_total = current + int(amount)
 
-    if user_id in _USER_CACHE:
-        _USER_CACHE[user_id]['data']['daily_vouchers_bought'] = new_total
-        _USER_CACHE[user_id]['data']['last_voucher_buy_date'] = today
-
-    p = await get_db()
     await p.execute('''
         UPDATE users 
         SET daily_vouchers_bought = $1, last_voucher_buy_date = $2
@@ -165,9 +148,6 @@ async def record_vouchers_bought(user_id: int, amount: int):
     ''', new_total, today, user_id)
 
 async def update_gems(user_id: int, amount: int):
-    global _USER_CACHE
-    if user_id in _USER_CACHE:
-        _USER_CACHE[user_id]['data']['gems'] = max(0, int(_USER_CACHE[user_id]['data'].get('gems', 0) or 0) + int(amount))
     p = await get_db()
     await p.execute(
         'UPDATE users SET gems = GREATEST(0, COALESCE(gems, 0) + $1) WHERE user_id = $2',
@@ -175,9 +155,11 @@ async def update_gems(user_id: int, amount: int):
     )
 
 async def add_fans(user_id: int, amount: int):
-    global _USER_CACHE
-    if user_id in _USER_CACHE:
-        _USER_CACHE[user_id]['data']['fans'] = max(0, int(_USER_CACHE[user_id]['data'].get('fans', 0) or 0) + int(amount))
+    p = await get_db()
+    await p.execute(
+        'UPDATE users SET fans = GREATEST(0, COALESCE(fans, 0) + $1) WHERE user_id = $2',
+        int(amount), user_id
+    )
     p = await get_db()
     await p.execute(
         'UPDATE users SET fans = GREATEST(0, COALESCE(fans, 0) + $1) WHERE user_id = $2',
@@ -325,11 +307,9 @@ async def get_inventory_autocomplete(user_id: int, search: str = "") -> list:
         return []
 
 async def get_inventory_size(user_id: int) -> int:
-    if user_id in _USER_INVENTORY_CACHE:
-        return len(_USER_INVENTORY_CACHE[user_id]['data'])
     p = await get_db()
     val = await p.fetchval('SELECT COUNT(*) FROM inventory WHERE user_id = $1', user_id)
-    return val or 0
+    return int(val or 0)
 
 async def remove_players_from_inventory(user_id: int, inventory_ids: list):
     if not inventory_ids:
@@ -1602,6 +1582,8 @@ DEFAULT_BOT_CONFIG = {
     "presence_status_state": "online",
     "maintenance_mode": False,
     "maintenance_message": "🛠️ DestiFC is currently undergoing scheduled maintenance. Commands are temporarily paused!",
+    "draft_rotation_hours": 2.0,
+    "store_rotation_hours": 4.0,
     "commands_enabled": {
         "draft": True,
         "market": True,
