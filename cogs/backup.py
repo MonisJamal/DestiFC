@@ -19,7 +19,7 @@ class BackupCog(commands.Cog):
             p = await database.get_db()
             # Perform a lightweight ping to verify Supabase cloud connectivity
             await p.fetchval("SELECT 1")
-            print("[Cloud DB] Supabase PostgreSQL health verified successfully.")
+            print("[Cloud DB] Neon PostgreSQL health verified successfully.")
         except Exception as e:
             print(f"[Cloud DB Warning] Supabase health check issue: {e}")
 
