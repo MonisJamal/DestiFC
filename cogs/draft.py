@@ -399,11 +399,19 @@ class DraftCog(commands.Cog):
             database.increment_drafts(user_id, amount),
             database.set_draft_pity(user_id, pack, pity_counter)
         )
-        card_gen_task = asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, is_anim)
-
-        image_result, _ = await asyncio.gather(card_gen_task, db_task)
-        image_binary, filename = image_result
-        file = discord.File(fp=image_binary, filename=filename or 'card.png') if image_binary else None
+        async def _gen_player(p):
+            is_anim_p = bool(is_walkout_pack or (isinstance(p.get('rating', 0), int) and p.get('rating', 0) >= 120))
+            res = await asyncio.to_thread(get_or_create_card_bytes, p, 3, is_anim_p)
+            return res
+            
+        card_gen_tasks = [_gen_player(p) for p in pulled_players[:5]] # Max 5 cards to avoid discord limits
+        
+        results, _ = await asyncio.gather(asyncio.gather(*card_gen_tasks), db_task)
+        
+        files = []
+        for idx, (img_bin, fname) in enumerate(results):
+            if img_bin:
+                files.append(discord.File(fp=img_bin, filename=fname or f'card_{idx}.png'))
 
         # Check supply asynchronously in background so command response is instantaneous
         async def _check_supply_bg():
@@ -580,7 +588,7 @@ class DraftCog(commands.Cog):
                 embed.set_footer(text=f"Draft {pack} Pity ➔ Pool B in {pity_b} drafts | Pool A Walkout in {pity_a} drafts")
                 
                 if file:
-                    await interaction.followup.send(embed=embed, file=file)
+                    await interaction.followup.send(embed=embed, files=files)
                 else:
                     await interaction.followup.send(embed=embed)
             
