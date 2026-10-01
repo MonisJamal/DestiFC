@@ -402,7 +402,7 @@ def get_or_create_card_bytes(player: dict, scale: int = 3, animated: bool = Fals
                 raw = f.read()
             if raw and len(raw) > 100:
                 filename = f"card.{ext}"
-                if len(_MEMORY_CARD_BYTES_CACHE) < 500:
+                if len(_MEMORY_CARD_BYTES_CACHE) < 50:
                     _MEMORY_CARD_BYTES_CACHE[key] = (raw, filename)
                 return io.BytesIO(raw), filename
         except Exception:
@@ -436,7 +436,7 @@ def get_or_create_card_bytes(player: dict, scale: int = 3, animated: bool = Fals
     except Exception:
         pass
 
-    if len(_MEMORY_CARD_BYTES_CACHE) < 500:
+    if len(_MEMORY_CARD_BYTES_CACHE) < 50:
         _MEMORY_CARD_BYTES_CACHE[key] = (raw, filename)
     return io.BytesIO(raw), filename
 
