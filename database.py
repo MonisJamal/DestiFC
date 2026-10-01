@@ -17,6 +17,7 @@ _LAYOUTS_CACHE = None
 _LAYOUTS_CACHE_EXP = 0
 _USER_INVENTORY_CACHE = {}  # {user_id: {"data": list, "exp": timestamp}}
 _USER_SQUAD_CACHE = {}      # {user_id: {"data": dict, "exp": timestamp}}
+_USER_CACHE = {}            # {user_id: {"data": dict, "exp": timestamp}}
 import ssl
 
 async def get_db():
