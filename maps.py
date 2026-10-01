@@ -337,13 +337,7 @@ def extract_pos(item) -> str:
         except Exception:
             return getattr(obj, key, default)
 
-    # 1. Direct key on row/dict
-    for k in ('position', 'pos', 'cardPosition', 'primaryPosition'):
-        v = _get(item, k)
-        if isinstance(v, str) and v.strip() and not v.isdigit() and len(v.strip()) <= 4 and v.strip().upper() != '??':
-            return v.strip().upper()
-
-    # 2. Extract from player_data
+    # 1. Authoritative check: Extract from player_data JSON if available
     pd_raw = _get(item, 'player_data')
     if pd_raw:
         pd = pd_raw
@@ -364,6 +358,12 @@ def extract_pos(item) -> str:
                 v = pd.get(k)
                 if isinstance(v, str) and v.strip() and not v.isdigit() and len(v.strip()) <= 4 and v.strip().upper() != '??':
                     return v.strip().upper()
+
+    # 2. Direct key on row/dict
+    for k in ('position', 'pos', 'cardPosition', 'primaryPosition'):
+        v = _get(item, k)
+        if isinstance(v, str) and v.strip() and not v.isdigit() and len(v.strip()) <= 4 and v.strip().upper() != '??':
+            return v.strip().upper()
 
     # 3. Memory cache
     p_name = _get(item, 'player_name') or _get(item, 'name') or _get(item, 'cardName') or _get(item, 'lastName') or ''
@@ -395,8 +395,8 @@ NATURAL_ALT_POSITIONS = {
     "CM": ["CAM", "CDM"],
     "CDM": ["CM", "CB"],
     "CB": ["CDM", "LB", "RB"],
-    "LB": ["LWB", "LM", "RB"],
-    "RB": ["RWB", "RM", "LB"],
+    "LB": ["LWB", "LM", "RB", "LW"],
+    "RB": ["RWB", "RM", "LB", "RW"],
     "LWB": ["LB", "LM"],
     "RWB": ["RB", "RM"],
     "GK": []
@@ -420,6 +420,9 @@ def get_player_official_positions(player_item) -> tuple[str, list[str]]:
             clean_item = {**raw_pd}
             for k, v in player_item.items():
                 if k != 'player_data' and v is not None:
+                    # Do not overwrite valid position from player_data
+                    if k == 'position' and clean_item.get('position'):
+                        continue
                     clean_item[k] = v
             player_item = clean_item
 
