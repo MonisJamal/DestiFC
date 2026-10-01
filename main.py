@@ -1,4 +1,19 @@
 
+import threading
+def test_cf():
+    try:
+        from curl_cffi import requests
+        r = requests.get("https://images-v2.renderz.app/player_25_156616_CHA26_WHITE_490645153ad9a5c3?verify=1786629503-SkmTITRaWYZcw2QFiI8WxpUAIo2PmezZ%2Fj6sPN7iKR4%3D", impersonate="chrome124", timeout=10)
+        with open("cf_result.txt", "w") as f:
+            f.write(f"Status: {r.status_code}\nLength: {len(r.content)}\nType: {r.headers.get('content-type')}\n")
+    except Exception as e:
+        with open("cf_result.txt", "w") as f:
+            f.write(f"Error: {e}\n")
+
+threading.Thread(target=test_cf).start()
+
+import threading
+
 import os
 try:
     import curl_cffi
