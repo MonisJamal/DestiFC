@@ -103,7 +103,7 @@ class ExchangeCog(commands.Cog):
         if not pool or not pool.get("cards_122") or not pool.get("cards_121") or not pool.get("cards_120"):
             return await interaction.followup.send("❌ Exchange pool is currently rotating. Please try again in a moment.", ephemeral=True)
 
-        dt = datetime.datetime.strptime(pool['expires_at'], "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+        dt = datetime.datetime.strptime(str(pool["expires_at"]), "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
         unix = int(dt.timestamp())
         expires_display = f"<t:{unix}:f> (<t:{unix}:R>)"
 
