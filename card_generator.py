@@ -2,9 +2,10 @@ import os
 import hashlib
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageChops, ImageFilter
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+try:
+    from curl_cffi import requests
+except ImportError:
+    import requests
 import json
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
@@ -18,11 +19,7 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 os.makedirs(CARD_CACHE_DIR, exist_ok=True)
 
 # High-performance persistent HTTP session with connection pooling
-_session = requests.Session()
-_retries = Retry(total=2, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504])
-_adapter = HTTPAdapter(pool_connections=40, pool_maxsize=80, max_retries=_retries)
-_session.mount('https://', _adapter)
-_session.mount('http://', _adapter)
+_session = requests.Session(impersonate="chrome124") if hasattr(requests, "Session") and "curl_cffi" in str(requests) else requests.Session()
 
 # In-memory fast image cache
 _MEMORY_IMAGE_CACHE = {}
@@ -83,7 +80,7 @@ def get_image_from_url(url: str, size=None) -> Image.Image:
             "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         }
         try:
-            resp = _session.get(url, headers=headers, timeout=(3.0, 6.0))
+            resp = _session.get(url, headers=headers, timeout=10.0)
             if resp.status_code == 200:
                 img = Image.open(BytesIO(resp.content)).convert("RGBA")
                 try:
