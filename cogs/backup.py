@@ -3,6 +3,7 @@ from discord.ext import commands, tasks
 import shutil
 import os
 import datetime
+import database
 
 class BackupCog(commands.Cog):
     def __init__(self, bot):

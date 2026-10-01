@@ -180,6 +180,10 @@ async def setup():
             key TEXT PRIMARY KEY,
             value JSONB,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        CREATE TABLE IF NOT EXISTS global_exchange_pool (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            pool_data TEXT,
+            expires_at TIMESTAMP
         );
 
         ALTER TABLE signature_box_config ADD COLUMN IF NOT EXISTS starts_at TIMESTAMP;
@@ -603,10 +607,11 @@ async def set_store_player_shop(items: list):
     p = await get_db()
     await p.execute("DELETE FROM store_player_shop")
     for item in items:
+        p_data = item.get('player_data') or item.get('player') or {}
         exp = _parse_timestamp(item.get("expires_at"))
         await p.execute(
             "INSERT INTO store_player_shop (player_data, price, expires_at) VALUES ($1, $2, $3)",
-            json.dumps(item['player_data']), item['price'], exp
+            json.dumps(p_data), item['price'], exp
         )
 
 _EXCHANGE_POOL_CACHE = None
@@ -635,11 +640,6 @@ async def set_active_exchange_pool(pool_dict: dict):
         exp = _parse_timestamp(pool_dict.get("expires_at"))
         pool_json = json.dumps(pool_dict)
         await p.execute('''
-            CREATE TABLE IF NOT EXISTS global_exchange_pool (
-                id INTEGER PRIMARY KEY DEFAULT 1,
-                pool_data TEXT,
-                expires_at TIMESTAMP
-            );
             INSERT INTO global_exchange_pool (id, pool_data, expires_at)
             VALUES (1, $1, $2)
             ON CONFLICT (id) DO UPDATE SET

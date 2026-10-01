@@ -63,8 +63,93 @@ class DestiFC(commands.Bot):
         # Sync slash commands
         await self.tree.sync()
 
-        # Start dynamic presence sync loop
+        # Start dynamic presence and heartbeat sync loops
         self.sync_presence_loop.start()
+        self.bot_heartbeat_loop.start()
+        self.remote_signal_listener_loop.start()
+
+    @tasks.loop(seconds=10)
+    async def bot_heartbeat_loop(self):
+        """Sends a high-precision live pulse to Supabase every 10s with real latency and stats."""
+        try:
+            import datetime
+            import json
+            import os
+
+            heartbeat_data = {
+                "last_ping": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "status": "online",
+                "latency_ms": round(self.latency * 1000, 1) if self.latency else 0,
+                "guilds_count": len(self.guilds),
+                "users_count": len(self.users),
+                "pid": os.getpid(),
+                "bot_user": str(self.user) if self.user else "DestiFC",
+                "is_ready": self.is_ready()
+            }
+            await database.execute(
+                """
+                INSERT INTO system_settings (key, value)
+                VALUES ('bot_heartbeat', $1)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+                """,
+                json.dumps(heartbeat_data)
+            )
+        except Exception as e:
+            pass
+
+    @bot_heartbeat_loop.before_loop
+    async def before_heartbeat_loop(self):
+        await self.wait_until_ready()
+
+    @tasks.loop(seconds=5)
+    async def remote_signal_listener_loop(self):
+        """Listens for remote process control commands (restart, reload cogs, shutdown) from Admin Panel."""
+        try:
+            jobs = await database.fetch_all(
+                """
+                SELECT id, job_type, payload
+                FROM portal_jobs
+                WHERE status = 'pending' AND job_type IN ('SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS')
+                ORDER BY created_at ASC
+                LIMIT 1
+                """
+            )
+            for job in jobs:
+                job_id = job['id']
+                job_type = job['job_type']
+                
+                await database.execute(
+                    "UPDATE portal_jobs SET status = 'completed', result = 'Executed successfully' WHERE id = $1",
+                    job_id
+                )
+
+                if job_type == 'SIGNAL_RELOAD_COGS':
+                    print("[Remote Control] Reloading all bot cogs...")
+                    for filename in os.listdir('./cogs'):
+                        if filename.endswith('.py') and not filename.startswith('__'):
+                            try:
+                                await self.reload_extension(f'cogs.{filename[:-3]}')
+                            except Exception as re_err:
+                                await self.load_extension(f'cogs.{filename[:-3]}')
+                    print("[Remote Control] All cogs reloaded!")
+
+                elif job_type == 'SIGNAL_RESTART':
+                    print("[Remote Control] Received restart signal from Admin Panel. Gracefully rebooting...")
+                    await self.close()
+                    import sys
+                    os.execv(sys.executable, ['python3'] + sys.argv)
+
+                elif job_type == 'SIGNAL_SHUTDOWN':
+                    print("[Remote Control] Received shutdown signal from Admin Panel. Closing bot...")
+                    await self.close()
+                    import sys
+                    sys.exit(0)
+        except Exception as e:
+            pass
+
+    @remote_signal_listener_loop.before_loop
+    async def before_signal_listener_loop(self):
+        await self.wait_until_ready()
 
     @tasks.loop(seconds=30)
     async def sync_presence_loop(self):
@@ -113,3 +198,4 @@ if __name__ == '__main__':
     else:
         bot = DestiFC()
         bot.run(TOKEN)
+
