@@ -1,7 +1,10 @@
 import base64
 import json
 import zlib
-import requests
+try:
+    from curl_cffi import requests
+except ImportError:
+    import requests
 
 def search_fifarenderz(search_name="Messi", size=10, from_offset=0):
     """
@@ -48,7 +51,10 @@ def search_fifarenderz(search_name="Messi", size=10, from_offset=0):
     }
     
     try:
-        resp = requests.get(url, headers=headers)
+        if "curl_cffi" in str(requests):
+            resp = requests.get(url, headers=headers, timeout=15, impersonate="chrome124")
+        else:
+            resp = requests.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
         data = resp.json()
         return data.get("players", [])
@@ -101,7 +107,10 @@ def query_players_by_program(program_code: str, size: int = 24, from_offset: int
 
     for attempt in range(3):
         try:
-            resp = requests.get(url, headers=headers, timeout=10)
+            if "curl_cffi" in str(requests):
+                resp = requests.get(url, headers=headers, timeout=15, impersonate="chrome124")
+            else:
+                resp = requests.get(url, headers=headers, timeout=15)
             if resp.status_code in (502, 503, 504):
                 import time
                 time.sleep(0.5 * (attempt + 1))
@@ -175,7 +184,10 @@ def query_players_by_program_wildcard(program_query: str, size: int = 100, min_r
     }
 
     try:
-        resp = requests.get(url, headers=headers)
+        if "curl_cffi" in str(requests):
+            resp = requests.get(url, headers=headers, timeout=15, impersonate="chrome124")
+        else:
+            resp = requests.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
         return resp.json().get("players", [])
     except Exception as e:
