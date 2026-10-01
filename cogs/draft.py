@@ -255,7 +255,7 @@ class DraftCog(commands.Cog):
         unix = int(dt.timestamp())
         expires_display = f"<t:{unix}:f> (<t:{unix}:R>)"
         
-        embed = discord.Embed(title=f"📦 Draft Pack {pack} Info", description=f"**Expires:** {expires_display}", color=0x00ff00)
+        embed = discord.Embed(title=f"📦 Draft Pack {pack} Info", description=f"**Expires:** {expires_display}", color=0xff00ff)
         
         featured_lines = []
         for p in d.get('pool_a', []):
