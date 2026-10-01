@@ -89,7 +89,7 @@ class DestiFC(commands.Bot):
             await database.execute(
                 """
                 INSERT INTO system_settings (key, value)
-                VALUES ('bot_heartbeat', $1)
+                VALUES ('bot_heartbeat', $1::jsonb)
                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
                 """,
                 json.dumps(heartbeat_data)

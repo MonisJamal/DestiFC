@@ -17,13 +17,17 @@ _LAYOUTS_CACHE = None
 _LAYOUTS_CACHE_EXP = 0
 _USER_INVENTORY_CACHE = {}  # {user_id: {"data": list, "exp": timestamp}}
 _USER_SQUAD_CACHE = {}      # {user_id: {"data": dict, "exp": timestamp}}
-_USER_CACHE = {}            # {user_id: {"data": dict, "exp": timestamp}}
+import ssl
 
 async def get_db():
     global _pool
     if _pool is None or getattr(_pool, '_closed', False):
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
         _pool = await asyncpg.create_pool(
             SUPABASE_URL,
+            ssl=ctx,
             min_size=1,
             max_size=15,
             command_timeout=30,
@@ -197,6 +201,8 @@ async def setup():
             key TEXT PRIMARY KEY,
             value JSONB,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS global_exchange_pool (
             id INTEGER PRIMARY KEY DEFAULT 1,
             pool_data TEXT,
