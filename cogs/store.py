@@ -149,19 +149,10 @@ class StoreCog(commands.Cog):
                 return False
 
             print("[Store] Rotating 3-hour Pool A Player Shop...")
-            # Fetch Pool A candidates across all 357 120-122 cards in existence
-            pool_122 = await asyncio.to_thread(fetch_all_players_by_rating, 122)
-            pool_121 = await asyncio.to_thread(fetch_all_players_by_rating, 121)
-            pool_120 = await asyncio.to_thread(fetch_all_players_by_rating, 120)
-            
-            pool_a_candidates = (pool_122 or []) + (pool_121 or []) + (pool_120 or [])
-
-            if len(pool_a_candidates) < 5:
-                active_drafts = await database.get_active_drafts()
-                if active_drafts:
-                    for d in active_drafts.values():
-                        if d.get("pool_a"):
-                            pool_a_candidates.extend(d["pool_a"])
+            # Fetch Pool A candidates (120-122) directly from Supabase database
+            pool_a_candidates = await database.get_official_cards_by_rating(120, 122, 100)
+            if not pool_a_candidates or len(pool_a_candidates) < 3:
+                pool_a_candidates = await database.get_official_cards_by_rating(118, 122, 100)
 
             if not pool_a_candidates:
                 return False
@@ -237,7 +228,7 @@ class StoreCog(commands.Cog):
         # Ensure shop is populated
         offers = await database.get_store_player_shop()
         if not offers:
-            await self.player_shop_rotator()
+            await self.rotate_player_shop(force=True)
             offers = await database.get_store_player_shop()
 
         if not offers:
@@ -274,7 +265,7 @@ class StoreCog(commands.Cog):
             name = p.get('cardName') or p.get('lastName', 'Unknown')
             ovr = p.get('rating', '??')
             pos = p.get('position', 'UK')
-            prog = p.get('program', {}).get('name', 'Special')
+            prog = str(p.get('source') or 'Special Event').replace('PROGRAM_', '').replace('_', ' ').title()
             price = offer["price"]
             price_fmt = f"{price / 1_000_000_000:.2f}B" if price >= 1_000_000_000 else f"{price // 1_000_000}M"
 

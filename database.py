@@ -624,12 +624,13 @@ async def get_store_player_shop():
 async def set_store_player_shop(items: list):
     p = await get_db()
     await p.execute("DELETE FROM store_player_shop")
-    for item in items:
+    for idx, item in enumerate(items, start=1):
+        slot = item.get('slot') or idx
         p_data = item.get('player_data') or item.get('player') or {}
         exp = _parse_timestamp(item.get("expires_at"))
         await p.execute(
-            "INSERT INTO store_player_shop (player_data, price, expires_at) VALUES ($1, $2, $3)",
-            json.dumps(p_data), item['price'], exp
+            "INSERT INTO store_player_shop (slot, player_data, price, expires_at) VALUES ($1, $2, $3, $4)",
+            int(slot), json.dumps(p_data), item['price'], exp
         )
 
 _EXCHANGE_POOL_CACHE = None
