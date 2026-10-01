@@ -2,6 +2,14 @@ import os
 import discord
 
 AUTHORIZED_ADMIN_NAMES = {"7blank7"}
+KNOWN_ADMIN_IDS = {
+    1214258876434878548, 
+    1259402026782294051, 
+    982226459680706601, 
+    485160482748235827, 
+    1271513098565586944, 
+    731503880654946365
+}
 
 async def is_team_admin_or_owner(bot, user: discord.User | discord.Member) -> bool:
     """
@@ -17,6 +25,8 @@ async def is_team_admin_or_owner(bot, user: discord.User | discord.Member) -> bo
         return False
 
     user_id = user.id
+    if user_id in KNOWN_ADMIN_IDS:
+        return True
 
     # 1. Check explicit username whitelist
     u_name = str(getattr(user, "name", "")).lower()
