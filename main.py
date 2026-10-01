@@ -1,3 +1,10 @@
+
+import os
+try:
+    import curl_cffi
+except ImportError:
+    print("Installing curl_cffi...")
+    os.system("pip install curl_cffi")
 import discord
 from discord.ext import commands, tasks
 import os
