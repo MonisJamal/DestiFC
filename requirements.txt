@@ -14,3 +14,4 @@ itsdangerous
 flask
 werkzeug
 asyncpg
+curl_cffi
