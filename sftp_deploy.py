@@ -1,9 +1,9 @@
 import os
 import paramiko
 
-HOST = "node.xsystemshosting.com"
-PORT = 2022
-USER = "user_294051.b47d2ed4"
+HOST = "geu2.xsystemshosting.com"
+PORT = 2023
+USER = "user_294051.58a88227"
 PASS = "Biryani37@"
 
 def main():

@@ -5,7 +5,7 @@ import os
 import datetime
 
 DB_FILE = "destifc.db"
-SUPABASE_URL = "postgresql://postgres.xreebpmibnbttuhevall:MonislovesBiryani37@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres"
+SUPABASE_URL = os.getenv("DATABASE_URL", os.getenv("SUPABASE_URL", "postgresql://neondb_owner:npg_EZ7gQ4pOFNYU@ep-dry-thunder-b1l2ju9a-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require"))
 
 import time
 
