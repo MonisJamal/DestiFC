@@ -394,23 +394,17 @@ async def get_inventory_light(user_id: int) -> list:
     _USER_INVENTORY_CACHE[user_id] = {"data": inv, "exp": now}
     return inv
 
-async def get_inventory(user_id: int, full: bool = False) -> list:
+async def get_inventory(user_id: int, full: bool = True) -> list:
     now = time.time()
-    if not full and user_id in _USER_INVENTORY_CACHE:
+    if user_id in _USER_INVENTORY_CACHE:
         cached = _USER_INVENTORY_CACHE[user_id]
-        if now - cached['exp'] < 300:
+        if now - cached['exp'] < 120:
             return cached['data']
     p = await get_db()
-    if full:
-        rows = await p.fetch(
-            'SELECT id, user_id, player_id, player_name, ovr, position, locked, player_data FROM inventory WHERE user_id = $1 ORDER BY ovr DESC, id DESC',
-            user_id
-        )
-    else:
-        rows = await p.fetch(
-            'SELECT id, user_id, player_id, player_name, ovr, position, locked FROM inventory WHERE user_id = $1 ORDER BY ovr DESC, id DESC',
-            user_id
-        )
+    rows = await p.fetch(
+        'SELECT id, user_id, player_id, player_name, ovr, position, locked, player_data FROM inventory WHERE user_id = $1 ORDER BY ovr DESC, id DESC',
+        user_id
+    )
     inv = [dict(r) for r in rows]
     _USER_INVENTORY_CACHE[user_id] = {"data": inv, "exp": now}
     return inv
