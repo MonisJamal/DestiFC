@@ -130,7 +130,7 @@ class DraftCog(commands.Cog):
                                 await asyncio.to_thread(get_or_create_card_bytes, p, 3, True)
                             except Exception:
                                 pass
-                asyncio.create_task(_prewarm_cards())
+                # asyncio.create_task(_prewarm_cards())
         except Exception as e:
             print(f"[Draft] Error in draft rotator: {e}")
 

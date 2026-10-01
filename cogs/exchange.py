@@ -88,7 +88,7 @@ class ExchangeCog(commands.Cog):
                         try:
                             await asyncio.to_thread(get_or_create_card_bytes, p, 3, True)
                         except Exception: pass
-                asyncio.create_task(_prewarm())
+                # asyncio.create_task(_prewarm())
         except Exception as e:
             print(f"[Exchange] Error in exchange rotator: {e}")
 
