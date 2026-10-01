@@ -169,8 +169,6 @@ class ExchangeCog(commands.Cog):
             database.get_active_exchange_pool()
         )
 
-        if inv_size >= 1000:
-            return await interaction.followup.send("❌ Your inventory is full! You cannot open more packs until you quicksell or use cards in `/squad`.", ephemeral=True)
             
         # Filter available cards not locked or in active squad
         inventory = [row for row in inventory if int(row.get('id', -1)) not in locked_ids and not row.get('locked', 0)]

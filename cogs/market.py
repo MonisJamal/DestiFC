@@ -556,8 +556,7 @@ class MarketCog(commands.Cog):
         
         # Check inventory size
         inv_size = await database.get_inventory_size(user_id)
-        if inv_size >= 1000:
-            return await interaction.followup.send("❌ Your inventory is full! Quicksell or exchange some cards first.")
+        
             
         user = await database.get_user(user_id)
         
@@ -586,6 +585,7 @@ class MarketCog(commands.Cog):
             INSERT INTO inventory (user_id, player_id, player_name, ovr, player_data)
             VALUES ($1, $2, $3, $4, $5)
         ''', user_id, listing['player_id'], listing['player_name'], listing['ovr'], json.dumps(p_data))
+        await database.enforce_inventory_limit(user_id)
             
         pos = extract_pos(listing)
         await interaction.followup.send(f"🎉 Congratulations! You purchased **{listing['player_name']}** `({pos})` ({listing['ovr']} OVR) for **{price:,}** coins!")
@@ -608,6 +608,7 @@ class MarketCog(commands.Cog):
             INSERT INTO inventory (user_id, player_id, player_name, ovr, player_data)
             VALUES ($1, $2, $3, $4, $5)
         ''', user_id, listing['player_id'], listing['player_name'], listing['ovr'], listing['player_data'])
+        await database.enforce_inventory_limit(user_id)
         await p.execute('DELETE FROM market WHERE id = $1', listing_id)
             
         pos = extract_pos(listing)

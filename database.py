@@ -255,6 +255,11 @@ async def add_players_to_inventory_batch(user_id: int, player_list: list):
         'INSERT INTO inventory (user_id, player_id, player_name, ovr, position, player_data) VALUES ($1, $2, $3, $4, $5, $6)',
         records
     )
+    try:
+        await enforce_inventory_limit(user_id)
+    except Exception as e:
+        print(f"[Inventory] Error enforcing limit for {user_id}: {e}")
+
 
 async def get_inventory_light(user_id: int) -> list:
     """Ultra fast inventory query without transferring heavy player_data JSON."""
@@ -1677,3 +1682,35 @@ async def save_bot_config(config_dict: dict) -> bool:
 
 
 
+
+async def enforce_inventory_limit(user_id: int):
+    p = await get_db()
+    count = await p.fetchval('SELECT COUNT(*) FROM inventory WHERE user_id = $1', user_id)
+    if count <= 2000:
+        return
+        
+    excess = count - 2000
+    
+    # We need to find the lowest rated unlocked cards not in squad
+    inv = await get_inventory(user_id)
+    squad_locked = await get_squad_locked_ids(user_id)
+    
+    eligible = [
+        c for c in inv
+        if c.get("locked") == 0 and int(c.get("id", -1)) not in squad_locked
+    ]
+    
+    # Sort eligible by OVR ascending, then id ascending
+    eligible.sort(key=lambda x: (x.get("ovr", 0), x.get("id", 0)))
+    
+    to_sell = eligible[:excess]
+    if not to_sell:
+        return
+        
+    ids_to_remove = [int(c["id"]) for c in to_sell]
+    total_coins = sum(get_quicksell_value_for_ovr(c.get("ovr", 0)) for c in to_sell)
+    
+    await remove_players_from_inventory(user_id, ids_to_remove)
+    await update_balance(user_id, total_coins)
+    
+    print(f"[Inventory] Auto-quicksold {len(to_sell)} extra cards for {user_id} for {total_coins} coins.")

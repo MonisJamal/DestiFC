@@ -102,8 +102,6 @@ class PlayerShopView(discord.ui.View):
                 return await interaction.followup.send(f"❌ You need **{price:,} Coins** to buy **{ovr} {p_name}**! You only have **{balance:,} Coins**.", ephemeral=True)
 
             inv_size = await database.get_inventory_size(user_id)
-            if inv_size >= 1000:
-                return await interaction.followup.send("❌ Your inventory is full (1000/1000 cards). Please quicksell or list cards before buying.", ephemeral=True)
 
             # Deduct coins and add player
             await database.add_coins(user_id, -price)
@@ -319,8 +317,6 @@ class StoreCog(commands.Cog):
             return await interaction.followup.send(f"❌ You need **{price:,} Coins** to buy **{ovr} {name}**! You only have **{balance:,} Coins**.", ephemeral=True)
 
         inv_size = await database.get_inventory_size(user_id)
-        if inv_size >= 1000:
-            return await interaction.followup.send("❌ Your inventory is full (1000/1000 cards). Please quicksell or list cards before buying.", ephemeral=True)
 
         # Deduct coins and add player
         await database.add_coins(user_id, -price)
