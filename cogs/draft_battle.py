@@ -605,8 +605,8 @@ class DraftBattleRoomView(discord.ui.View):
         match_embed.add_field(name=f"🔴 {user_b.display_name}'s Draft", value=f"Formation: `{data_b.get('formation', 'N/A')}`\nRating: 🌟 **{ovr_b} OVR**", inline=True)
         match_embed.set_footer(text="DestiFC Draft Battles • Stats & records recorded to /club_stats")
 
-        squad_a = {"formation": data_a.get("formation", "4-3-3 Attack"), "players": {pos: {"name": p.get("cardName", p.get("lastName", pos)), "ovr": p.get("rating", 110)} for pos, p in data_a.get("players", {}).items()}}
-        squad_b = {"formation": data_b.get("formation", "4-3-3 Attack"), "players": {pos: {"name": p.get("cardName", p.get("lastName", pos)), "ovr": p.get("rating", 110)} for pos, p in data_b.get("players", {}).items()}}
+        squad_a = {"formation": data_a.get("formation", "4-3-3 Attack"), "players": {pos: {"name": p.get("cardName", p.get("lastName", pos)), "ovr": p.get("rating", 110), "player_data": p} for pos, p in data_a.get("players", {}).items()}}
+        squad_b = {"formation": data_b.get("formation", "4-3-3 Attack"), "players": {pos: {"name": p.get("cardName", p.get("lastName", pos)), "ovr": p.get("rating", 110), "player_data": p} for pos, p in data_b.get("players", {}).items()}}
 
         # Try generating 3D image for Winner
         file = None

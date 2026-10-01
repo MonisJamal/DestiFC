@@ -881,12 +881,18 @@ def _render_single_slot_card(pos, player_info, raw_data, c_size, glow_color, fon
     name = str(player_info.get("name", pos))[:12]
     ovr = str(player_info.get("ovr", ""))
     
+    if not raw_data:
+        raw_data = player_info.get("raw_data") or player_info.get("player_data") or player_info.get("player")
+        if not raw_data and isinstance(player_info, dict) and ("images" in player_info or "rating" in player_info):
+            raw_data = player_info
+
     card_3d = None
     if raw_data:
         player_json = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
         try:
             card_raw = generate_card(player_json, scale=1, animated=False)
-            card_3d = render_3d_card(card_raw, c_size, glow_color)
+            if card_raw:
+                card_3d = render_3d_card(card_raw, c_size, glow_color)
         except Exception as e:
             print(f"Error rendering card face for {name} ({pos}): {e}")
 
