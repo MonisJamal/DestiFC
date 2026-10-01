@@ -875,7 +875,10 @@ async def preload_official_cards_cache():
         p = await get_db()
         rows = await p.fetch('SELECT rating, player_data FROM official_cards WHERE rating >= 110')
         cache = {}
-        for r in rows:
+        for i, r in enumerate(rows):
+
+            if i % 100 == 0: await asyncio.sleep(0)
+
             rating = r['rating']
             if rating not in cache:
                 cache[rating] = []
