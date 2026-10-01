@@ -475,6 +475,7 @@ class SquadCog(commands.Cog):
             "name": new_name,
             "ovr": new_ovr
         }
+        await database.update_squad(interaction.user.id, squad)
         
         alt_note = f" *(Official Alt Position: `{main_p}` ➔ `{clean_target}` • 100% OVR)*" if not is_primary else ""
         reposition_note = f" (Moved from **{repositioned_from}**)" if repositioned_from else ""
