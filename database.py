@@ -5,7 +5,7 @@ import os
 import datetime
 
 DB_FILE = "destifc.db"
-SUPABASE_URL = os.getenv("DATABASE_URL", os.getenv("SUPABASE_URL", "postgresql://neondb_owner:npg_EZ7gQ4pOFNYU@ep-dry-thunder-b1l2ju9a-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require"))
+SUPABASE_URL = os.getenv("DATABASE_URL", os.getenv("SUPABASE_URL", "postgresql://neondb_owner:npg_EZ7gQ4pOFNYU@ep-dry-thunder-b1l2ju9a.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require"))
 
 import time
 
@@ -57,163 +57,38 @@ async def fetch_val(query_str: str, *args):
 async def setup():
     """Initializes the database pool and verifies schema."""
     p = await get_db()
-    # Ensure default tables exist
-    await p.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            user_id BIGINT PRIMARY KEY,
-            coins BIGINT DEFAULT 0,
-            vouchers INTEGER DEFAULT 0,
-            gems INTEGER DEFAULT 0,
-            fans INTEGER DEFAULT 0,
-            drafts_opened INTEGER DEFAULT 0,
-            drafts_since_walkout INTEGER DEFAULT 0,
-            is_private INTEGER DEFAULT 0,
-            last_quest_daily INTEGER DEFAULT 0,
-            last_quest_skill INTEGER DEFAULT 0,
-            last_quest_h2h INTEGER DEFAULT 0,
-            last_quest_freekick INTEGER DEFAULT 0,
-            last_quest_dribble INTEGER DEFAULT 0,
-            last_quest_trivia INTEGER DEFAULT 0,
-            last_quest_gk INTEGER DEFAULT 0,
-            last_quest_volley INTEGER DEFAULT 0
-        );
+    print("✅ Neon PostgreSQL Connected and Verified!")
 
-        CREATE TABLE IF NOT EXISTS inventory (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT REFERENCES users(user_id),
-            player_id TEXT,
-            player_name TEXT,
-            ovr INTEGER,
-            player_data TEXT,
-            locked INTEGER DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS squads (
-            user_id BIGINT PRIMARY KEY REFERENCES users(user_id),
-            active_squad TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS global_drafts (
-            draft_number INTEGER PRIMARY KEY,
-            draft_data TEXT,
-            pool_a TEXT,
-            pool_b TEXT,
-            pool_c TEXT,
-            expires_at TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS store_player_shop (
-            id BIGSERIAL PRIMARY KEY,
-            slot INTEGER UNIQUE,
-            player_data TEXT,
-            price BIGINT,
-            expires_at TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS market (
-            id BIGSERIAL PRIMARY KEY,
-            seller_id BIGINT REFERENCES users(user_id),
-            inventory_id BIGINT,
-            player_id TEXT,
-            player_name TEXT,
-            ovr INTEGER,
-            price BIGINT,
-            player_data TEXT,
-            listed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        
-        CREATE TABLE IF NOT EXISTS custom_draft_cards (
-            id BIGSERIAL PRIMARY KEY,
-            player_data TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS portal_jobs (
-            job_name TEXT PRIMARY KEY,
-            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS formation_layouts (
-            formation_name TEXT PRIMARY KEY,
-            positions_json TEXT NOT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS active_sbcs (
-            id BIGSERIAL PRIMARY KEY,
-            sbc_json TEXT,
-            expires_at BIGINT
-        );
-
-        CREATE TABLE IF NOT EXISTS sbc_completions (
-            user_id BIGINT,
-            sbc_id BIGINT,
-            completed_at BIGINT,
-            PRIMARY KEY (user_id, sbc_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS season_pass (
-            user_id BIGINT PRIMARY KEY,
-            season_id INTEGER DEFAULT 1,
-            xp BIGINT DEFAULT 0,
-            claimed_tiers TEXT DEFAULT '[]',
-            started_at BIGINT DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS achievements (
-            user_id BIGINT,
-            badge_id TEXT,
-            unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (user_id, badge_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS user_stats (
-            user_id BIGINT PRIMARY KEY,
-            walkouts_pulled INTEGER DEFAULT 0,
-            matches_won INTEGER DEFAULT 0,
-            exchanges_done INTEGER DEFAULT 0,
-            sbcs_done INTEGER DEFAULT 0,
-            market_buys INTEGER DEFAULT 0,
-            daily_streak INTEGER DEFAULT 0
-        );
-
-        CREATE TABLE IF NOT EXISTS signature_box_config (
-            id INTEGER PRIMARY KEY DEFAULT 1,
-            title TEXT DEFAULT 'FC SIGNATURE BOX',
-            subtitle TEXT DEFAULT '10 Exclusive Limited Time Rewards',
-            is_active BOOLEAN DEFAULT true,
-            banner_url TEXT DEFAULT '',
-            starts_at TIMESTAMP,
-            expires_at TIMESTAMP,
-            signature_card_data JSONB,
-            rewards_json JSONB,
-            draw_costs_json JSONB,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS user_signature_box (
-            user_id BIGINT PRIMARY KEY,
-            box_id INTEGER DEFAULT 1,
-            claimed_reward_ids JSONB DEFAULT '[]',
-            draws_completed INTEGER DEFAULT 0,
-            last_drawn_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS system_settings (
-            key TEXT PRIMARY KEY,
-            value JSONB,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS global_exchange_pool (
-            id INTEGER PRIMARY KEY DEFAULT 1,
-            pool_data TEXT,
-            expires_at TIMESTAMP
-        );
-
-        ALTER TABLE signature_box_config ADD COLUMN IF NOT EXISTS starts_at TIMESTAMP;
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS last_match_time BIGINT DEFAULT 0;
-    ''')
-    print("✅ Supabase PostgreSQL Connected and Verified!")
+def _sanitize_user_dict(d: dict, user_id: int) -> dict:
+    return {
+        "user_id": user_id,
+        "coins": int(d.get("coins") or 0),
+        "vouchers": int(d.get("vouchers") or 0),
+        "gems": int(d.get("gems") or 0),
+        "fans": int(d.get("fans") or 0),
+        "drafts_opened": int(d.get("drafts_opened") or 0),
+        "drafts_since_walkout": int(d.get("drafts_since_walkout") or 0),
+        "is_private": int(d.get("is_private") or 0),
+        "last_quest_daily": int(d.get("last_quest_daily") or 0),
+        "last_quest_skill": int(d.get("last_quest_skill") or 0),
+        "last_quest_h2h": int(d.get("last_quest_h2h") or 0),
+        "last_quest_freekick": int(d.get("last_quest_freekick") or 0),
+        "last_quest_dribble": int(d.get("last_quest_dribble") or 0),
+        "last_quest_trivia": int(d.get("last_quest_trivia") or 0),
+        "last_quest_gk": int(d.get("last_quest_gk") or 0),
+        "last_quest_volley": int(d.get("last_quest_volley") or 0),
+        "last_daily": int(d.get("last_daily") or 0),
+        "last_work": int(d.get("last_work") or 0),
+        "last_match_time": int(d.get("last_match_time") or 0),
+        "draft_battle_wins": int(d.get("draft_battle_wins") or 0),
+        "draft_battle_losses": int(d.get("draft_battle_losses") or 0),
+        "draft_battle_draws": int(d.get("draft_battle_draws") or 0),
+        "draft_battle_elo": int(d.get("draft_battle_elo") or 1000),
+        "draft_battle_points": int(d.get("draft_battle_points") or 0),
+        "daily_vouchers_bought": int(d.get("daily_vouchers_bought") or 0),
+        "last_voucher_buy_date": str(d.get("last_voucher_buy_date") or ""),
+        "draft_pity": d.get("draft_pity") or {}
+    }
 
 async def get_user(user_id: int) -> dict:
     global _USER_CACHE
@@ -226,28 +101,25 @@ async def get_user(user_id: int) -> dict:
     p = await get_db()
     row = await p.fetchrow('SELECT * FROM users WHERE user_id = $1', user_id)
     if row:
-        data = dict(row)
+        data = _sanitize_user_dict(dict(row), user_id)
     else:
         await p.execute('INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', user_id)
         row = await p.fetchrow('SELECT * FROM users WHERE user_id = $1', user_id)
         if row:
-            data = dict(row)
+            data = _sanitize_user_dict(dict(row), user_id)
         else:
-            data = {
-                "user_id": user_id, "coins": 0, "vouchers": 0, "gems": 0, "fans": 0,
-                "drafts_opened": 0, "drafts_since_walkout": 0, "is_private": 0
-            }
+            data = _sanitize_user_dict({}, user_id)
     _USER_CACHE[user_id] = {"data": data, "exp": now}
     return data
 
 async def add_coins(user_id: int, amount: int):
     global _USER_CACHE
     if user_id in _USER_CACHE:
-        _USER_CACHE[user_id]['data']['coins'] = max(0, int(_USER_CACHE[user_id]['data'].get('coins', 0)) + int(amount))
+        _USER_CACHE[user_id]['data']['coins'] = max(0, int(_USER_CACHE[user_id]['data'].get('coins', 0) or 0) + int(amount))
     p = await get_db()
     await p.execute(
-        'UPDATE users SET coins = GREATEST(0, coins + $1) WHERE user_id = $2',
-        amount, user_id
+        'UPDATE users SET coins = GREATEST(0, COALESCE(coins, 0) + $1) WHERE user_id = $2',
+        int(amount), user_id
     )
 
 async def update_coins(user_id: int, amount: int):
@@ -256,11 +128,11 @@ async def update_coins(user_id: int, amount: int):
 async def add_vouchers(user_id: int, amount: int):
     global _USER_CACHE
     if user_id in _USER_CACHE:
-        _USER_CACHE[user_id]['data']['vouchers'] = max(0, int(_USER_CACHE[user_id]['data'].get('vouchers', 0)) + int(amount))
+        _USER_CACHE[user_id]['data']['vouchers'] = max(0, int(_USER_CACHE[user_id]['data'].get('vouchers', 0) or 0) + int(amount))
     p = await get_db()
     await p.execute(
-        'UPDATE users SET vouchers = GREATEST(0, vouchers + $1) WHERE user_id = $2',
-        amount, user_id
+        'UPDATE users SET vouchers = GREATEST(0, COALESCE(vouchers, 0) + $1) WHERE user_id = $2',
+        int(amount), user_id
     )
 
 async def update_vouchers(user_id: int, amount: int):
@@ -279,7 +151,7 @@ async def record_vouchers_bought(user_id: int, amount: int):
     user = await get_user(user_id)
     
     current = 0 if user.get("last_voucher_buy_date") != today else int(user.get("daily_vouchers_bought", 0) or 0)
-    new_total = current + amount
+    new_total = current + int(amount)
 
     if user_id in _USER_CACHE:
         _USER_CACHE[user_id]['data']['daily_vouchers_bought'] = new_total
@@ -295,31 +167,31 @@ async def record_vouchers_bought(user_id: int, amount: int):
 async def update_gems(user_id: int, amount: int):
     global _USER_CACHE
     if user_id in _USER_CACHE:
-        _USER_CACHE[user_id]['data']['gems'] = max(0, int(_USER_CACHE[user_id]['data'].get('gems', 0)) + int(amount))
+        _USER_CACHE[user_id]['data']['gems'] = max(0, int(_USER_CACHE[user_id]['data'].get('gems', 0) or 0) + int(amount))
     p = await get_db()
     await p.execute(
-        'UPDATE users SET gems = GREATEST(0, gems + $1) WHERE user_id = $2',
-        amount, user_id
+        'UPDATE users SET gems = GREATEST(0, COALESCE(gems, 0) + $1) WHERE user_id = $2',
+        int(amount), user_id
     )
 
 async def add_fans(user_id: int, amount: int):
     global _USER_CACHE
     if user_id in _USER_CACHE:
-        _USER_CACHE[user_id]['data']['fans'] = max(0, int(_USER_CACHE[user_id]['data'].get('fans', 0)) + int(amount))
+        _USER_CACHE[user_id]['data']['fans'] = max(0, int(_USER_CACHE[user_id]['data'].get('fans', 0) or 0) + int(amount))
     p = await get_db()
     await p.execute(
-        'UPDATE users SET fans = GREATEST(0, fans + $1) WHERE user_id = $2',
-        amount, user_id
+        'UPDATE users SET fans = GREATEST(0, COALESCE(fans, 0) + $1) WHERE user_id = $2',
+        int(amount), user_id
     )
 
 async def increment_drafts(user_id: int, amount: int = 1):
     global _USER_CACHE
     if user_id in _USER_CACHE:
-        _USER_CACHE[user_id]['data']['drafts_opened'] = int(_USER_CACHE[user_id]['data'].get('drafts_opened', 0)) + int(amount)
+        _USER_CACHE[user_id]['data']['drafts_opened'] = int(_USER_CACHE[user_id]['data'].get('drafts_opened', 0) or 0) + int(amount)
     p = await get_db()
     await p.execute(
-        'UPDATE users SET drafts_opened = drafts_opened + $1 WHERE user_id = $2',
-        amount, user_id
+        'UPDATE users SET drafts_opened = COALESCE(drafts_opened, 0) + $1 WHERE user_id = $2',
+        int(amount), user_id
     )
 
 async def get_leaderboard(limit: int = 10):
