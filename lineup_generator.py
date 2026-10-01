@@ -877,6 +877,7 @@ def load_font(size: int):
     return ImageFont.load_default()
 
 def _render_single_slot_card(pos, player_info, raw_data, c_size, glow_color, font_name, font_pos):
+    import time; time.sleep(0.01)
     """Renders a single player's 3D card (executed in parallel worker threads)."""
     name = str(player_info.get("name", pos))[:12]
     ovr = str(player_info.get("ovr", ""))

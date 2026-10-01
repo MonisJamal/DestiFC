@@ -296,6 +296,7 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                     col = frame_idx % cols
                     row = frame_idx // cols
                     box = (col * 256, row * 256, (col + 1) * 256, (row + 1) * 256)
+                    import time; time.sleep(0.01)
                     frame_sprite = sprite_sheet.crop(box)
                     if SCALE != 1.0:
                         frame_sprite = frame_sprite.resize(target_size, Image.Resampling.BILINEAR)
