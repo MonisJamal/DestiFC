@@ -42,6 +42,7 @@ FORMATION_MAP = {
 }
 
 import database
+from auth import is_team_admin_or_owner
 from maps import extract_pos, TACTICS, is_position_compatible, get_player_official_positions, check_player_position_eligibility
 from cogs.market import get_price_limits, format_price_short
 
@@ -204,7 +205,7 @@ class SquadCog(commands.Cog):
         target = user or interaction.user
 
         # Parallel fetch squad, privacy, and layouts
-        if target.id != interaction.user.id and not await interaction.client.is_owner(interaction.user):
+        if target.id != interaction.user.id and not await is_team_admin_or_owner(self.bot, interaction.user):
             is_priv, squad, layouts = await asyncio.gather(
                 database.is_profile_private(target.id),
                 database.get_squad(target.id),
@@ -602,7 +603,7 @@ class SquadCog(commands.Cog):
         target = user or interaction.user
         
         # Parallel fetch Privacy Check and Lightweight Inventory
-        if target.id != interaction.user.id and not await interaction.client.is_owner(interaction.user):
+        if target.id != interaction.user.id and not await is_team_admin_or_owner(self.bot, interaction.user):
             is_priv, inventory = await asyncio.gather(
                 database.is_profile_private(target.id),
                 database.get_inventory_light(target.id)
@@ -704,7 +705,7 @@ class SquadCog(commands.Cog):
         await interaction.response.defer()
         target = user or interaction.user
 
-        if target.id != interaction.user.id and not await interaction.client.is_owner(interaction.user):
+        if target.id != interaction.user.id and not await is_team_admin_or_owner(self.bot, interaction.user):
             if await database.is_profile_private(target.id):
                 return await interaction.followup.send(f"🔒 **{target.display_name}** has set their club profile to **Private**.", ephemeral=True)
 
@@ -813,7 +814,7 @@ class SquadCog(commands.Cog):
         await interaction.response.defer()
         target = user or interaction.user
 
-        if target.id != interaction.user.id and not await interaction.client.is_owner(interaction.user):
+        if target.id != interaction.user.id and not await is_team_admin_or_owner(self.bot, interaction.user):
             if await database.is_profile_private(target.id):
                 return await interaction.followup.send(f"🔒 **{target.display_name}** has set their club profile to **Private**.", ephemeral=True)
 

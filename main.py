@@ -31,45 +31,6 @@ class DestiFC(commands.Bot):
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py') and not filename.startswith('__'):
                 await self.load_extension(f'cogs.{filename[:-3]}')
-        
-        # Global interaction check for maintenance mode and command permissions
-        @self.tree.interaction_check
-        async def global_permission_and_maintenance_check(interaction: discord.Interaction) -> bool:
-            # Always allow admins and owners full bypass
-            try:
-                is_admin = await is_team_admin_or_owner(self, interaction.user)
-                if is_admin:
-                    return True
-            except Exception:
-                pass
-
-            try:
-                bot_cfg = await database.get_bot_config()
-                if bot_cfg.get('maintenance_mode', False):
-                    msg = bot_cfg.get(
-                        'maintenance_message',
-                        "🛠️ DestiFC is currently undergoing scheduled maintenance. Commands are temporarily paused!"
-                    )
-                    if not interaction.response.is_done():
-                        await interaction.response.send_message(f"🔒 **Maintenance Mode Active**\n{msg}", ephemeral=True)
-                    return False
-
-                cmd = interaction.command
-                cmd_name = (cmd.name if cmd else "").lower()
-                root_name = (cmd.root_parent.name if cmd and cmd.root_parent else cmd_name).lower()
-
-                commands_enabled = bot_cfg.get('commands_enabled', {})
-                if (cmd_name in commands_enabled and not commands_enabled[cmd_name]) or (root_name in commands_enabled and not commands_enabled[root_name]):
-                    if not interaction.response.is_done():
-                        await interaction.response.send_message(
-                            f"⚠️ The `/{cmd_name}` command is temporarily disabled by administrators for tuning. Please check back shortly!",
-                            ephemeral=True
-                        )
-                    return False
-            except Exception as e:
-                print(f"[Maintenance Check Error] {e}")
-
-            return True
 
         # Global command error handler
         @self.tree.error
