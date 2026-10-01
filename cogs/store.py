@@ -243,7 +243,10 @@ class StoreCog(commands.Cog):
         expires_str = offers[0].get("expires_at", "")
         time_rem_str = "4 hours"
         try:
-            exp_dt = datetime.datetime.strptime(expires_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+            if isinstance(expires_str, datetime.datetime):
+                exp_dt = expires_str.replace(tzinfo=datetime.timezone.utc) if expires_str.tzinfo is None else expires_str
+            else:
+                exp_dt = datetime.datetime.strptime(str(expires_str), "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
             diff = exp_dt - now
             if diff.total_seconds() > 0:
                 hours, remainder = divmod(int(diff.total_seconds()), 3600)
