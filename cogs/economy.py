@@ -815,18 +815,27 @@ class EconomyCog(commands.Cog):
         walkout_chance = eco_cfg.get('daily_walkout_chance', 0.15)
         
         p = await database.get_db()
-        await p.execute('UPDATE users SET coins = COALESCE(coins, 0) + $1, vouchers = COALESCE(vouchers, 0) + $2, last_daily = $3 WHERE user_id = $4', coins_won, vouchers_won, current_time, user_id)
+        await p.execute('''
+            INSERT INTO users (user_id, coins, vouchers, last_daily)
+            VALUES ($4, $1, $2, $3)
+            ON CONFLICT (user_id) DO UPDATE SET
+                coins = COALESCE(users.coins, 0) + $1,
+                vouchers = COALESCE(users.vouchers, 0) + $2,
+                last_daily = $3
+        ''', coins_won, vouchers_won, current_time, user_id)
+        
+        # Invalidate cached user record
+        database._USER_CACHE.pop(user_id, None)
             
         desc = f"🪙 You received **{coins_won:,} Coins**\n🎫 You received **+{vouchers_won}x Draft Vouchers**!"
         embed = discord.Embed(title="🎁 Daily Reward Claimed!", description=desc, color=discord.Color.green())
         
-        # Dynamic chance to drop a random top 100 player
+        # Dynamic chance to drop a random top superstar from database
+        lucky_player = None
         if random.random() < walkout_chance:
-            from renderz_api import query_players_by_program
-            lucky_pool = query_players_by_program("", min_rating=120, max_rating=120, size=50)
-            lucky_player = random.choice(lucky_pool) if lucky_pool else None
-        else:
-            lucky_player = None
+            lucky_pool = await database.get_official_cards_by_rating(120, 122, 50)
+            if lucky_pool:
+                lucky_player = random.choice(lucky_pool)
 
         if lucky_player:
             await database.add_player_to_inventory(user_id, lucky_player)

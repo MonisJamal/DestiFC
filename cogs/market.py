@@ -502,32 +502,30 @@ class MarketCog(commands.Cog):
     ):
         await interaction.response.defer()
         
-        query = "SELECT * FROM market WHERE ovr >= ? AND ovr <= ?"
+        where_clauses = ["ovr >= $1", "ovr <= $2"]
         params = [min_ovr, max_ovr]
         
         if name:
-            query += " AND LOWER(player_name) LIKE ?"
             params.append(f"%{name.lower().strip()}%")
+            where_clauses.append(f"LOWER(player_name) LIKE ${len(params)}")
             
+        where_str = " AND ".join(where_clauses)
+        
         if sort == "price_asc":
-            query += " ORDER BY price ASC, ovr DESC"
+            order_clause = "ORDER BY price ASC, ovr DESC"
         elif sort == "price_desc":
-            query += " ORDER BY price DESC, ovr DESC"
+            order_clause = "ORDER BY price DESC, ovr DESC"
         elif sort == "ovr_asc":
-            query += " ORDER BY ovr ASC, price ASC"
+            order_clause = "ORDER BY ovr ASC, price ASC"
         elif sort == "newest":
-            query += " ORDER BY id DESC"
+            order_clause = "ORDER BY id DESC"
         else: # ovr_desc
-            query += " ORDER BY ovr DESC, price ASC"
+            order_clause = "ORDER BY ovr DESC, price ASC"
             
-        query += " LIMIT 150"
+        sql = f"SELECT * FROM market WHERE {where_str} {order_clause} LIMIT 150"
         
         p = await database.get_db()
-        # Convert ? to $1, $2...
-        pg_query = query
-        for i in range(1, len(params) + 1):
-            pg_query = pg_query.replace('?', f'${i}', 1)
-        rows = await p.fetch(pg_query, *params)
+        rows = await p.fetch(sql, *params)
         market_rows = [dict(r) for r in rows]
         
         if position:
