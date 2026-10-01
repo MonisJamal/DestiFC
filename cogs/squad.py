@@ -625,11 +625,13 @@ class SquadCog(commands.Cog):
         
         lines = []
         for p in inventory[start_idx:end_idx]:
-            min_p, max_p = get_price_limits(p['ovr'])
-            lock_icon = "🔒 " if p.get('locked', 0) else ""
-            ovr_icon = "🔥" if p['ovr'] >= 120 else ("✨" if p['ovr'] >= 117 else "⚽")
-            pos = p.get('position') or extract_pos(p)
-            lines.append(f"`ID:{p['id']}` {lock_icon}{ovr_icon} **{p['player_name']}** `({pos})` — `{p['ovr']} OVR` | 🪙 {format_price_short(min_p)}–{format_price_short(max_p)}")
+            ovr = int(p.get('ovr') or 100)
+            min_p, max_p = get_price_limits(ovr)
+            lock_icon = "🔒 " if p.get('locked') else ""
+            ovr_icon = "🔥" if ovr >= 120 else ("✨" if ovr >= 117 else "⚽")
+            pos = p.get('position') or extract_pos(p) or "ST"
+            p_name = p.get('player_name') or 'Player'
+            lines.append(f"`ID:{p.get('id', '??')}` {lock_icon}{ovr_icon} **{p_name}** `({pos})` — `{ovr} OVR` | 🪙 {format_price_short(min_p)}–{format_price_short(max_p)}")
             
         embed = discord.Embed(title=f"🎒 {target.display_name}'s Club", description="\n".join(lines), color=discord.Color.green())
         embed.set_footer(text=f"Page 1/{max_pages} | Total Players: {len(inventory)}")

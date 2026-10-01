@@ -36,9 +36,12 @@ class DestiFC(commands.Bot):
         @self.tree.interaction_check
         async def global_permission_and_maintenance_check(interaction: discord.Interaction) -> bool:
             # Always allow admins and owners full bypass
-            is_admin = await is_team_admin_or_owner(self, interaction.user)
-            if is_admin:
-                return True
+            try:
+                is_admin = await is_team_admin_or_owner(self, interaction.user)
+                if is_admin:
+                    return True
+            except Exception:
+                pass
 
             try:
                 bot_cfg = await database.get_bot_config()
@@ -51,9 +54,12 @@ class DestiFC(commands.Bot):
                         await interaction.response.send_message(f"🔒 **Maintenance Mode Active**\n{msg}", ephemeral=True)
                     return False
 
-                cmd_name = (interaction.command.name if interaction.command else "").lower()
+                cmd = interaction.command
+                cmd_name = (cmd.name if cmd else "").lower()
+                root_name = (cmd.root_parent.name if cmd and cmd.root_parent else cmd_name).lower()
+
                 commands_enabled = bot_cfg.get('commands_enabled', {})
-                if cmd_name in commands_enabled and not commands_enabled[cmd_name]:
+                if (cmd_name in commands_enabled and not commands_enabled[cmd_name]) or (root_name in commands_enabled and not commands_enabled[root_name]):
                     if not interaction.response.is_done():
                         await interaction.response.send_message(
                             f"⚠️ The `/{cmd_name}` command is temporarily disabled by administrators for tuning. Please check back shortly!",
@@ -64,6 +70,28 @@ class DestiFC(commands.Bot):
                 print(f"[Maintenance Check Error] {e}")
 
             return True
+
+        # Global command error handler
+        @self.tree.error
+        async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+            import traceback
+            cmd_name = interaction.command.name if interaction.command else "command"
+            print(f"[AppCommandError] Command '/{cmd_name}' failed for user {interaction.user.id} ({interaction.user.display_name}): {error}")
+            traceback.print_exception(type(error), error, error.__traceback__)
+
+            msg = f"❌ An unexpected error occurred while executing `/{cmd_name}`. Please try again in a moment."
+            if isinstance(error, app_commands.CommandOnCooldown):
+                msg = f"⏳ This command is on cooldown. Try again in {error.retry_after:.1f}s."
+            elif isinstance(error, app_commands.CheckFailure):
+                msg = "❌ You do not have permission to execute this command."
+
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send(msg, ephemeral=True)
+                else:
+                    await interaction.response.send_message(msg, ephemeral=True)
+            except Exception:
+                pass
 
         # Sync slash commands
         await self.tree.sync()
