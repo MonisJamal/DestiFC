@@ -282,6 +282,40 @@ class AdminCog(commands.Cog):
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
 
+
+    @admin_group.command(name="set_exchange_exclusive", description="Admin: Make a card Exchange-Only (removes from drafts)")
+    @app_commands.describe(name="Card name to search", ovr="OVR rating", exclusive="True = Exchange Only, False = Normal")
+    async def set_exchange_exclusive(self, interaction: discord.Interaction, name: str, ovr: int, exclusive: bool):
+        await interaction.response.defer(ephemeral=True)
+        
+        p = await database.get_db()
+        val = 1 if exclusive else 0
+        
+        # Update official cards
+        off_res = await p.execute(
+            "UPDATE official_cards SET exchange_exclusive = $1 WHERE rating = $2 AND player_data::text ILIKE $3",
+            val, ovr, f'%{name}%'
+        )
+        
+        # Update custom cards
+        cust_res = await p.execute(
+            "UPDATE custom_draft_cards SET exchange_exclusive = $1 WHERE player_data::text ILIKE $2",
+            val, f'%"rating": {ovr}%{name}%'
+        )
+        
+        # Force cache reload
+        database._OFFICIAL_CARDS_CACHE = {}
+        database._CUSTOM_DRAFT_CARDS_CACHE = None
+        
+        embed = discord.Embed(
+            title="🔒 Card Exclusivity Updated!",
+            description=f"Updated **{name}** ({ovr} OVR).
+
+Exchange Exclusive: **{'✅ YES (Removed from Drafts)' if exclusive else '❌ NO (Available in Drafts)'}**",
+            color=discord.Color.red() if exclusive else discord.Color.green()
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     @admin_group.command(name="remove_card", description="Admin: Remove a specific card from a user's inventory by ID")
     @app_commands.describe(user="Target user", inventory_id="The card ID in their inventory")
     async def remove_card(self, interaction: discord.Interaction, user: discord.Member, inventory_id: int):

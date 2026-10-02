@@ -646,7 +646,7 @@ async def get_all_custom_draft_cards():
         return _CUSTOM_DRAFT_CARDS_CACHE
     p = await get_db()
     try:
-        rows = await p.fetch('SELECT player_data FROM custom_draft_cards')
+        rows = await p.fetch('SELECT player_data FROM custom_draft_cards WHERE (exchange_exclusive IS NULL OR exchange_exclusive = 0)')
         _CUSTOM_DRAFT_CARDS_CACHE = [json.loads(r['player_data']) for r in rows]
         _CUSTOM_DRAFT_CARDS_EXP = now + 120.0
         return _CUSTOM_DRAFT_CARDS_CACHE
@@ -860,7 +860,7 @@ async def get_official_cards_by_rating(min_rating: int, max_rating: int = None, 
         p = await get_db()
         rows = await p.fetch('''
             SELECT player_data FROM official_cards 
-            WHERE rating >= $1 AND rating <= $2 
+            WHERE rating >= $1 AND rating <= $2 AND (exchange_exclusive IS NULL OR exchange_exclusive = 0)
             ORDER BY RANDOM() LIMIT $3
         ''', min_rating, max_rating, limit)
         
@@ -880,7 +880,7 @@ async def preload_official_cards_cache():
     global _OFFICIAL_CARDS_CACHE
     try:
         p = await get_db()
-        rows = await p.fetch('SELECT rating, player_data FROM official_cards WHERE rating >= 110')
+        rows = await p.fetch('SELECT rating, player_data FROM official_cards WHERE rating >= 110 AND (exchange_exclusive IS NULL OR exchange_exclusive = 0)')
         cache = {}
         for i, r in enumerate(rows):
 
