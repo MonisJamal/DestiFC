@@ -99,6 +99,7 @@ def _sanitize_user_dict(d: dict, user_id: int) -> dict:
         "drafts_since_walkout": int(d.get("drafts_since_walkout") or 0),
         "is_private": int(d.get("is_private") or 0),
         "last_quest_daily": int(d.get("last_quest_daily") or 0),
+        "starter_claimed": int(d.get("starter_claimed") or 0),
         "last_quest_skill": int(d.get("last_quest_skill") or 0),
         "last_quest_h2h": int(d.get("last_quest_h2h") or 0),
         "last_quest_freekick": int(d.get("last_quest_freekick") or 0),
