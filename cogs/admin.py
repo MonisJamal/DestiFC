@@ -247,6 +247,41 @@ class AdminCog(commands.Cog):
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
 
+
+    @admin_group.command(name="set_coins", description="Admin: Set a user's exact coin balance")
+    @app_commands.describe(user="Target user", amount="Exact amount of coins they should have")
+    async def set_coins(self, interaction: discord.Interaction, user: discord.Member, amount: int):
+        await interaction.response.defer(ephemeral=True)
+        if amount < 0:
+            return await interaction.followup.send("❌ Amount cannot be negative.", ephemeral=True)
+        
+        p = await database.get_db()
+        await p.execute('UPDATE users SET coins = $1 WHERE user_id = $2', amount, user.id)
+        
+        embed = discord.Embed(
+            title="🪙 Balance Set!",
+            description=f"Successfully set **{user.display_name}**'s balance to **{amount:,} Coins**.",
+            color=discord.Color.gold()
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @admin_group.command(name="set_vouchers", description="Admin: Set a user's exact voucher balance")
+    @app_commands.describe(user="Target user", amount="Exact amount of vouchers they should have")
+    async def set_vouchers(self, interaction: discord.Interaction, user: discord.Member, amount: int):
+        await interaction.response.defer(ephemeral=True)
+        if amount < 0:
+            return await interaction.followup.send("❌ Amount cannot be negative.", ephemeral=True)
+            
+        p = await database.get_db()
+        await p.execute('UPDATE users SET vouchers = $1 WHERE user_id = $2', amount, user.id)
+        
+        embed = discord.Embed(
+            title="🎟️ Vouchers Set!",
+            description=f"Successfully set **{user.display_name}**'s vouchers to **{amount:,} Draft Vouchers**.",
+            color=discord.Color.purple()
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     @admin_group.command(name="remove_card", description="Admin: Remove a specific card from a user's inventory by ID")
     @app_commands.describe(user="Target user", inventory_id="The card ID in their inventory")
     async def remove_card(self, interaction: discord.Interaction, user: discord.Member, inventory_id: int):
