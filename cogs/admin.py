@@ -309,9 +309,8 @@ class AdminCog(commands.Cog):
         
         embed = discord.Embed(
             title="🔒 Card Exclusivity Updated!",
-            description=f"Updated **{name}** ({ovr} OVR).
+            description=f"Updated **{name}** ({ovr} OVR).\n\nExchange Exclusive: **{'✅ YES (Removed from Drafts)' if exclusive else '❌ NO (Available in Drafts)'}**",
 
-Exchange Exclusive: **{'✅ YES (Removed from Drafts)' if exclusive else '❌ NO (Available in Drafts)'}**",
             color=discord.Color.red() if exclusive else discord.Color.green()
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
