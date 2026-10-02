@@ -219,7 +219,8 @@ async def set_highest_div(user_id: int, div: str):
     pass
 
 async def set_starter_claimed(user_id: int):
-    pass
+    p = await get_db()
+    await p.execute('UPDATE users SET starter_claimed = 1 WHERE user_id = $1', user_id)
 
 async def get_user_rank(user_id: int) -> dict:
     p = await get_db()
