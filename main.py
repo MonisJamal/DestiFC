@@ -24,7 +24,21 @@ class DestiFC(commands.Bot):
         self.last_presence_state = None
 
     async def setup_hook(self):
+        self.tree.on_error = self.on_app_command_error
         await database.setup()
+
+    async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+        import traceback
+        err_str = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+        print(f"[Slash Error] {interaction.command.name if interaction.command else 'Unknown'}: {err_str}")
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.send_message(f"🚨 **FATAL ERROR:**\n```py\n{err_str[:1900]}```", ephemeral=True)
+            else:
+                await interaction.followup.send(f"🚨 **FATAL ERROR:**\n```py\n{err_str[:1900]}```", ephemeral=True)
+        except Exception:
+            pass
+
         asyncio.create_task(database.preload_official_cards_cache())
         
         # Load cogs
