@@ -1,6 +1,6 @@
 import discord
 import asyncio
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import json
 
@@ -193,8 +193,39 @@ class InventoryPagination(discord.ui.View):
 
 
 class SquadCog(commands.Cog):
+
     def __init__(self, bot):
         self.bot = bot
+        self.sync_formations.start()
+
+    def cog_unload(self):
+        self.sync_formations.cancel()
+
+    @tasks.loop(seconds=30)
+    async def sync_formations(self):
+        try:
+            import json
+            import lineup_generator
+            p = await database.get_db()
+            rows = await p.fetch("SELECT formation_name, positions_json FROM formation_layouts")
+            layouts = {}
+            for r in rows:
+                try:
+                    positions = r['positions_json']
+                    if isinstance(positions, str):
+                        positions = json.loads(positions)
+                    layouts[r['formation_name']] = positions
+                except Exception:
+                    pass
+            if layouts:
+                lineup_generator.set_cached_layouts(layouts)
+        except Exception as e:
+            print("Failed to sync formations:", e)
+
+    @sync_formations.before_loop
+    async def before_sync(self):
+        await self.bot.wait_until_ready()
+
 
     squad_group = app_commands.Group(name="squad", description="Manage your starting XI")
 
