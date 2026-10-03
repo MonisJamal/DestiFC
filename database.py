@@ -1636,6 +1636,17 @@ DEFAULT_BOT_CONFIG = {
 _BOT_CONFIG_CACHE = None
 _BOT_CONFIG_CACHE_EXP = 0
 
+async def get_season_config() -> dict:
+    p = await get_db()
+    try:
+        row = await p.fetchrow("SELECT value FROM system_settings WHERE key = 'season_config'")
+        if row and row['value']:
+            import json
+            return json.loads(row['value'])
+    except Exception as e:
+        print(f"[Database] Error fetching season config: {e}")
+    return {}
+
 async def get_bot_config() -> dict:
     global _BOT_CONFIG_CACHE, _BOT_CONFIG_CACHE_EXP
     now = time.time()

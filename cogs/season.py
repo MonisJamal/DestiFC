@@ -21,7 +21,28 @@ SEASON_REWARDS = {
          "badge": "season_champion", "card_reward": True},
 }
 
-XP_PER_TIER = 500
+async def fetch_season_config():
+    config = await database.get_season_config()
+    if not config:
+        return {
+            "season_number": 1,
+            "season_title": "Default Season Pass",
+            "xp_per_tier": 500,
+            "tiers_count": 10,
+            "tiers": [
+                {"tier": 1, "reward_type": "coins", "reward_value": 12000000, "reward_name": "12,000,000 Coins"},
+                {"tier": 2, "reward_type": "vouchers", "reward_value": 5, "reward_name": "5 Draft Vouchers"},
+                {"tier": 3, "reward_type": "coins", "reward_value": 32000000, "reward_name": "32,000,000 Coins"},
+                {"tier": 4, "reward_type": "vouchers", "reward_value": 8, "reward_name": "8 Draft Vouchers"},
+                {"tier": 5, "reward_type": "coins", "reward_value": 60000000, "reward_name": "60,000,000 Coins"},
+                {"tier": 6, "reward_type": "vouchers", "reward_value": 12, "reward_name": "12 Draft Vouchers"},
+                {"tier": 7, "reward_type": "coins", "reward_value": 80000000, "reward_name": "80,000,000 Coins"},
+                {"tier": 8, "reward_type": "vouchers", "reward_value": 15, "reward_name": "15 Draft Vouchers"},
+                {"tier": 9, "reward_type": "coins", "reward_value": 120000000, "reward_name": "120,000,000 Coins"},
+                {"tier": 10, "reward_type": "card", "reward_value": 120, "reward_name": "120+ OVR Walkout"}
+            ]
+        }
+    return config
 
 
 async def ensure_season_table(db=None):
@@ -56,15 +77,15 @@ async def add_season_xp(user_id, amount):
     await p.execute('UPDATE season_pass SET xp = xp + $1 WHERE user_id = $2', amount, user_id)
 
 
-def get_current_tier(xp):
-    return min(xp // XP_PER_TIER, 10)
+def get_current_tier(xp, config):
+    return min(xp // config.get('xp_per_tier', 500), config.get('tiers_count', 10))
 
 
-def xp_for_next_tier(xp):
-    current = get_current_tier(xp)
-    if current >= 10:
+def xp_for_next_tier(xp, config):
+    current = get_current_tier(xp, config)
+    if current >= config.get('tiers_count', 10):
         return 0
-    return ((current + 1) * XP_PER_TIER) - xp
+    return ((current + 1) * config.get('xp_per_tier', 500)) - xp
 
 
 class SeasonCog(commands.Cog):
@@ -92,11 +113,12 @@ class SeasonCog(commands.Cog):
         await interaction.response.defer()
         user_id = interaction.user.id
         data = await get_season_data(user_id)
+        config = await fetch_season_config()
         if not data:
             return await interaction.followup.send("❌ Could not load season data.")
 
         xp = data["xp"]
-        current_tier = get_current_tier(xp)
+        current_tier = get_current_tier(xp, config)
         claimed = data["claimed_tiers"]
 
         # Calculate time remaining
@@ -106,26 +128,29 @@ class SeasonCog(commands.Cog):
         hours_left = (remaining_secs % 86400) // 3600
 
         # Build progress bar
-        progress_pct = (xp % XP_PER_TIER) / XP_PER_TIER if current_tier < 10 else 1.0
+        xp_per_tier = config.get("xp_per_tier", 500)
+        tiers_count = config.get("tiers_count", 10)
+        
+        progress_pct = (xp % xp_per_tier) / xp_per_tier if current_tier < tiers_count else 1.0
         filled = int(progress_pct * 20)
         bar = "█" * filled + "░" * (20 - filled)
 
         lines = []
-        for tier_num in range(1, 11):
-            reward = SEASON_REWARDS[tier_num]
+        for t_data in config.get("tiers", []):
+            tier_num = t_data["tier"]
             if tier_num in claimed:
                 status = "✅"
             elif tier_num <= current_tier:
                 status = "🟡"  # Available to claim
             else:
                 status = "🔒"
-            lines.append(f"{status} **Tier {tier_num}** — {reward['desc']}")
+            lines.append(f"{status} **Tier {tier_num}** — {t_data.get('reward_name', 'Reward')}")
 
         embed = discord.Embed(
-            title=f"🎫 Season Pass (Season #{data['season_id']})",
-            description=f"**XP:** {xp} / {(current_tier + 1) * XP_PER_TIER if current_tier < 10 else 'MAX'}\n"
+            title=f"🎫 {config.get('season_title', 'Season Pass')} (Season #{data['season_id']})",
+            description=f"**XP:** {xp} / {(current_tier + 1) * xp_per_tier if current_tier < tiers_count else 'MAX'}\n"
                         f"**Progress:** [{bar}]\n"
-                        f"**Current Tier:** {current_tier}/10\n"
+                        f"**Current Tier:** {current_tier}/{tiers_count}\n"
                         f"⏰ **Resets in:** {days_left}d {hours_left}h\n\n" +
                         "\n".join(lines),
             color=discord.Color.purple()
@@ -137,12 +162,15 @@ class SeasonCog(commands.Cog):
     async def season_claim(self, interaction: discord.Interaction, tier: int):
         await interaction.response.defer()
         user_id = interaction.user.id
+        
+        config = await fetch_season_config()
+        tiers_count = config.get("tiers_count", 10)
 
-        if tier < 1 or tier > 10:
-            return await interaction.followup.send("❌ Tier must be between 1 and 10.")
+        if tier < 1 or tier > tiers_count:
+            return await interaction.followup.send(f"❌ Tier must be between 1 and {tiers_count}.")
 
         data = await get_season_data(user_id)
-        current_tier = get_current_tier(data["xp"])
+        current_tier = get_current_tier(data["xp"], config)
         claimed = data["claimed_tiers"]
 
         if tier > current_tier:
