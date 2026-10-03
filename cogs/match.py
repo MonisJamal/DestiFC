@@ -201,6 +201,12 @@ class MatchCog(commands.Cog):
     async def simulate_live_match(self, interaction, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b):
         try:
             # 1. Extract players, positions, and sectoral power ratings
+            inv_a = await database.get_inventory(player_a.id) or []
+            inv_b = await database.get_inventory(player_b.id) or []
+            inv_map = {}
+            for c in (inv_a + inv_b):
+                inv_map[str(c.get('id', ''))] = c
+
             def get_team_sectors(squad, team_avg_ovr):
                 atk, mid, defn, gk = [], [], [], []
                 starters = []
@@ -208,7 +214,24 @@ class MatchCog(commands.Cog):
                     if not p: continue
                     name = p.get('name') or p.get('player_name', 'Player')
                     pos = ''.join([c for c in pos_raw if not c.isdigit()]).strip().upper()
-                    entry = {"name": name, "pos": pos, "raw_pos": pos_raw, "ovr": p.get('ovr', 100)}
+                    
+                    p_ovr = p.get('ovr', 100)
+                    inv_id_str = str(p.get('inv_id', ''))
+                    
+                    # Apply custom card / signature card buffs directly to the player's OVR for the match engine
+                    is_custom = False
+                    boost_val = 1.15
+                    if inv_id_str in inv_map:
+                        full_p = inv_map[inv_id_str]
+                        is_custom = full_p.get('is_custom') or full_p.get('is_signature_box') or 'CUSTOM' in str(full_p.get('source', '')).upper() or 'SIGNATURE' in str(full_p.get('source', '')).upper()
+                        boost_val = full_p.get('performance_boost', 1.15)
+                    elif inv_id_str.startswith('custom_') or inv_id_str.startswith('sig_'):
+                        is_custom = True
+                        
+                    if is_custom:
+                        p_ovr = int(p_ovr * boost_val)
+                    
+                    entry = {"name": name, "pos": pos, "raw_pos": pos_raw, "ovr": p_ovr, "is_custom": is_custom}
                     starters.append(entry)
                     if pos in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF']:
                         atk.append(entry)
