@@ -86,6 +86,36 @@ class SignatureBoxCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    def extract_base64_files(self, box: dict):
+        import base64
+        import io
+        files = []
+        
+        banner = box.get('banner_url', '')
+        if banner and banner.startswith('data:image/'):
+            try:
+                mime, b64 = banner.split(';base64,')
+                ext = mime.split('/')[-1]
+                b = base64.b64decode(b64)
+                files.append(discord.File(fp=io.BytesIO(b), filename=f"banner.{ext}"))
+                box['banner_url'] = f"attachment://banner.{ext}"
+            except Exception:
+                pass
+                
+        sig_data = box.get('signature_card_data', {})
+        card_img = sig_data.get('playerCardImage', '')
+        if card_img and card_img.startswith('data:image/'):
+            try:
+                mime, b64 = card_img.split(';base64,')
+                ext = mime.split('/')[-1]
+                b = base64.b64decode(b64)
+                files.append(discord.File(fp=io.BytesIO(b), filename=f"card.{ext}"))
+                sig_data['playerCardImage'] = f"attachment://card.{ext}"
+            except Exception:
+                pass
+        
+        return files
+
     def generate_box_embed(self, user: discord.Member, box: dict, user_box: dict) -> discord.Embed:
         claimed = set(user_box.get('claimed_reward_ids', []))
         all_rewards = box.get('rewards_json', [])
@@ -174,9 +204,14 @@ class SignatureBoxCog(commands.Cog):
                 print(f"[Signature Box expires_at parse error]: {e}")
 
         user_box = await database.get_user_signature_box(interaction.user.id)
-        embed = self.generate_box_embed(interaction.user, box, user_box)
-        view = SignatureBoxView(interaction.user, box, user_box, self)
-        await interaction.followup.send(embed=embed, view=view)
+        # Deep copy to avoid mutating the cached box config
+        import copy
+        box_copy = copy.deepcopy(box)
+        files = self.extract_base64_files(box_copy)
+        
+        embed = self.generate_box_embed(interaction.user, box_copy, user_box)
+        view = SignatureBoxView(interaction.user, box_copy, user_box, self)
+        await interaction.followup.send(embed=embed, view=view, files=files)
 
     async def execute_draw(self, interaction: discord.Interaction, view: SignatureBoxView):
         user_id = interaction.user.id
@@ -338,7 +373,11 @@ class SignatureBoxCog(commands.Cog):
             view.update_buttons()
             updated_box_embed = self.generate_box_embed(interaction.user, box, user_box)
             if interaction.message:
-                await interaction.message.edit(embed=updated_box_embed, view=view)
+                import copy
+                box_copy = copy.deepcopy(box)
+                files = self.extract_base64_files(box_copy)
+                updated_box_embed = self.generate_box_embed(interaction.user, box_copy, user_box)
+                await interaction.message.edit(embed=updated_box_embed, view=view, attachments=files)
         except Exception:
             pass
 
