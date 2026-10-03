@@ -127,7 +127,7 @@ class SignatureBoxCog(commands.Cog):
             color=discord.Color.gold()
         )
         if box.get('banner_url'):
-            embed.set_thumbnail(url=box['banner_url'])
+            embed.set_image(url=box['banner_url'])
         embed.set_footer(text=f"DestiFC Signature Box • Expires: {box.get('expires_at', 'Limited Time')}")
         return embed
 
