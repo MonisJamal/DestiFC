@@ -324,6 +324,33 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
             print(f"Error generating animated frames: {e}")
 
     card.alpha_composite(overlay)
+    
+    # Custom Card Jugaad Animations
+    if animated and not sprite_sheet:
+        try:
+            frames = []
+            num_frames = 20
+            W, H = card.size
+            for i in range(num_frames):
+                frame = card.copy()
+                if i < 12:
+                    shine = Image.new("RGBA", (W, H), (0,0,0,0))
+                    d = ImageDraw.Draw(shine)
+                    progress = i / 12.0
+                    cx = -W + (W * 3) * progress
+                    w = W * 0.4
+                    slope = 0.5
+                    d.polygon([(cx, 0), (cx+w, 0), (cx+w-H*slope, H), (cx-H*slope, H)], fill=(255,255,255,70))
+                    d.polygon([(cx+w*0.4, 0), (cx+w*0.6, 0), (cx+w*0.6-H*slope, H), (cx+w*0.4-H*slope, H)], fill=(255,255,255,140))
+                    shine = shine.filter(ImageFilter.GaussianBlur(radius=3 * SCALE))
+                    frame = Image.alpha_composite(frame, shine)
+                frames.append(frame)
+            if len(_MEMORY_CARD_CACHE) < 500:
+                _MEMORY_CARD_CACHE[card_cache_key] = frames
+            return frames
+        except Exception as e:
+            print(f"Jugaad animation failed: {e}")
+
     if not animated:
         try:
             card.save(disk_card_file, "PNG")
