@@ -140,7 +140,7 @@ class DestiFC(commands.Bot):
                 """
                 SELECT id, job_type, payload
                 FROM portal_jobs
-                WHERE status = 'pending' AND job_type IN ('SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES')
+                WHERE status = 'pending' AND job_type IN ('mass_dm', 'SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES')
                 ORDER BY created_at ASC
                 LIMIT 1
                 """
@@ -154,7 +154,42 @@ class DestiFC(commands.Bot):
                     job_id
                 )
 
-                if job_type == 'SIGNAL_RELOAD_COGS':
+                if job_type == 'mass_dm':
+                    import asyncio
+                    import json
+                    try:
+                        data = json.loads(job['payload'])
+                        title = data.get('title', 'Announcement')
+                        message = data.get('message', '')
+                        
+                        async def bg_mass_dm():
+                            try:
+                                users = await database.fetch_all("SELECT user_id FROM users")
+                                count = 0
+                                for u in users:
+                                    try:
+                                        user = await bot.fetch_user(u['user_id'])
+                                        if user:
+                                            embed = discord.Embed(
+                                                title=title,
+                                                description=message,
+                                                color=discord.Color.purple()
+                                            )
+                                            await user.send(embed=embed)
+                                            count += 1
+                                            await asyncio.sleep(2.0) # Rate limit protection
+                                    except Exception as e:
+                                        pass
+                                print(f"[Mass DM] Successfully sent to {count} users.")
+                            except Exception as ex:
+                                print(f"[Mass DM] Fatal Error: {ex}")
+                                
+                        bot.loop.create_task(bg_mass_dm())
+                        print(f"[Mass DM] Queued DM blast for {title}")
+                    except Exception as e:
+                        print(f"Error parsing mass_dm payload: {e}")
+                        
+                elif job_type == 'SIGNAL_RELOAD_COGS':
                     print("[Remote Control] Flushing caches and reloading all bot cogs...")
                     database.flush_all_caches()
                     for filename in os.listdir('./cogs'):
