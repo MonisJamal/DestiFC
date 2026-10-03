@@ -178,11 +178,15 @@ class DestiFC(commands.Bot):
                         
                         async def bg_mass_dm():
                             try:
+                                import traceback
+                                with open("mass_dm.log", "w") as f:
+                                    f.write(f"Starting mass DM for {title}\n")
                                 users = await database.fetch_all("SELECT user_id FROM users")
                                 count = 0
+                                errs = 0
                                 for u in users:
                                     try:
-                                        user = await bot.fetch_user(u['user_id'])
+                                        user = await bot.fetch_user(int(u['user_id']))
                                         if user:
                                             embed = discord.Embed(
                                                 title=title,
@@ -193,10 +197,15 @@ class DestiFC(commands.Bot):
                                             count += 1
                                             await asyncio.sleep(2.0) # Rate limit protection
                                     except Exception as e:
+                                        errs += 1
+                                        with open("mass_dm.log", "a") as f:
+                                            f.write(f"Failed to DM {u['user_id']}: {e}\n")
                                         pass
-                                print(f"[Mass DM] Successfully sent to {count} users.")
+                                with open("mass_dm.log", "a") as f:
+                                    f.write(f"[Mass DM] Successfully sent to {count} users. Failed: {errs}\n")
                             except Exception as ex:
-                                print(f"[Mass DM] Fatal Error: {ex}")
+                                with open("mass_dm.log", "a") as f:
+                                    f.write(f"[Mass DM] Fatal Error: {ex}\n{traceback.format_exc()}\n")
                                 
                         bot.loop.create_task(bg_mass_dm())
                         print(f"[Mass DM] Queued DM blast for {title}")
