@@ -299,6 +299,19 @@ class SquadCog(commands.Cog):
                 if layouts:
                     set_cached_layouts(layouts)
                 
+                # Fetch all-time stats for the players to display on the 3D cards
+                p_stats_rows = await database.get_user_player_stats(target.id)
+                stats_map = {row['player_name'].lower(): row for row in p_stats_rows}
+                
+                # Attach stats to inv_dict for rendering
+                for inv_id, pdata in inv_dict.items():
+                    name_lower = pdata.get("cardName", pdata.get("lastName", "")).lower()
+                    if name_lower in stats_map:
+                        st = stats_map[name_lower]
+                        pdata["_lifetime_goals"] = st.get("goals", 0)
+                        pdata["_lifetime_assists"] = st.get("assists", 0)
+                        pdata["_lifetime_matches"] = st.get("matches_played", 0)
+
                 def _render():
                     img = generate_lineup_image(squad, inv_dict)
                     buf = io.BytesIO()
@@ -342,12 +355,39 @@ class SquadCog(commands.Cog):
             
         squad = await database.get_squad(interaction.user.id)
         positions = FORMATION_MAP[new_formation].copy()
+        
+        old_players = squad.get("players", {})
+        if isinstance(old_players, list):
+            old_players = {}
+            
+        new_players = {}
+        kept_count = 0
+        
+        # Try to map old players to new slots
+        for new_pos in positions:
+            if new_pos in old_players and old_players[new_pos]:
+                new_players[new_pos] = old_players[new_pos]
+                old_players[new_pos] = None
+                kept_count += 1
+            else:
+                new_players[new_pos] = None
+                
+        # For remaining old players, try to find an empty slot that matches their position loosely
+        for old_pos, p_data in old_players.items():
+            if p_data:
+                for new_pos in positions:
+                    if not new_players[new_pos]:
+                        # Basic position match (e.g. CB1 and CB2)
+                        if old_pos[:2] == new_pos[:2]:
+                            new_players[new_pos] = p_data
+                            kept_count += 1
+                            break
             
         new_squad = {
             "formation": new_formation,
             "tactic": squad.get("tactic", "Tiki-Taka"),
             "theme": squad.get("theme", "default"),
-            "players": positions
+            "players": new_players
         }
         
         await database.update_squad(interaction.user.id, new_squad)
@@ -355,7 +395,7 @@ class SquadCog(commands.Cog):
         is_syn = any(f.lower() in new_formation.lower() for f in t_data["best_formations"])
         syn_msg = f"\n🌟 **Tactical Chemistry Synergy is ACTIVE with your {t_data['emoji']} {t_data['name']} tactic!**" if is_syn else f"\n💡 *Tip: Best suitable tactic for {new_formation}: Check `/squad tactic`.*"
         
-        await interaction.followup.send(f"✅ Formation changed to **{new_formation}**! Your squad has been reset, please set your players again.{syn_msg}")
+        await interaction.followup.send(f"✅ Formation changed to **{new_formation}**! Kept **{kept_count}** previous players in their positions.{syn_msg}")
 
     @squad_group.command(name="tactic", description="Select or view your team's tactical playstyle & formation synergy")
     @app_commands.describe(tactic="Select playstyle tactic for your club")

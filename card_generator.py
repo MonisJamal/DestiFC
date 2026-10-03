@@ -214,6 +214,8 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
 
     card = fetched_images.get("bg")
     if not card:
+        if not fetched_images.get("player"):
+            return None # Force fallback if both BG and player are missing
         # Preserve full transparent alpha for standalone / custom card renders
         card = Image.new("RGBA", target_size, (0, 0, 0, 0))
     

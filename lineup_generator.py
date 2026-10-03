@@ -900,7 +900,15 @@ def _render_single_slot_card(pos, player_info, raw_data, c_size, glow_color, fon
     if card_3d is None:
         card_3d = _render_fallback_card(name, ovr, pos, c_size, glow_color, font_name, font_pos)
 
-    return pos, card_3d, name, ovr
+    stats_str = ""
+    if isinstance(raw_data, dict) and "_lifetime_matches" in raw_data:
+        m = raw_data.get("_lifetime_matches", 0)
+        if m > 0:
+            g = raw_data.get("_lifetime_goals", 0)
+            a = raw_data.get("_lifetime_assists", 0)
+            stats_str = f"{g}G {a}A"
+
+    return pos, card_3d, name, ovr, stats_str
 
 def generate_lineup_image(squad_data: dict, inventory_dict: dict):
     """
@@ -975,8 +983,13 @@ def generate_lineup_image(squad_data: dict, inventory_dict: dict):
 
         for future in concurrent.futures.as_completed(tasks):
             try:
-                pos, card_3d, name, ovr = future.result()
-                rendered_cards[pos] = (card_3d, name, ovr)
+                res = future.result()
+                if len(res) == 5:
+                    pos, card_3d, name, ovr, stats_str = res
+                else:
+                    pos, card_3d, name, ovr = res
+                    stats_str = ""
+                rendered_cards[pos] = (card_3d, name, ovr, stats_str)
             except Exception as e:
                 print(f"Parallel card render failed: {e}")
 
@@ -985,7 +998,13 @@ def generate_lineup_image(squad_data: dict, inventory_dict: dict):
         cx, cy, c_size = projected[pos]
         
         if pos in rendered_cards:
-            card_3d, name, ovr = rendered_cards[pos]
+            val = rendered_cards[pos]
+            if len(val) == 4:
+                card_3d, name, ovr, stats_str = val
+            else:
+                card_3d, name, ovr = val
+                stats_str = ""
+
             px = cx - card_3d.width // 2
             py = cy - card_3d.height // 2 - 6
             pitch.paste(card_3d, (px, py), card_3d)
