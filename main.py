@@ -146,7 +146,7 @@ class DestiFC(commands.Bot):
     async def before_heartbeat_loop(self):
         await self.wait_until_ready()
 
-    @tasks.loop(seconds=5)
+    @tasks.loop(seconds=60)
     async def remote_signal_listener_loop(self):
         """Listens for remote process control commands (restart, reload cogs, shutdown) from Admin Panel."""
         try:
