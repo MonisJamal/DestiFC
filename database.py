@@ -128,7 +128,7 @@ async def get_user(user_id: int) -> dict:
     if row:
         return _sanitize_user_dict(dict(row), user_id)
     else:
-        await p.execute('INSERT INTO users (user_id, coins, vouchers) VALUES ($1, 50000000, 50) ON CONFLICT (user_id) DO NOTHING', user_id)
+        await p.execute('INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING', user_id)
         row = await p.fetchrow('SELECT * FROM users WHERE user_id = $1', user_id)
         if row:
             return _sanitize_user_dict(dict(row), user_id)
