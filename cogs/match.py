@@ -453,26 +453,52 @@ class MatchCog(commands.Cog):
                     att_pool = att_starters
                     play_type = "forward"
 
+                # Determine the defender who challenges this play:
+                # 65% Central/wide defender (CB, LB, RB)
+                # 35% Defensive midfielder / tracking midfielder (CDM, CM)
+                def_backline = s_a["defn"] if not is_a_attack else s_b["defn"]
+                def_midline = s_a["mid"] if not is_a_attack else s_b["mid"]
+                
+                # Filter CDMs or deep midfielders if available
+                cdms = [p for p in def_midline if p.get('pos') in ['CDM', 'CM']]
+                if random.random() < 0.35 and (cdms or def_midline):
+                    def_pool = cdms or def_midline
+                    def_role = "midfield"
+                elif def_backline:
+                    def_pool = def_backline
+                    def_role = "defender"
+                else:
+                    def_pool = def_starters
+                    def_role = "defender"
+
                 active_atk = random.choice(att_pool)
-                active_def = random.choice(def_defs)
+                active_def = random.choice(def_pool)
                 active_gk = def_gks[0]
 
-                # Context-aware scenarios based on player position!
+                # Context-aware scenarios based on attacker and defender positions!
                 atk_pos = active_atk.get('pos', 'ST')
-                if play_type == "defender":
+                def_pos = active_def.get('pos', 'CB')
+
+                if def_role == "midfield":
+                    scenarios = [
+                        f"🛡️ **MIDFIELD BATTLEGROUND!** **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) tries to push through, but anchor **{active_def['name']}** (`{def_pos}`, {active_def['ovr']} OVR) steps in to shut down the play!",
+                        f"⚡ **PRESSING ENFORCER!** **{active_def['name']}** (`{def_pos}`, {active_def['ovr']} OVR) tracks back aggressively to challenge **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) in the middle of the pitch!"
+                    ]
+                    scenario_text = scenarios[m_idx % len(scenarios)]
+                elif play_type == "defender":
                     if atk_pos in ['LB', 'RB', 'LWB', 'RWB']:
-                        scenario_text = f"💨 **OVERLAPPING FULLBACK!** **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) flies down the flank and cuts directly towards goal!"
+                        scenario_text = f"💨 **OVERLAPPING FULLBACK!** **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) flies down the flank, marked tightly by **{active_def['name']}** (`{def_pos}`, {active_def['ovr']} OVR)!"
                     else:
-                        scenario_text = f"📐 **CORNER KICK CHAOS!** Center-back **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) powers forward into the box, towering over **{active_def['name']}**!"
+                        scenario_text = f"📐 **CORNER KICK CHAOS!** Center-back **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) powers forward into the box, contested in the air by **{active_def['name']}** (`{def_pos}`)!"
                 elif play_type == "midfield":
-                    scenario_text = f"⚡ **MIDFIELD ARRIVAL!** **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) makes a late run to the edge of the box, teeing up an opportunity against **{active_def['name']}**!"
+                    scenario_text = f"⚡ **MIDFIELD ARRIVAL!** **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) arrives late at the D, facing defender **{active_def['name']}** (`{def_pos}`, {active_def['ovr']} OVR)!"
                 else:
                     scenarios = [
-                        f"⚡ **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) bursts into the final third on a rapid counter-attack!",
-                        f"🎯 **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) cuts inside across the penalty box against **{active_def['name']}** ({active_def['ovr']} OVR)!",
-                        f"🔥 High-pressing turnover! **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) pounces on a loose ball in the danger zone!",
-                        f"🚀 Delicate chipped through-ball leaves **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) bearing down on the defense!",
-                        f"⚡ 1-on-1 duel in the box! **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) isolates **{active_def['name']}**!"
+                        f"⚡ **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) bursts into the final third on a counter against **{active_def['name']}** (`{def_pos}`)!",
+                        f"🎯 **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) cuts inside across the penalty box against **{active_def['name']}** (`{def_pos}`, {active_def['ovr']} OVR)!",
+                        f"🔥 High-pressing turnover! **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) pounces on a loose ball in front of **{active_def['name']}**!",
+                        f"🚀 Delicate chipped through-ball leaves **{active_atk['name']}** (`{atk_pos}`) racing wheel-to-wheel with **{active_def['name']}** (`{def_pos}`)!",
+                        f"⚡ 1-on-1 duel in the box! **{active_atk['name']}** (`{atk_pos}`) isolates defender **{active_def['name']}** (`{def_pos}`)!"
                     ]
                     scenario_text = scenarios[m_idx % len(scenarios)]
 
@@ -626,7 +652,17 @@ class MatchCog(commands.Cog):
                     else:
                         saves_a += 1
 
-                    if def_act == "intercept":
+                    if def_role == "midfield":
+                        if def_act == "intercept":
+                            outcome_text = f"🛡️ **MIDFIELD SHIELD!** Holding mid **{active_def['name']}** anticipates the pass and snatches possession cleanly in the center circle!"
+                        elif def_act == "tackle":
+                            outcome_text = f"⚔️ **BULLDOG TACKLE!** Midfield powerhouse **{active_def['name']}** slides in and strips the ball right off {active_atk['name']}'s boot!"
+                        elif def_act == "jockey":
+                            outcome_text = f"🧱 **MIDFIELD WALL!** **{active_def['name']}** jockeys expertly, cutting off {active_atk['name']}'s progression!"
+                        else:
+                            outcome_text = f"🧤 **REFLEX MASTERCLASS!** {active_gk['name']} reacts with feline reflexes to deny {active_atk['name']} from point-blank range!"
+                            scoresheet_events.append(f"🧤 **{minute}'** - **{active_gk['name']}** (Crucial Save)")
+                    elif def_act == "intercept":
                         outcome_text = f"🛡️ **READ LIKE A BOOK!** {active_def['name']} cuts the passing lane with a masterclass anticipation!"
                     elif def_act == "jockey":
                         outcome_text = f"🧱 **STANDS TALL!** {active_def['name']} holds their ground with patient jockeying, blocking {active_atk['name']}'s effort!"
