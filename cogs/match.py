@@ -426,30 +426,55 @@ class MatchCog(commands.Cog):
                 if is_a_attack:
                     att_member, def_member = player_a, player_b
                     att_starters, def_starters = starters_a, starters_b
-                    att_atks, def_defs = s_a["atk"] or starters_a, s_b["defn"] or starters_b
+                    def_defs = s_b["defn"] or starters_b
                     def_gks = s_b["gk"] or [{"name": "Goalkeeper", "ovr": 100}]
                     att_team_name, def_team_name = player_a.display_name, player_b.display_name
                 else:
                     att_member, def_member = player_b, player_a
                     att_starters, def_starters = starters_b, starters_a
-                    att_atks, def_defs = s_b["atk"] or starters_b, s_a["defn"] or starters_a
+                    def_defs = s_a["defn"] or starters_a
                     def_gks = s_a["gk"] or [{"name": "Goalkeeper", "ovr": 100}]
                     att_team_name, def_team_name = player_b.display_name, player_a.display_name
+                # Determine the type of offensive opportunity:
+                # 50% Forward attack (ST/LW/RW/CF)
+                # 30% Midfield arrival / long shot (CAM/CM/CDM)
+                # 20% Set-piece / Corner header or Overlapping fullback run (CB/LB/RB)
+                roll = random.random()
+                if roll < 0.50 and (s_a["atk"] if is_a_attack else s_b["atk"]):
+                    att_pool = s_a["atk"] if is_a_attack else s_b["atk"]
+                    play_type = "forward"
+                elif roll < 0.80 and (s_a["mid"] if is_a_attack else s_b["mid"]):
+                    att_pool = s_a["mid"] if is_a_attack else s_b["mid"]
+                    play_type = "midfield"
+                elif (s_a["defn"] if is_a_attack else s_b["defn"]):
+                    att_pool = s_a["defn"] if is_a_attack else s_b["defn"]
+                    play_type = "defender"
+                else:
+                    att_pool = att_starters
+                    play_type = "forward"
 
-                # Pick key actor cards
-                active_atk = random.choice(att_atks)
+                active_atk = random.choice(att_pool)
                 active_def = random.choice(def_defs)
                 active_gk = def_gks[0]
 
-                # Scenario flavor
-                scenarios = [
-                    f"⚡ **{active_atk['name']}** ({active_atk['ovr']} OVR) bursts into the final third on a rapid counter-attack!",
-                    f"🎯 **{active_atk['name']}** cuts inside across the edge of the penalty box against **{active_def['name']}** ({active_def['ovr']} OVR)!",
-                    f"🔥 High-pressing turnover! **{active_atk['name']}** pounces on a loose ball in the danger zone!",
-                    f"🚀 Delicate chipped through-ball leaves **{active_atk['name']}** bearing down on the defense!",
-                    f"⚡ 1-on-1 duel in the box! **{active_atk['name']}** isolates **{active_def['name']}**!"
-                ]
-                scenario_text = scenarios[m_idx % len(scenarios)]
+                # Context-aware scenarios based on player position!
+                atk_pos = active_atk.get('pos', 'ST')
+                if play_type == "defender":
+                    if atk_pos in ['LB', 'RB', 'LWB', 'RWB']:
+                        scenario_text = f"💨 **OVERLAPPING FULLBACK!** **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) flies down the flank and cuts directly towards goal!"
+                    else:
+                        scenario_text = f"📐 **CORNER KICK CHAOS!** Center-back **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) powers forward into the box, towering over **{active_def['name']}**!"
+                elif play_type == "midfield":
+                    scenario_text = f"⚡ **MIDFIELD ARRIVAL!** **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) makes a late run to the edge of the box, teeing up an opportunity against **{active_def['name']}**!"
+                else:
+                    scenarios = [
+                        f"⚡ **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) bursts into the final third on a rapid counter-attack!",
+                        f"🎯 **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) cuts inside across the penalty box against **{active_def['name']}** ({active_def['ovr']} OVR)!",
+                        f"🔥 High-pressing turnover! **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) pounces on a loose ball in the danger zone!",
+                        f"🚀 Delicate chipped through-ball leaves **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) bearing down on the defense!",
+                        f"⚡ 1-on-1 duel in the box! **{active_atk['name']}** (`{atk_pos}`, {active_atk['ovr']} OVR) isolates **{active_def['name']}**!"
+                    ]
+                    scenario_text = scenarios[m_idx % len(scenarios)]
 
                 scoreboard = f"**{player_a.display_name}** `{current_score_a} - {current_score_b}` **{player_b.display_name}**"
                 time_label = f"⏱️ **{minute}' MINUTE — KEY MATCH MOMENT!**"
@@ -570,7 +595,19 @@ class MatchCog(commands.Cog):
                     else:
                         current_score_b += 1
 
-                    if atk_act == "pass":
+                    if play_type == "defender":
+                        if atk_pos in ['LB', 'RB', 'LWB', 'RWB']:
+                            outcome_text = f"💨 **FULLBACK ON THE OVERLAP!** Fullback **{active_atk['name']}** bombs forward and lashes a venomous drive into the far corner! ⚽🔥"
+                        else:
+                            outcome_text = f"📐 **BULLET HEADER!** Towering center-back **{active_atk['name']}** rises highest from the set-piece and powers a header into the roof of the net! ⚽🔥"
+                    elif play_type == "midfield":
+                        if atk_act == "finesse":
+                            outcome_text = f"💫 **MIDFIELD MAESTRO!** **{active_atk['name']}** picks out the top corner from 25 yards with an exquisite curling strike! ⚽🔥"
+                        elif atk_act == "pass":
+                            outcome_text = f"🎯 **LATE ARRIVAL!** **{active_atk['name']}** arrives late from midfield, receives the return pass, and buries it into the bottom corner! ⚽🔥"
+                        else:
+                            outcome_text = f"🚀 **LONG RANGE SCREAMER!** **{active_atk['name']}** unleashes a 30-yard thunderbolt from deep midfield that leaves the keeper rooted to the spot! ⚽🔥"
+                    elif atk_act == "pass":
                         outcome_text = f"🎯 **SURGICAL PASS!** {active_atk['name']} threads an inch-perfect through ball, tapping it past {active_def['name']} into the empty net! ⚽🔥"
                     elif atk_act == "dribble":
                         outcome_text = f"⚡ **SAMBA FLAIR!** {active_atk['name']} hits an insane roulette skill move, sits {active_def['name']} on the turf, and tucks it home! ⚽🔥"
