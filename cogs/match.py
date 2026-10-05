@@ -23,19 +23,29 @@ class MatchMomentView(discord.ui.View):
         self.attacker_action = None
         self.defender_action = None
 
-    @discord.ui.button(label="🎯 Pass / Cross", style=discord.ButtonStyle.primary, row=0, custom_id="btn_pass")
+    # Row 0: Primary Attacker Moves
+    @discord.ui.button(label="🎯 Pass", style=discord.ButtonStyle.primary, row=0, custom_id="btn_pass")
     async def btn_pass(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "pass", "🎯 Pass / Cross")
+        await self._handle_click(interaction, "pass", "🎯 Through Pass")
 
-    @discord.ui.button(label="⚡ Dribble / Skill", style=discord.ButtonStyle.success, row=0, custom_id="btn_dribble")
+    @discord.ui.button(label="⚡ Dribble", style=discord.ButtonStyle.success, row=0, custom_id="btn_dribble")
     async def btn_dribble(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "dribble", "⚡ Dribble / Skill")
+        await self._handle_click(interaction, "dribble", "⚡ Skill Dribble")
 
     @discord.ui.button(label="🚀 Power Shot", style=discord.ButtonStyle.danger, row=0, custom_id="btn_shoot")
     async def btn_shoot(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._handle_click(interaction, "shoot", "🚀 Power Shot")
 
-    @discord.ui.button(label="🛡️ Cut Pass Lane", style=discord.ButtonStyle.secondary, row=1, custom_id="btn_intercept")
+    @discord.ui.button(label="💫 Finesse Curl", style=discord.ButtonStyle.primary, row=0, custom_id="btn_finesse")
+    async def btn_finesse(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_click(interaction, "finesse", "💫 Finesse Curl")
+
+    @discord.ui.button(label="🪄 Chip Shot", style=discord.ButtonStyle.secondary, row=0, custom_id="btn_chip")
+    async def btn_chip(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_click(interaction, "chip", "🪄 Chip Shot")
+
+    # Row 1: Primary Defender Counter-Moves
+    @discord.ui.button(label="🛡️ Cut Pass", style=discord.ButtonStyle.primary, row=1, custom_id="btn_intercept")
     async def btn_intercept(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._handle_click(interaction, "intercept", "🛡️ Cut Pass Lane")
 
@@ -43,20 +53,30 @@ class MatchMomentView(discord.ui.View):
     async def btn_tackle(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._handle_click(interaction, "tackle", "⚔️ Crunch Tackle")
 
-    @discord.ui.button(label="🧤 Rush / Stand Tall", style=discord.ButtonStyle.primary, row=1, custom_id="btn_save")
+    @discord.ui.button(label="🧤 Rush GK", style=discord.ButtonStyle.danger, row=1, custom_id="btn_save")
     async def btn_save(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "save", "🧤 Rush / Stand Tall")
+        await self._handle_click(interaction, "save", "🧤 Rush GK")
+
+    @discord.ui.button(label="🧱 Jockey Block", style=discord.ButtonStyle.success, row=1, custom_id="btn_jockey")
+    async def btn_jockey(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_click(interaction, "jockey", "🧱 Jockey Block")
+
+    @discord.ui.button(label="🚩 Offside Trap", style=discord.ButtonStyle.secondary, row=1, custom_id="btn_trap")
+    async def btn_trap(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_click(interaction, "trap", "🚩 Offside Trap")
 
     async def _handle_click(self, interaction: discord.Interaction, action_key: str, action_label: str):
         uid = interaction.user.id
+        atk_keys = ["pass", "dribble", "shoot", "finesse", "chip"]
+        def_keys = ["intercept", "tackle", "save", "jockey", "trap"]
         if uid == self.attacker_member.id:
-            if action_key not in ["pass", "dribble", "shoot"]:
-                return await interaction.response.send_message("❌ You are **Attacking**! Pick: `🎯 Pass`, `⚡ Dribble`, or `🚀 Power Shot`.", ephemeral=True)
+            if action_key not in atk_keys:
+                return await interaction.response.send_message("❌ You are **Attacking**! Use the top row buttons (`Pass`, `Dribble`, `Power Shot`, `Finesse`, `Chip`).", ephemeral=True)
             self.attacker_action = action_key
             await interaction.response.send_message(f"✅ Locked in: **{action_label}**! Waiting for defending manager...", ephemeral=True)
         elif uid == self.defender_member.id:
-            if action_key not in ["intercept", "tackle", "save"]:
-                return await interaction.response.send_message("❌ You are **Defending**! Pick: `🛡️ Cut Pass`, `⚔️ Tackle`, or `🧤 Rush/Stand`.", ephemeral=True)
+            if action_key not in def_keys:
+                return await interaction.response.send_message("❌ You are **Defending**! Use the bottom row buttons (`Cut Pass`, `Tackle`, `Rush GK`, `Jockey`, `Trap`).", ephemeral=True)
             self.defender_action = action_key
             await interaction.response.send_message(f"✅ Locked in: **{action_label}**! Counter-action ready...", ephemeral=True)
         else:
@@ -440,8 +460,8 @@ class MatchCog(commands.Cog):
                     f"🏟️ **LIVE DIVISION RIVALS MATCH**\n\n"
                     f"{scoreboard}\n{time_label}\n\n"
                     f"🎙️ *{scenario_text}*\n\n"
-                    f"⚽ **{att_team_name} (Attacker)**: Choose `🎯 Pass` | `⚡ Dribble` | `🚀 Power Shot`\n"
-                    f"🛡️ **{def_team_name} (Defender)**: Choose `🛡️ Cut Pass` | `⚔️ Crunch Tackle` | `🧤 Rush GK`\n"
+                    f"⚽ **{att_team_name} (Attacker)**: `🎯 Pass` | `⚡ Dribble` | `🚀 Power Shot` | `💫 Finesse` | `🪄 Chip`\n"
+                    f"🛡️ **{def_team_name} (Defender)**: `🛡️ Cut Pass` | `⚔️ Tackle` | `🧤 Rush GK` | `🧱 Jockey` | `🚩 Offside Trap`\n"
                     f"*(Quick 7s to lock in your play!)*"
                 )
 
@@ -449,59 +469,89 @@ class MatchCog(commands.Cog):
                 await asyncio.sleep(7.0)
 
                 # Default fallback actions if not selected
-                atk_act = view.attacker_action or random.choice(["pass", "dribble", "shoot"])
-                def_act = view.defender_action or random.choice(["intercept", "tackle", "save"])
+                atk_act = view.attacker_action or random.choice(["pass", "dribble", "shoot", "finesse", "chip"])
+                def_act = view.defender_action or random.choice(["intercept", "tackle", "save", "jockey", "trap"])
 
                 # Resolve circumstance outcome matrix
-                # 1. Base success rating from card OVR difference
                 ovr_delta = active_atk['ovr'] - active_def['ovr']
-                # Tactical match-up bonuses:
-                # Pass beats Tackle & Save; loses to Intercept
-                # Dribble beats Intercept & Tackle (foul risk); loses to disciplined Jockey
-                # Shoot beats Tackle/Intercept (uncontested shot); contested by Save
+                gk_delta = active_atk['ovr'] - active_gk['ovr']
                 success_chance = 0.50 + (ovr_delta * 0.015)
 
                 is_goal = False
                 is_foul = False
+                is_offside = False
                 outcome_text = ""
 
+                # Tactical rock-paper-scissors matchup resolution:
                 if atk_act == "pass":
                     if def_act == "intercept":
-                        success_chance -= 0.35
-                    elif def_act in ["tackle", "save"]:
+                        success_chance -= 0.40
+                    elif def_act == "trap":
+                        if random.random() < 0.50:
+                            is_offside = True
+                        else:
+                            success_chance += 0.35  # Trap sprung open!
+                    elif def_act in ["tackle", "save", "jockey"]:
                         success_chance += 0.25
+
                 elif atk_act == "dribble":
-                    if def_act == "intercept":
-                        success_chance += 0.25
+                    if def_act == "jockey":
+                        success_chance -= 0.35  # Disciplined defending halts dribble
+                    elif def_act == "intercept":
+                        success_chance += 0.30  # Defender guessing pass leaves lane open
                     elif def_act == "tackle":
-                        if random.random() < 0.28:
+                        if random.random() < 0.32:
                             is_foul = True
-                        success_chance += 0.10
-                    elif def_act == "save":
-                        success_chance += 0.20
+                        success_chance += 0.15
+                    elif def_act in ["save", "trap"]:
+                        success_chance += 0.25
+
                 elif atk_act == "shoot":
-                    gk_delta = active_atk['ovr'] - active_gk['ovr']
-                    success_chance = 0.45 + (gk_delta * 0.02)
+                    success_chance = 0.46 + (gk_delta * 0.02)
                     if def_act == "save":
                         success_chance -= 0.25
-                    elif def_act == "tackle":
+                    elif def_act == "jockey":
+                        success_chance -= 0.20  # Center-back blocks shooting angle
+                    elif def_act in ["tackle", "intercept", "trap"]:
+                        success_chance += 0.20
+
+                elif atk_act == "finesse":
+                    success_chance = 0.48 + (gk_delta * 0.018)
+                    if def_act == "save":
+                        # Finesse curls around a stationary or rushing keeper
+                        success_chance += 0.10
+                    elif def_act == "jockey":
+                        success_chance -= 0.30  # Jockeying defender closes the bend angle
+                    elif def_act in ["tackle", "intercept"]:
                         success_chance += 0.15
 
-                success_chance = max(0.12, min(0.85, success_chance))
+                elif atk_act == "chip":
+                    if def_act == "save":
+                        # Perfect counter to keeper rushing off their line!
+                        success_chance = 0.85
+                    elif def_act in ["jockey", "trap"]:
+                        success_chance = 0.25  # Defender tracks back or keeper was on goal line
+                    else:
+                        success_chance = 0.45 + (gk_delta * 0.015)
+
+                success_chance = max(0.10, min(0.90, success_chance))
 
                 if is_a_attack:
                     shots_total_a += 1
                 else:
                     shots_total_b += 1
 
-                if is_foul:
+                if is_offside:
+                    outcome_text = f"🚩 **OFFSIDE TRAP SPRUNG!** {def_team_name}'s backline steps up in sync, catching **{active_atk['name']}** straying beyond the last defender!"
+                    scoresheet_events.append(f"🚩 **{minute}'** - **{active_atk['name']}** (Offside Flag Raised)")
+                elif is_foul:
                     if is_a_attack:
                         fouls_b += 1
                         yellows_b += 1
                     else:
                         fouls_a += 1
                         yellows_a += 1
-                    outcome_text = f"🟨 **CLATTERED!** {active_def['name']} lunges in with a desperate tackle on **{active_atk['name']}**! Yellow card shown!"
+                    outcome_text = f"🟨 **CLATTERED!** {active_def['name']} dives in with a reckless crunch tackle taking down **{active_atk['name']}**! Yellow card shown!"
                     scoresheet_events.append(f"🟨 **{minute}'** - **{active_def['name']}** (Foul on {active_atk['name']})")
                 elif random.random() < success_chance:
                     # Attack succeeded!
@@ -510,7 +560,6 @@ class MatchCog(commands.Cog):
                     else:
                         shots_on_target_b += 1
 
-                    # Goal or assist converted!
                     is_goal = True
                     scorer_name = active_atk['name']
                     player_scores[scorer_name] = player_scores.get(scorer_name, 0) + 1
@@ -522,11 +571,15 @@ class MatchCog(commands.Cog):
                         current_score_b += 1
 
                     if atk_act == "pass":
-                        outcome_text = f"🎯 **PINPOINT PLAY!** {active_atk['name']} executes a surgical pass slicing past {active_def['name']}, tapping it straight into the back of the net! ⚽🔥"
+                        outcome_text = f"🎯 **SURGICAL PASS!** {active_atk['name']} threads an inch-perfect through ball, tapping it past {active_def['name']} into the empty net! ⚽🔥"
                     elif atk_act == "dribble":
-                        outcome_text = f"⚡ **MAGIC FEET!** {active_atk['name']} hits a filthy skill move, leaves {active_def['name']} in the dust, and slots it home with ice in the veins! ⚽🔥"
+                        outcome_text = f"⚡ **SAMBA FLAIR!** {active_atk['name']} hits an insane roulette skill move, sits {active_def['name']} on the turf, and tucks it home! ⚽🔥"
+                    elif atk_act == "finesse":
+                        outcome_text = f"💫 **PURE ARTISTRY!** {active_atk['name']} curls a delightful finesse strike right into the postage stamp top corner! Unstoppable! ⚽🔥"
+                    elif atk_act == "chip":
+                        outcome_text = f"🪄 **AUDACIOUS CHIP!** Seeing {active_gk['name']} off their line, {active_atk['name']} dinks a glorious rainbow chip into the net! World class! ⚽🔥"
                     else:
-                        outcome_text = f"🚀 **UNSTOPPABLE SCREAMER!** {active_atk['name']} unloads a missile that blasts straight past {active_gk['name']}! Top bins! ⚽🔥"
+                        outcome_text = f"🚀 **THUNDERBOLT!** {active_atk['name']} unleashes an absolute rocket that almost rips through the netting! Top bins! ⚽🔥"
 
                     scoresheet_events.append(f"⚽ **{minute}'** - **{scorer_name}** ({att_team_name})")
                 else:
@@ -537,11 +590,15 @@ class MatchCog(commands.Cog):
                         saves_a += 1
 
                     if def_act == "intercept":
-                        outcome_text = f"🛡️ **READ LIKE A BOOK!** {active_def['name']} anticipates {active_atk['name']}'s pass with a masterclass interception!"
+                        outcome_text = f"🛡️ **READ LIKE A BOOK!** {active_def['name']} cuts the passing lane with a masterclass anticipation!"
+                    elif def_act == "jockey":
+                        outcome_text = f"🧱 **STANDS TALL!** {active_def['name']} holds their ground with patient jockeying, blocking {active_atk['name']}'s effort!"
+                    elif def_act == "trap":
+                        outcome_text = f"🛡️ **DEFENSIVE COMPACTNESS!** The backline swarms {active_atk['name']}, neutralizing the attacking wave!"
                     elif def_act == "tackle":
-                        outcome_text = f"⚔️ **BRICK WALL!** {active_def['name']} executes a clean, crunching challenge to dispossess {active_atk['name']} cleanly!"
+                        outcome_text = f"⚔️ **TIMED TO PERFECTION!** {active_def['name']} executes a picture-perfect sliding challenge, hooking the ball away cleanly!"
                     else:
-                        outcome_text = f"🧤 **WORLD-CLASS SAVE!** {active_gk['name']} charges out heroically to smother the shot from {active_atk['name']}!"
+                        outcome_text = f"🧤 **REFLEX MASTERCLASS!** {active_gk['name']} reacts with feline reflexes to deny {active_atk['name']} from point-blank range!"
                         scoresheet_events.append(f"🧤 **{minute}'** - **{active_gk['name']}** (Crucial Save)")
 
                 action_summary = f"*(Attacker chose `{atk_act.upper()}` vs Defender `{def_act.upper()}`)*"
