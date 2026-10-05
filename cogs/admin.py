@@ -384,6 +384,21 @@ class AdminCog(commands.Cog):
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
 
+    @admin_group.command(name="reset_user", description="Admin: Completely wipe all data & cards for a specific user")
+    @app_commands.describe(user="The user to completely reset")
+    async def reset_user_command(self, interaction: discord.Interaction, user: discord.Member):
+        if not await is_team_admin_or_owner(self.bot, interaction.user):
+            return await interaction.response.send_message("❌ **Access Denied:** Administrator command only.", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        
+        await database.reset_user(user.id)
+        embed = discord.Embed(
+            title="⚠️ User Account Reset",
+            description=f"Successfully wiped **all** progress, inventory, balance, squads, and stats for {user.mention} (`{user.id}`). They are now starting as a brand new player.",
+            color=discord.Color.dark_red()
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
     @admin_group.command(name="set_price", description="Admin: Set minimum price floor, max ceiling, and quicksell for an OVR")
     @app_commands.describe(ovr="Card OVR rating (e.g. 120)", min_price="Min Price in Coins", max_price="Max Price in Coins (optional, defaults to 2x min)", quicksell="QuickSell Coins (optional, defaults to 70% min)")
     async def set_ovr_price(self, interaction: discord.Interaction, ovr: int, min_price: int, max_price: int = None, quicksell: int = None):

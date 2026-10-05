@@ -250,19 +250,31 @@ class SquadCog(commands.Cog):
                 database.get_formation_layouts()
             )
 
+        if isinstance(squad, str):
+            try: squad = json.loads(squad)
+            except Exception: squad = {}
+        if not isinstance(squad, dict):
+            squad = {}
+
         formation = squad.get("formation", "4-3-3 Flat")
         players = squad.get("players", {})
+        if not isinstance(players, dict):
+            players = {}
         
         # Targeted fetch: only get the 11 equipped inventory cards instead of downloading full inventory
-        inv_ids = [int(p['inv_id']) for p in players.values() if p and p.get('inv_id') is not None]
+        inv_ids = [int(p['inv_id']) for p in players.values() if isinstance(p, dict) and p.get('inv_id') is not None]
         
         inv_dict = {}
         if inv_ids:
             cached_inv = database._USER_INVENTORY_CACHE.get(target.id)
             if cached_inv:
                 for row in cached_inv.get("data", []):
-                    if row.get("id") in inv_ids:
-                        inv_dict[row["id"]] = row.get("player_data")
+                    if row.get("id") in inv_ids and "player_data" in row:
+                        raw = row.get("player_data")
+                        try:
+                            inv_dict[row["id"]] = json.loads(raw) if isinstance(raw, str) else (raw or {})
+                        except Exception:
+                            inv_dict[row["id"]] = {}
             
             missing_ids = [iid for iid in inv_ids if iid not in inv_dict]
             if missing_ids:
@@ -270,9 +282,10 @@ class SquadCog(commands.Cog):
                 rows = await p.fetch('SELECT id, player_data FROM inventory WHERE user_id = $1 AND id = ANY($2::bigint[])', target.id, missing_ids)
                 for r in rows:
                     try:
-                        pdata = json.loads(r['player_data']) if isinstance(r['player_data'], str) else r['player_data']
-                        inv_dict[r['id']] = pdata
-                    except Exception: pass
+                        raw = r['player_data']
+                        inv_dict[r['id']] = json.loads(raw) if isinstance(raw, str) else (raw or {})
+                    except Exception:
+                        inv_dict[r['id']] = {}
 
         total_ovr = 0
         count = 0
@@ -304,9 +317,21 @@ class SquadCog(commands.Cog):
                 stats_map = {row['player_name'].lower(): row for row in p_stats_rows}
                 
                 # Attach stats to inv_dict for rendering
-                for inv_id, pdata in inv_dict.items():
-                    name_lower = pdata.get("cardName", pdata.get("lastName", "")).lower()
-                    if name_lower in stats_map:
+                for inv_id, pdata in list(inv_dict.items()):
+                    if isinstance(pdata, str):
+                        try:
+                            pdata = json.loads(pdata)
+                            inv_dict[inv_id] = pdata
+                        except Exception:
+                            pdata = {}
+                            inv_dict[inv_id] = pdata
+
+                    if not isinstance(pdata, dict):
+                        pdata = {}
+                        inv_dict[inv_id] = pdata
+
+                    name_lower = str(pdata.get("cardName") or pdata.get("lastName") or "").lower()
+                    if name_lower and name_lower in stats_map:
                         st = stats_map[name_lower]
                         pdata["_lifetime_goals"] = st.get("goals", 0)
                         pdata["_lifetime_assists"] = st.get("assists", 0)

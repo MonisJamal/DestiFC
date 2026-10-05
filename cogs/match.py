@@ -11,6 +11,57 @@ from maps import TACTICS
 # Global tracking set to ensure only 1 active H2H match / challenge at a time per user
 ACTIVE_MATCH_USERS = set()
 
+class MatchMomentView(discord.ui.View):
+    def __init__(self, attacker_member: discord.Member, defender_member: discord.Member, minute: int, atk_player: dict, def_player: dict, scenario_desc: str):
+        super().__init__(timeout=8)
+        self.attacker_member = attacker_member
+        self.defender_member = defender_member
+        self.minute = minute
+        self.atk_player = atk_player
+        self.def_player = def_player
+        self.scenario_desc = scenario_desc
+        self.attacker_action = None
+        self.defender_action = None
+
+    @discord.ui.button(label="🎯 Pass / Cross", style=discord.ButtonStyle.primary, row=0, custom_id="btn_pass")
+    async def btn_pass(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_click(interaction, "pass", "🎯 Pass / Cross")
+
+    @discord.ui.button(label="⚡ Dribble / Skill", style=discord.ButtonStyle.success, row=0, custom_id="btn_dribble")
+    async def btn_dribble(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_click(interaction, "dribble", "⚡ Dribble / Skill")
+
+    @discord.ui.button(label="🚀 Power Shot", style=discord.ButtonStyle.danger, row=0, custom_id="btn_shoot")
+    async def btn_shoot(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_click(interaction, "shoot", "🚀 Power Shot")
+
+    @discord.ui.button(label="🛡️ Cut Pass Lane", style=discord.ButtonStyle.secondary, row=1, custom_id="btn_intercept")
+    async def btn_intercept(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_click(interaction, "intercept", "🛡️ Cut Pass Lane")
+
+    @discord.ui.button(label="⚔️ Crunch Tackle", style=discord.ButtonStyle.danger, row=1, custom_id="btn_tackle")
+    async def btn_tackle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_click(interaction, "tackle", "⚔️ Crunch Tackle")
+
+    @discord.ui.button(label="🧤 Rush / Stand Tall", style=discord.ButtonStyle.primary, row=1, custom_id="btn_save")
+    async def btn_save(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_click(interaction, "save", "🧤 Rush / Stand Tall")
+
+    async def _handle_click(self, interaction: discord.Interaction, action_key: str, action_label: str):
+        uid = interaction.user.id
+        if uid == self.attacker_member.id:
+            if action_key not in ["pass", "dribble", "shoot"]:
+                return await interaction.response.send_message("❌ You are **Attacking**! Pick: `🎯 Pass`, `⚡ Dribble`, or `🚀 Power Shot`.", ephemeral=True)
+            self.attacker_action = action_key
+            await interaction.response.send_message(f"✅ Locked in: **{action_label}**! Waiting for defending manager...", ephemeral=True)
+        elif uid == self.defender_member.id:
+            if action_key not in ["intercept", "tackle", "save"]:
+                return await interaction.response.send_message("❌ You are **Defending**! Pick: `🛡️ Cut Pass`, `⚔️ Tackle`, or `🧤 Rush/Stand`.", ephemeral=True)
+            self.defender_action = action_key
+            await interaction.response.send_message(f"✅ Locked in: **{action_label}**! Counter-action ready...", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ You are a spectator in this match!", ephemeral=True)
+
 class MatchRequestView(discord.ui.View):
     def __init__(self, challenger: discord.Member, opponent: discord.Member, cog, squad_a, squad_b, fans_a, fans_b, ovr_a, ovr_b, timeout_secs: int = 60):
         super().__init__(timeout=timeout_secs)
@@ -303,88 +354,6 @@ class MatchCog(commands.Cog):
             possession_a = max(35, min(65, possession_a))
             possession_b = 100 - possession_a
 
-            # Sector Battles (Attack vs Defense + GK)
-            threat_a = (s_a["atk_p"] * 0.65 + s_a["mid_p"] * 0.35) - (s_b["def_p"] * 0.65 + s_b["gk_p"] * 0.35)
-            threat_b = (s_b["atk_p"] * 0.65 + s_b["mid_p"] * 0.35) - (s_a["def_p"] * 0.65 + s_a["gk_p"] * 0.35)
-
-            chances_a = max(2, int(4 + (threat_a * 0.35) + random.randint(-1, 2)))
-            chances_b = max(2, int(4 + (threat_b * 0.35) + random.randint(-1, 2)))
-
-            goals_a = 0
-            for _ in range(chances_a):
-                p_score = 0.28 + (threat_a * 0.035)
-                if random.random() < max(0.08, min(0.60, p_score)):
-                    goals_a += 1
-
-            goals_b = 0
-            for _ in range(chances_b):
-                p_score = 0.28 + (threat_b * 0.035)
-                if random.random() < max(0.08, min(0.60, p_score)):
-                    goals_b += 1
-
-            goals_a = min(5, goals_a)
-            goals_b = min(5, goals_b)
-
-            if goals_a > goals_b:
-                winner = player_a
-            elif goals_b > goals_a:
-                winner = player_b
-            else:
-                winner = None
-                
-            # Distribute goals across 90 minutes
-            all_goals = []
-            for _ in range(goals_a): 
-                # Weight goalscorer choice by individual player OVR
-                scorer_cands = s_a["atk"] + s_a["mid"]
-                if scorer_cands:
-                    scorer_obj = max(random.sample(scorer_cands, min(3, len(scorer_cands))), key=lambda x: x['ovr'] + random.randint(-2, 3))
-                    scorer = scorer_obj['name']
-                else:
-                    scorer = random.choice(atk_a + mid_a)
-                all_goals.append((player_a, random.randint(8, 88), scorer))
-
-            for _ in range(goals_b): 
-                scorer_cands = s_b["atk"] + s_b["mid"]
-                if scorer_cands:
-                    scorer_obj = max(random.sample(scorer_cands, min(3, len(scorer_cands))), key=lambda x: x['ovr'] + random.randint(-2, 3))
-                    scorer = scorer_obj['name']
-                else:
-                    scorer = random.choice(atk_b + mid_b)
-                all_goals.append((player_b, random.randint(8, 88), scorer))
-
-            all_goals.sort(key=lambda x: x[1])
-
-            scoresheet_events = []
-            player_scores = {p['name']: 0 for p in (starters_a + starters_b)}
-
-            current_score_a = 0
-            current_score_b = 0
-
-            is_a_win = (winner == player_a)
-            is_b_win = (winner == player_b)
-            is_draw = (winner is None)
-
-            # Generate realistic match statistics
-            shots_on_target_a = goals_a + random.randint(2, 5)
-            shots_total_a = shots_on_target_a + random.randint(3, 6)
-            shots_on_target_b = goals_b + random.randint(2, 5)
-            shots_total_b = shots_on_target_b + random.randint(3, 6)
-
-            saves_a = max(0, shots_on_target_b - goals_b)
-            saves_b = max(0, shots_on_target_a - goals_a)
-
-            corners_a = random.randint(2, 7)
-            corners_b = random.randint(2, 7)
-            fouls_a = random.randint(2, 6)
-            fouls_b = random.randint(2, 6)
-            yellows_a = random.randint(0, 2)
-            yellows_b = random.randint(0, 2)
-            pass_acc_a = random.randint(83, 94)
-            pass_acc_b = random.randint(81, 93)
-            xg_a = round(goals_a * 0.65 + (shots_on_target_a * 0.16) + random.uniform(0.1, 0.3), 2)
-            xg_b = round(goals_b * 0.65 + (shots_on_target_b * 0.16) + random.uniform(0.1, 0.3), 2)
-
             def calc_full_team_ratings(starters, is_winning_team, is_draw_match, goals_conceded, goals_scored):
                 ratings = []
                 for s in starters:
@@ -414,106 +383,219 @@ class MatchCog(commands.Cog):
                     ratings.append({"name": p_name, "pos": pos, "rating": rating, "goals": goals, "ovr": s['ovr']})
                 return ratings
 
-            # Temporary pre-calculation for MOTM calculation
-            for g in all_goals:
-                player_scores[g[2]] = player_scores.get(g[2], 0) + 1
-
-            ratings_a_est = calc_full_team_ratings(starters_a, is_a_win, is_draw, goals_b, goals_a)
-            ratings_b_est = calc_full_team_ratings(starters_b, is_b_win, is_draw, goals_a, goals_b)
-            all_rated = [(r, player_a.display_name) for r in ratings_a_est] + [(r, player_b.display_name) for r in ratings_b_est]
-            motm_entry, motm_team = max(all_rated, key=lambda x: (x[0]["goals"] * 2 + x[0]["rating"]))
-
-            # Reset player_scores for live commentary tracking
+            # Interactive H2H match moments (5 high-stakes moments across 90 minutes)
+            moments_minutes = [18, 38, 55, 74, 88]
+            
+            all_goals = []
+            current_score_a = 0
+            current_score_b = 0
+            scoresheet_events = []
             player_scores = {p['name']: 0 for p in (starters_a + starters_b)}
+            shots_total_a, shots_on_target_a, saves_a = 0, 0, 0
+            shots_total_b, shots_on_target_b, saves_b = 0, 0, 0
+            yellows_a, yellows_b = 0, 0
+            fouls_a, fouls_b = 0, 0
 
+            # Match moments loop
+            for m_idx, minute in enumerate(moments_minutes):
+                # 1. Determine attacking team based on midfield battle + momentum
+                mid_diff = (s_a["mid_p"] - s_b["mid_p"])
+                prob_a_attack = max(0.25, min(0.75, 0.50 + (mid_diff * 0.02) + random.uniform(-0.1, 0.1)))
+                is_a_attack = (random.random() < prob_a_attack)
+
+                if is_a_attack:
+                    att_member, def_member = player_a, player_b
+                    att_starters, def_starters = starters_a, starters_b
+                    att_atks, def_defs = s_a["atk"] or starters_a, s_b["defn"] or starters_b
+                    def_gks = s_b["gk"] or [{"name": "Goalkeeper", "ovr": 100}]
+                    att_team_name, def_team_name = player_a.display_name, player_b.display_name
+                else:
+                    att_member, def_member = player_b, player_a
+                    att_starters, def_starters = starters_b, starters_a
+                    att_atks, def_defs = s_b["atk"] or starters_b, s_a["defn"] or starters_a
+                    def_gks = s_a["gk"] or [{"name": "Goalkeeper", "ovr": 100}]
+                    att_team_name, def_team_name = player_b.display_name, player_a.display_name
+
+                # Pick key actor cards
+                active_atk = random.choice(att_atks)
+                active_def = random.choice(def_defs)
+                active_gk = def_gks[0]
+
+                # Scenario flavor
+                scenarios = [
+                    f"⚡ **{active_atk['name']}** ({active_atk['ovr']} OVR) bursts into the final third on a rapid counter-attack!",
+                    f"🎯 **{active_atk['name']}** cuts inside across the edge of the penalty box against **{active_def['name']}** ({active_def['ovr']} OVR)!",
+                    f"🔥 High-pressing turnover! **{active_atk['name']}** pounces on a loose ball in the danger zone!",
+                    f"🚀 Delicate chipped through-ball leaves **{active_atk['name']}** bearing down on the defense!",
+                    f"⚡ 1-on-1 duel in the box! **{active_atk['name']}** isolates **{active_def['name']}**!"
+                ]
+                scenario_text = scenarios[m_idx % len(scenarios)]
+
+                scoreboard = f"**{player_a.display_name}** `{current_score_a} - {current_score_b}` **{player_b.display_name}**"
+                time_label = f"⏱️ **{minute}' MINUTE — KEY MATCH MOMENT!**"
+
+                view = MatchMomentView(att_member, def_member, minute, active_atk, active_def, scenario_text)
+
+                prompt_content = (
+                    f"🏟️ **LIVE DIVISION RIVALS MATCH**\n\n"
+                    f"{scoreboard}\n{time_label}\n\n"
+                    f"🎙️ *{scenario_text}*\n\n"
+                    f"⚽ **{att_team_name} (Attacker)**: Choose `🎯 Pass` | `⚡ Dribble` | `🚀 Power Shot`\n"
+                    f"🛡️ **{def_team_name} (Defender)**: Choose `🛡️ Cut Pass` | `⚔️ Crunch Tackle` | `🧤 Rush GK`\n"
+                    f"*(Quick 7s to lock in your play!)*"
+                )
+
+                await interaction.edit_original_response(content=prompt_content, view=view)
+                await asyncio.sleep(7.0)
+
+                # Default fallback actions if not selected
+                atk_act = view.attacker_action or random.choice(["pass", "dribble", "shoot"])
+                def_act = view.defender_action or random.choice(["intercept", "tackle", "save"])
+
+                # Resolve circumstance outcome matrix
+                # 1. Base success rating from card OVR difference
+                ovr_delta = active_atk['ovr'] - active_def['ovr']
+                # Tactical match-up bonuses:
+                # Pass beats Tackle & Save; loses to Intercept
+                # Dribble beats Intercept & Tackle (foul risk); loses to disciplined Jockey
+                # Shoot beats Tackle/Intercept (uncontested shot); contested by Save
+                success_chance = 0.50 + (ovr_delta * 0.015)
+
+                is_goal = False
+                is_foul = False
+                outcome_text = ""
+
+                if atk_act == "pass":
+                    if def_act == "intercept":
+                        success_chance -= 0.35
+                    elif def_act in ["tackle", "save"]:
+                        success_chance += 0.25
+                elif atk_act == "dribble":
+                    if def_act == "intercept":
+                        success_chance += 0.25
+                    elif def_act == "tackle":
+                        if random.random() < 0.28:
+                            is_foul = True
+                        success_chance += 0.10
+                    elif def_act == "save":
+                        success_chance += 0.20
+                elif atk_act == "shoot":
+                    gk_delta = active_atk['ovr'] - active_gk['ovr']
+                    success_chance = 0.45 + (gk_delta * 0.02)
+                    if def_act == "save":
+                        success_chance -= 0.25
+                    elif def_act == "tackle":
+                        success_chance += 0.15
+
+                success_chance = max(0.12, min(0.85, success_chance))
+
+                if is_a_attack:
+                    shots_total_a += 1
+                else:
+                    shots_total_b += 1
+
+                if is_foul:
+                    if is_a_attack:
+                        fouls_b += 1
+                        yellows_b += 1
+                    else:
+                        fouls_a += 1
+                        yellows_a += 1
+                    outcome_text = f"🟨 **CLATTERED!** {active_def['name']} lunges in with a desperate tackle on **{active_atk['name']}**! Yellow card shown!"
+                    scoresheet_events.append(f"🟨 **{minute}'** - **{active_def['name']}** (Foul on {active_atk['name']})")
+                elif random.random() < success_chance:
+                    # Attack succeeded!
+                    if is_a_attack:
+                        shots_on_target_a += 1
+                    else:
+                        shots_on_target_b += 1
+
+                    # Goal or assist converted!
+                    is_goal = True
+                    scorer_name = active_atk['name']
+                    player_scores[scorer_name] = player_scores.get(scorer_name, 0) + 1
+                    all_goals.append((att_member, minute, scorer_name))
+
+                    if is_a_attack:
+                        current_score_a += 1
+                    else:
+                        current_score_b += 1
+
+                    if atk_act == "pass":
+                        outcome_text = f"🎯 **PINPOINT PLAY!** {active_atk['name']} executes a surgical pass slicing past {active_def['name']}, tapping it straight into the back of the net! ⚽🔥"
+                    elif atk_act == "dribble":
+                        outcome_text = f"⚡ **MAGIC FEET!** {active_atk['name']} hits a filthy skill move, leaves {active_def['name']} in the dust, and slots it home with ice in the veins! ⚽🔥"
+                    else:
+                        outcome_text = f"🚀 **UNSTOPPABLE SCREAMER!** {active_atk['name']} unloads a missile that blasts straight past {active_gk['name']}! Top bins! ⚽🔥"
+
+                    scoresheet_events.append(f"⚽ **{minute}'** - **{scorer_name}** ({att_team_name})")
+                else:
+                    # Defense stood firm!
+                    if is_a_attack:
+                        saves_b += 1
+                    else:
+                        saves_a += 1
+
+                    if def_act == "intercept":
+                        outcome_text = f"🛡️ **READ LIKE A BOOK!** {active_def['name']} anticipates {active_atk['name']}'s pass with a masterclass interception!"
+                    elif def_act == "tackle":
+                        outcome_text = f"⚔️ **BRICK WALL!** {active_def['name']} executes a clean, crunching challenge to dispossess {active_atk['name']} cleanly!"
+                    else:
+                        outcome_text = f"🧤 **WORLD-CLASS SAVE!** {active_gk['name']} charges out heroically to smother the shot from {active_atk['name']}!"
+                        scoresheet_events.append(f"🧤 **{minute}'** - **{active_gk['name']}** (Crucial Save)")
+
+                action_summary = f"*(Attacker chose `{atk_act.upper()}` vs Defender `{def_act.upper()}`)*"
+                interim_scoreboard = f"**{player_a.display_name}** `{current_score_a} - {current_score_b}` **{player_b.display_name}**"
+
+                await interaction.edit_original_response(
+                    content=(
+                        f"🏟️ **LIVE DIVISION RIVALS MATCH**\n\n"
+                        f"{interim_scoreboard}\n⏱️ **{minute}' Outcome**\n\n"
+                        f"{outcome_text}\n{action_summary}\n\n"
+                        f"⏳ *Match continuing...*"
+                    ),
+                    view=None
+                )
+                await asyncio.sleep(3.5)
+
+            # Match winner resolution
+            if current_score_a > current_score_b:
+                winner = player_a
+                is_a_win, is_b_win, is_draw = True, False, False
+            elif current_score_b > current_score_a:
+                winner = player_b
+                is_a_win, is_b_win, is_draw = False, True, False
+            else:
+                winner = None
+                is_a_win, is_b_win, is_draw = False, False, True
+
+            possession_a = int(50 + ((s_a["mid_p"] - s_b["mid_p"]) * 1.6) + random.randint(-2, 2))
+            possession_a = max(35, min(65, possession_a))
+            possession_b = 100 - possession_a
+            pass_acc_a = random.randint(84, 94)
+            pass_acc_b = random.randint(82, 93)
+            corners_a = random.randint(2, 6)
+            corners_b = random.randint(2, 6)
+            xg_a = round(current_score_a * 0.65 + (shots_on_target_a * 0.18) + random.uniform(0.1, 0.25), 2)
+            # Re-calculate accurate final ratings with actual player scores
+            ratings_a = calc_full_team_ratings(starters_a, is_a_win, is_draw, current_score_b, current_score_a)
+            ratings_b = calc_full_team_ratings(starters_b, is_b_win, is_draw, current_score_a, current_score_b)
+            all_rated_final = [(r, player_a.display_name) for r in ratings_a] + [(r, player_b.display_name) for r in ratings_b]
+            motm_entry, motm_team = max(all_rated_final, key=lambda x: (x[0]["goals"] * 2 + x[0]["rating"]))
+            motm_str = f"⭐ **{motm_entry['name']}** `({motm_entry['rating']} Rating)` — *{motm_team}*"
             # Background AI analysis task (never delays the match)
             events_summary = [f"{g[1]}' {g[2]} ({g[0].display_name})" for g in all_goals]
             ai_analysis_task = asyncio.create_task(
                 ai_engine.generate_post_match_analysis(
                     player_a.display_name,
                     player_b.display_name,
-                    goals_a,
-                    goals_b,
+                    current_score_a,
+                    current_score_b,
                     motm_entry['name'],
                     motm_entry['rating'],
                     events_summary
                 )
             )
-
-            # 1-minute match simulation (8 ticks x 7.5s = 60s total)
-            ticks = [10, 25, 40, 45, 60, 75, 85, 90]
-            
-            for idx, current_minute in enumerate(ticks):
-                prev_minute = ticks[idx - 1] if idx > 0 else 0
-                events = []
-                
-                # Check for goals in this interval
-                for g in all_goals:
-                    if prev_minute < g[1] <= current_minute:
-                        team_target = g[0]
-                        minute = g[1]
-                        scorer = g[2]
-                        player_scores[scorer] = player_scores.get(scorer, 0) + 1
-                        
-                        if team_target == player_a:
-                            current_score_a += 1
-                            events.append(f"⚽ **GOAL FOR {player_a.display_name.upper()}!** Spectacular finish by **{scorer}**! 🔥 ({minute}')")
-                            scoresheet_events.append(f"⚽ **{minute}'** - **{scorer}** ({player_a.display_name})")
-                        else:
-                            current_score_b += 1
-                            events.append(f"⚽ **GOAL FOR {player_b.display_name.upper()}!** Clinical strike from **{scorer}**! 🔥 ({minute}')")
-                            scoresheet_events.append(f"⚽ **{minute}'** - **{scorer}** ({player_b.display_name})")
-
-                if not events and current_minute < 90:
-                    if random.choice([True, False]):
-                        t_atk, t_mid, t_def, t_gk = atk_a, mid_a, def_b, gk_b
-                        att_team_name = player_a.display_name
-                    else:
-                        t_atk, t_mid, t_def, t_gk = atk_b, mid_b, def_a, gk_a
-                        att_team_name = player_b.display_name
-                        
-                    a = random.choice(t_atk)
-                    m = random.choice(t_mid)
-                    d = random.choice(t_def)
-                    g = random.choice(t_gk)
-                    
-                    commentary_pool = [
-                        f"⚡ Fluid build-up orchestrated by **{m}** splitting the defensive line!",
-                        f"🧤 WORLD-CLASS REFLEXES! **{g}** makes a fingertip diving save to deny a curled strike from **{a}**!",
-                        f"🛡️ Rock-solid sliding interception from **{d}** thwarting a dangerous counter-attack.",
-                        f"🎯 **{m}** delivers an inswinging cross into the box, cleared with authority by **{d}**.",
-                        f"🚀 Long-range strike from **{a}**... it rattles violently off the crossbar!",
-                        f"🔥 **{a}** executes a blistering step-over and cuts inside, but the shot is blocked behind for a corner.",
-                        f"📐 Pinpoint corner whipped into the 6-yard box by **{m}**, headed just inches wide!",
-                        f"🟨 Cynical tactical foul by **{d}** to halt {att_team_name}'s fast break."
-                    ]
-                    chosen_com = random.choice(commentary_pool)
-                    events.append(f"🎙️ *{chosen_com}*")
-                    
-                    if "save" in chosen_com.lower():
-                        scoresheet_events.append(f"🧤 **{current_minute}'** - **{g}** (Crucial Save)")
-                    elif "foul" in chosen_com.lower():
-                        scoresheet_events.append(f"🟨 **{current_minute}'** - **{d}** (Yellow Card)")
-                
-                event_text = "\n".join(events) if events else "🏁 *Final whistle blown by the referee!*"
-                scoreboard = f"**{player_a.display_name}** `{current_score_a} - {current_score_b}` **{player_b.display_name}**"
-                time_label = "⏱️ **45' HALF TIME**" if current_minute == 45 else (f"⏱️ **90' FULL TIME**" if current_minute == 90 else f"⏱️ **{current_minute}' Min**")
-                
-                stats_mini = f"📊 Possession: `{possession_a}%` ⬝ `{possession_b}%` | Shots: `{current_score_a + random.randint(1,3)}` ⬝ `{current_score_b + random.randint(1,3)}`"
-                
-                if current_minute < 90:
-                    await interaction.edit_original_response(
-                        content=f"🏟️ **LIVE DIVISION RIVALS MATCH**\n\n{scoreboard}\n{time_label} • {stats_mini}\n\n{event_text}",
-                        view=None
-                    )
-                    await asyncio.sleep(7.5)
-
-            # Re-calculate accurate final ratings with actual player scores
-            ratings_a = calc_full_team_ratings(starters_a, is_a_win, is_draw, goals_b, goals_a)
-            ratings_b = calc_full_team_ratings(starters_b, is_b_win, is_draw, goals_a, goals_b)
-            all_rated_final = [(r, player_a.display_name) for r in ratings_a] + [(r, player_b.display_name) for r in ratings_b]
-            motm_entry, motm_team = max(all_rated_final, key=lambda x: (x[0]["goals"] * 2 + x[0]["rating"]))
-            motm_str = f"⭐ **{motm_entry['name']}** `({motm_entry['rating']} Rating)` — *{motm_team}*"
 
             color = discord.Color.light_grey()
             if winner is None:
@@ -524,15 +606,15 @@ class MatchCog(commands.Cog):
             elif winner == player_a:
                 result_text = f"🏆 **{player_a.display_name} WINS!**\nFinal Score: `{current_score_a} - {current_score_b}`"
                 color = discord.Color.green()
-                fan_change_str = f"**{player_a.display_name}** gained **+10,000 Fans**\n**{player_b.display_name}** lost **-8,000 Fans**"
-                bonus_a_str = "💰 **+10,000,000 Coins**\n🎫 **+1x Draft Voucher**"
+                fan_change_str = f"**{player_a.display_name}** gained **+10,000 Fans**\n**{player_b.display_name}** lost **-2,000 Fans**"
+                bonus_a_str = "💰 **+25,000,000 Coins**\n🎫 **+1x Draft Voucher**"
                 bonus_b_str = ""
             else:
                 result_text = f"🏆 **{player_b.display_name} WINS!**\nFinal Score: `{current_score_a} - {current_score_b}`"
                 color = discord.Color.red()
-                fan_change_str = f"**{player_b.display_name}** gained **+10,000 Fans**\n**{player_a.display_name}** lost **-8,000 Fans**"
+                fan_change_str = f"**{player_b.display_name}** gained **+10,000 Fans**\n**{player_a.display_name}** lost **-2,000 Fans**"
                 bonus_a_str = ""
-                bonus_b_str = "💰 **+10,000,000 Coins**\n🎫 **+1x Draft Voucher**"
+                bonus_b_str = "💰 **+25,000,000 Coins**\n🎫 **+1x Draft Voucher**"
 
             embed = discord.Embed(title="FULL TIME ⏱️", description=result_text, color=color)
             
@@ -599,12 +681,12 @@ class MatchCog(commands.Cog):
                     p = await database.get_db()
                     await p.execute('UPDATE users SET last_match_time = $1 WHERE user_id = $2 OR user_id = $3', now, player_a.id, player_b.id)
 
-                    win_coins = gp_cfg.get('match_win_coins', 25_000_000)
-                    draw_coins = gp_cfg.get('match_draw_coins', 10_000_000)
-                    loss_coins = gp_cfg.get('match_loss_coins', 5_000_000)
-                    win_fans = gp_cfg.get('match_win_fans', 25)
-                    draw_fans = gp_cfg.get('match_draw_fans', 0)
-                    loss_fans = gp_cfg.get('match_loss_fans', -15)
+                    win_coins = int(gp_cfg.get('match_win_coins', 25_000_000))
+                    draw_coins = int(gp_cfg.get('match_draw_coins', 10_000_000))
+                    loss_coins = int(gp_cfg.get('match_loss_coins', 5_000_000))
+                    win_fans = int(gp_cfg.get('match_win_fans', 10_000))
+                    draw_fans = int(gp_cfg.get('match_draw_fans', 2_000))
+                    loss_fans = int(gp_cfg.get('match_loss_fans', -2_000))
                     win_xp = int(gp_cfg.get('match_win_xp', 75))
 
                     if winner is None:

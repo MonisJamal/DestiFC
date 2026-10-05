@@ -792,48 +792,80 @@ class EconomyCog(commands.Cog):
         await interaction.response.defer()
         user_id = interaction.user.id
         
-        # Check cooldown
+        # Check cooldown & streak calculation
         p = await database.get_db()
-        last_daily = await p.fetchval('SELECT last_daily FROM users WHERE user_id = $1', user_id) or 0
-        row = (last_daily,) if last_daily else None
+        row = await p.fetchrow('SELECT last_daily, daily_streak FROM users WHERE user_id = $1', user_id)
+        last_daily = row['last_daily'] if row and row['last_daily'] else 0
+        current_streak = row['daily_streak'] if row and row['daily_streak'] else 0
                 
         current_time = int(time.time())
-        if row and row[0]:
-            last_daily = row[0]
-            cooldown = 86400  # 24 hours
-            if current_time - last_daily < cooldown:
-                remaining = cooldown - (current_time - last_daily)
+        cooldown = 86400  # 24 hours
+        if last_daily:
+            time_diff = current_time - last_daily
+            if time_diff < cooldown:
+                remaining = cooldown - time_diff
                 hours, rem = divmod(remaining, 3600)
                 mins, secs = divmod(rem, 60)
                 return await interaction.followup.send(f"⏳ You already claimed your daily reward! Come back in **{int(hours)}h {int(mins)}m**.")
-                
-        eco_cfg = await database.get_economy_config()
-        min_c = eco_cfg.get('daily_coins_min', 5_000_000)
-        max_c = eco_cfg.get('daily_coins_max', 20_000_000)
-        coins_won = random.randint(min_c, max_c)
-        vouchers_won = eco_cfg.get('daily_vouchers', 2)
-        walkout_chance = eco_cfg.get('daily_walkout_chance', 0.15)
-        
-        p = await database.get_db()
+            elif time_diff <= (cooldown * 2):
+                # Within 48 hours -> streak increments!
+                new_streak = (current_streak % 7) + 1
+            else:
+                # Missed more than 48 hours -> reset streak
+                new_streak = 1
+        else:
+            new_streak = 1
+
+        # 7-Day Tiered Streak Table
+        STREAK_REWARDS = {
+            1: {"coins": 5_000_000, "vouchers": 2, "gems": 10, "walkout": False},
+            2: {"coins": 10_000_000, "vouchers": 3, "gems": 25, "walkout": False},
+            3: {"coins": 15_000_000, "vouchers": 5, "gems": 50, "walkout": False},
+            4: {"coins": 20_000_000, "vouchers": 7, "gems": 75, "walkout": False},
+            5: {"coins": 30_000_000, "vouchers": 10, "gems": 100, "walkout": False},
+            6: {"coins": 40_000_000, "vouchers": 15, "gems": 150, "walkout": False},
+            7: {"coins": 60_000_000, "vouchers": 25, "gems": 300, "walkout": True},
+        }
+
+        tier = STREAK_REWARDS.get(new_streak, STREAK_REWARDS[1])
+        coins_won = tier["coins"]
+        vouchers_won = tier["vouchers"]
+        gems_won = tier["gems"]
+        guaranteed_walkout = tier["walkout"]
+
         await p.execute('''
-            INSERT INTO users (user_id, coins, vouchers, last_daily)
-            VALUES ($4, $1, $2, $3)
+            INSERT INTO users (user_id, coins, vouchers, gems, last_daily, daily_streak)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (user_id) DO UPDATE SET
-                coins = COALESCE(users.coins, 0) + $1,
-                vouchers = COALESCE(users.vouchers, 0) + $2,
-                last_daily = $3
-        ''', coins_won, vouchers_won, current_time, user_id)
+                coins = COALESCE(users.coins, 0) + $2,
+                vouchers = COALESCE(users.vouchers, 0) + $3,
+                gems = COALESCE(users.gems, 0) + $4,
+                last_daily = $5,
+                daily_streak = $6
+        ''', user_id, coins_won, vouchers_won, gems_won, current_time, new_streak)
         
         # Invalidate cached user record
         database._USER_CACHE.pop(user_id, None)
-            
-        desc = f"🪙 You received **{coins_won:,} Coins**\n🎫 You received **+{vouchers_won}x Draft Vouchers**!"
-        embed = discord.Embed(title="🎁 Daily Reward Claimed!", description=desc, color=discord.Color.green())
+
+        # Build visual progress bar
+        bar = " ".join(["🟩" if i <= new_streak else "⬜" for i in range(1, 8)])
+        streak_header = f"🔥 **Daily Streak: Day {new_streak} / 7**\n{bar}"
+        if new_streak == 7:
+            streak_header += "\n🏆 **MAX STREAK REACHED! MEGA REWARD ACTIVATED!**"
+
+        desc = (
+            f"{streak_header}\n\n"
+            f"🪙 **Coins:** `+{coins_won:,}`\n"
+            f"🎟️ **Draft Vouchers:** `+{vouchers_won}`\n"
+            f"💎 **Gems:** `+{gems_won}`"
+        )
+        embed = discord.Embed(title="🎁 Daily Reward Claimed!", description=desc, color=discord.Color.gold())
         
-        # Dynamic chance to drop a random top superstar from database
+        # Walkout card (guaranteed on Day 7, or 15% chance on other days)
         lucky_player = None
-        if random.random() < walkout_chance:
-            lucky_pool = await database.get_official_cards_by_rating(120, 122, 50)
+        if guaranteed_walkout or random.random() < 0.15:
+            min_r = 120 if guaranteed_walkout else 118
+            lucky_pool = await database.get_official_cards_by_rating(min_r, 122, 50)
             if lucky_pool:
                 lucky_player = random.choice(lucky_pool)
 
@@ -841,14 +873,15 @@ class EconomyCog(commands.Cog):
             await database.add_player_to_inventory(user_id, lucky_player)
             name = lucky_player.get('cardName', lucky_player.get('lastName', 'Unknown'))
             ovr = lucky_player.get('rating', '??')
-            embed.description += f"\n\n🎉 **JACKPOT!** You also found a **{ovr} {name}** hidden in your daily gift!"
+            badge = "🌟 **DAY 7 WALKOUT SPECIAL!**" if guaranteed_walkout else "🎉 **JACKPOT WALKOUT!**"
+            embed.description += f"\n\n{badge}\nYou also pulled a **{ovr} {name}** into your club!"
             img_url = lucky_player.get('images', {}).get('playerCardImage') or lucky_player.get('images', {}).get('playerImage')
             if img_url:
                 embed.set_thumbnail(url=img_url)
         
         try:
             from cogs.season import add_season_xp
-            await add_season_xp(user_id, 200)
+            await add_season_xp(user_id, 200 + (new_streak * 50))
         except Exception:
             pass
                 

@@ -62,9 +62,9 @@ async def get_db():
             ssl=ctx,
             min_size=2,
             max_size=25,
-            command_timeout=20,
-            timeout=20,
-            max_inactive_connection_lifetime=180.0,
+            command_timeout=60,
+            timeout=60,
+            max_inactive_connection_lifetime=300.0,
             statement_cache_size=0
         )
     return _pool
@@ -224,6 +224,7 @@ async def set_highest_div(user_id: int, div: str):
 async def set_starter_claimed(user_id: int):
     p = await get_db()
     await p.execute('UPDATE users SET starter_claimed = 1 WHERE user_id = $1', user_id)
+    _USER_CACHE.pop(user_id, None)
 
 async def get_user_rank(user_id: int) -> dict:
     p = await get_db()
@@ -237,6 +238,23 @@ async def get_user_rank(user_id: int) -> dict:
     except Exception as e:
         print(f"[Database] Error getting user rank: {e}")
         return {"rank": 1, "fans": 0, "total_users": 1}
+
+async def reset_user(user_id: int):
+    """Completely wipes all data for a specific user across all tables and clears RAM caches."""
+    _USER_INVENTORY_CACHE.pop(user_id, None)
+    _USER_SQUAD_CACHE.pop(user_id, None)
+    _USER_CACHE.pop(user_id, None)
+    p = await get_db()
+    await p.execute("DELETE FROM inventory WHERE user_id = $1", user_id)
+    await p.execute("DELETE FROM squads WHERE user_id = $1", user_id)
+    await p.execute("DELETE FROM user_stats WHERE user_id = $1", user_id)
+    await p.execute("DELETE FROM season_pass WHERE user_id = $1", user_id)
+    await p.execute("DELETE FROM achievements WHERE user_id = $1", user_id)
+    await p.execute("DELETE FROM user_signature_box WHERE user_id = $1", user_id)
+    await p.execute("DELETE FROM sbc_completions WHERE user_id = $1", user_id)
+    await p.execute("DELETE FROM player_stats WHERE user_id = $1", user_id)
+    await p.execute("DELETE FROM market WHERE seller_id = $1", user_id)
+    await p.execute("DELETE FROM users WHERE user_id = $1", user_id)
 
 async def add_player_to_inventory(user_id: int, player_data: dict):
     await add_players_to_inventory_batch(user_id, [player_data])
@@ -366,9 +384,15 @@ async def get_squad(user_id: int) -> dict:
     p = await get_db()
     row = await p.fetchrow('SELECT active_squad FROM squads WHERE user_id = $1', user_id)
     if row and row['active_squad']:
-        try:
-            data = json.loads(row['active_squad'])
-        except Exception:
+        val = row['active_squad']
+        if isinstance(val, dict):
+            data = val
+        elif isinstance(val, str):
+            try:
+                data = json.loads(val)
+            except Exception:
+                data = {}
+        else:
             data = {}
         if "formation" not in data:
             data = {"formation": "4-3-3 Flat", "players": data.get("players", data)}
@@ -900,6 +924,13 @@ async def preload_official_cards_cache():
         print(f"[Database] Preloaded {sum(len(v) for v in cache.values())} official cards into RAM cache!")
     except Exception as e:
         print(f"[Database] Card cache preload note: {e}")
+    
+    # Also warm up draft pools cache
+    try:
+        await get_active_drafts()
+        print("[Database] Draft pools preloaded into RAM cache!")
+    except Exception as e:
+        print(f"[Database] Draft cache preload note: {e}")
 
 async def get_max_official_ovr() -> int:
     """

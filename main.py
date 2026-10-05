@@ -26,6 +26,17 @@ class DestiFC(commands.Bot):
     async def setup_hook(self):
         self.tree.on_error = self.on_app_command_error
         await database.setup()
+        # Load all cogs on startup
+        for filename in os.listdir('./cogs'):
+            if filename.endswith('.py') and not filename.startswith('__'):
+                try:
+                    await self.load_extension(f'cogs.{filename[:-3]}')
+                    print(f"[Startup] Loaded cog: {filename}")
+                except Exception as e:
+                    print(f"[Startup] Failed to load cog {filename}: {e}")
+        await self.tree.sync()
+        print("[Startup] All cogs loaded and slash commands synced!")
+        asyncio.create_task(database.preload_official_cards_cache())
 
     async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
         import traceback
@@ -38,13 +49,6 @@ class DestiFC(commands.Bot):
                 await interaction.followup.send(f"🚨 **FATAL ERROR:**\n```py\n{err_str[:1900]}```", ephemeral=True)
         except Exception:
             pass
-
-        asyncio.create_task(database.preload_official_cards_cache())
-        
-        # Load cogs
-        for filename in os.listdir('./cogs'):
-            if filename.endswith('.py') and not filename.startswith('__'):
-                await self.load_extension(f'cogs.{filename[:-3]}')
 
         # Lightweight global interaction check — only maintenance mode and per-command disable.
         # No admin/owner API calls here (those caused the 3s timeout for non-admins).
@@ -221,7 +225,8 @@ class DestiFC(commands.Bot):
                                 await self.reload_extension(f'cogs.{filename[:-3]}')
                             except Exception as re_err:
                                 await self.load_extension(f'cogs.{filename[:-3]}')
-                    print("[Remote Control] All caches flushed and cogs reloaded!")
+                    await self.tree.sync()
+                    print("[Remote Control] All caches flushed, cogs reloaded, and slash commands synced!")
 
                 elif job_type == 'SIGNAL_RESTART':
                     print("[Remote Control] Received restart signal from Admin Panel. Gracefully rebooting...")

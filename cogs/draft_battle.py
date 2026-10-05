@@ -181,7 +181,7 @@ class DraftPickDropdown(discord.ui.Select):
 
 class SinglePlayerDraftView(discord.ui.View):
     def __init__(self, user: discord.User, formation: str, on_complete_callback):
-        super().__init__(timeout=300)
+        super().__init__(timeout=600)
         self.user = user
         self.formation = formation
         self.slots = FORMATION_SLOTS[formation]
@@ -267,7 +267,7 @@ class FormationSelectView(discord.ui.View):
 
 class DraftBattleRoomView(discord.ui.View):
     def __init__(self, challenger: discord.Member, opponent: discord.Member, wager: int, bot, message: discord.Message = None, channel_id: int = None, is_solo: bool = False):
-        super().__init__(timeout=300)
+        super().__init__(timeout=600)
         self.challenger = challenger
         self.opponent = opponent
         self.wager = wager
@@ -650,6 +650,7 @@ class DraftBattleRoomView(discord.ui.View):
         # Post results with ping into target channel
         ping_content = f"🔔 {user_a.mention} {user_b.mention} — **Your Draft Battle Match is Complete!**" if not self.is_solo else f"🔔 {user_a.mention} — **Your Solo Draft Battle is Complete!**"
         
+        sent_success = False
         if target_channel:
             try:
                 if file:
@@ -657,15 +658,33 @@ class DraftBattleRoomView(discord.ui.View):
                     await target_channel.send(content=ping_content, embed=match_embed, file=file)
                 else:
                     await target_channel.send(content=ping_content, embed=match_embed)
+                sent_success = True
+            except discord.Forbidden:
+                print(f"[DraftBattle] 403 Forbidden sending to channel {target_channel.id} - missing Send Messages or Embed Links permission")
             except Exception as e:
-                print("[DraftBattle] Error sending result message:", e)
-        else:
-            print(f"[DraftBattle] Warning: Could not resolve target_channel (channel_id={self.channel_id})")
+                print(f"[DraftBattle] Error sending result message with image file: {e}")
+                try:
+                    match_embed.set_image(url=None)
+                    await target_channel.send(content=ping_content, embed=match_embed)
+                    sent_success = True
+                except Exception as e2:
+                    print(f"[DraftBattle] Fatal sending result message without file: {e2}")
 
-        if interaction:
+        if not sent_success and interaction:
+            try:
+                if file:
+                    file.fp.seek(0)
+                    await interaction.followup.send(content=ping_content, embed=match_embed, file=file)
+                else:
+                    await interaction.followup.send(content=ping_content, embed=match_embed)
+                sent_success = True
+            except Exception as e_dm:
+                print(f"[DraftBattle] Fallback interaction send failed: {e_dm}")
+
+        if interaction and sent_success:
             try:
                 ch_mention = target_channel.mention if target_channel else "the channel"
-                await interaction.followup.send(f"🏁 **Draft Battle Finished!** Check {ch_mention} to view the match highlights and final score!", ephemeral=True)
+                await interaction.followup.send(f"🏁 **Draft Battle Finished!** Check {ch_mention} to view match highlights and final score!", ephemeral=True)
             except Exception:
                 pass
 
