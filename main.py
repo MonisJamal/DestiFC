@@ -87,16 +87,40 @@ class DestiFC(commands.Bot):
                     async def _assign_role():
                         try:
                             guild = interaction.guild
+                            if not guild:
+                                return
+                            role_id = int(str(bot_cfg['auto_role_id']).strip())
+                            role = guild.get_role(role_id)
+                            if not role:
+                                # Role might not belong to this guild or not in cache
+                                return
+                            
+                            # Ensure we have a discord.Member object
                             member = interaction.user
-                            if guild and isinstance(member, discord.Member):
-                                role_id = int(str(bot_cfg['auto_role_id']).strip())
-                                role = guild.get_role(role_id)
-                                if role and role not in member.roles:
-                                    bot_member = guild.me or guild.get_member(self.user.id)
-                                    if bot_member and bot_member.guild_permissions.manage_roles and bot_member.top_role > role:
-                                        await member.add_roles(role, reason="DestiFC Auto-Role: User executed bot command")
-                        except Exception:
-                            pass
+                            if not isinstance(member, discord.Member) or member.guild.id != guild.id:
+                                try:
+                                    member = await guild.fetch_member(interaction.user.id)
+                                except Exception:
+                                    member = guild.get_member(interaction.user.id)
+                            
+                            if member and role not in member.roles:
+                                bot_member = guild.me or guild.get_member(self.user.id)
+                                if not bot_member:
+                                    bot_member = await guild.fetch_member(self.user.id)
+                                
+                                if not bot_member.guild_permissions.manage_roles:
+                                    print(f"[Auto-Role Warning] Bot in guild '{guild.name}' lacks 'Manage Roles' permission to grant role {role.name} ({role_id})")
+                                    return
+                                
+                                if bot_member.top_role <= role:
+                                    print(f"[Auto-Role Warning] Bot's top role '{bot_member.top_role.name}' (pos {bot_member.top_role.position}) is NOT higher than target role '{role.name}' (pos {role.position}) in guild '{guild.name}'")
+                                    return
+                                
+                                await member.add_roles(role, reason="DestiFC Auto-Role: User executed bot command")
+                                print(f"[Auto-Role] Successfully assigned role '{role.name}' ({role_id}) to {member.display_name} ({member.id}) in '{guild.name}'")
+                        except Exception as e:
+                            print(f"[Auto-Role Exception] Failed to assign role: {e}")
+
                     asyncio.create_task(_assign_role())
 
             except Exception as e:
