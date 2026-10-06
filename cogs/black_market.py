@@ -66,7 +66,7 @@ class BlackMarketView(discord.ui.View):
             if balance < cost:
                 return await interaction.followup.send(f"❌ Insufficient coins! You need **{cost:,} Coins**, but you only have **{balance:,}**.", ephemeral=True)
 
-            await database.update_balance(user_id, -cost)
+            await database.add_coins(user_id, -cost)
             await database.add_vouchers(user_id, int(deal['vouchers']))
             await database.record_black_market_purchase(user_id, self.session_id, deal_key)
 
@@ -92,8 +92,8 @@ class BlackMarketView(discord.ui.View):
             if not player_data:
                 return await interaction.followup.send("❌ Card data unavailable.", ephemeral=True)
 
-            await database.update_balance(user_id, -cost)
-            await database.add_card_to_inventory(user_id, player_data)
+            await database.add_coins(user_id, -cost)
+            await database.add_player_to_inventory(user_id, player_data)
             await database.record_black_market_purchase(user_id, self.session_id, deal_key)
 
             pos = player_data.get('position', 'ST')
