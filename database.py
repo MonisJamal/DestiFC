@@ -1839,7 +1839,8 @@ async def record_black_market_purchase(user_id: int, market_session_id: str, dea
 
 DEFAULT_EXCHANGE_EXCLUSIVE_SETTINGS = {
     "target_ovr": 122,
-    "enabled": True
+    "enabled": True,
+    "allow_other_in_exchanges": False  # If True, other 122 cards can appear in exchanges alongside exclusives
 }
 
 _EXCHANGE_EXCLUSIVE_SETTINGS_CACHE = None
@@ -1937,12 +1938,20 @@ async def set_card_exchange_exclusive(asset_id: int, is_exclusive: bool) -> bool
 async def get_exchange_top_candidates(target_ovr: int = 122):
     """
     Returns the designated top walkouts for Exchange rotation.
-    If exchange_exclusive = 1 cards exist at target_ovr, ONLY THOSE cards are eligible.
-    If none are configured yet, falls back to non-exclusive target_ovr cards to avoid empty pools.
+    - If allow_other_in_exchanges is True: Exclusive cards are guaranteed + other non-exclusive cards can appear too.
+    - If allow_other_in_exchanges is False (Strict Mode): ONLY exchange_exclusive cards can appear in exchanges.
     """
+    cfg = await get_exchange_exclusive_settings()
     exclusive_cards = await get_exchange_exclusive_cards(target_ovr)
+    allow_others = cfg.get("allow_other_in_exchanges", False)
+
     if exclusive_cards:
+        if allow_others:
+            # Combine both exclusive cards and normal official cards for exchanges
+            other_cards = await get_official_cards_by_rating(target_ovr, target_ovr, 100)
+            return exclusive_cards + [c for c in other_cards if (c.get('assetId') or c.get('id')) not in [e.get('assetId') or e.get('id') for e in exclusive_cards]]
         return exclusive_cards
+
     # Fallback to non-exclusive if admin hasn't flagged any cards yet
     return await get_official_cards_by_rating(target_ovr, target_ovr, 100)
 
