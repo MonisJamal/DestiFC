@@ -27,13 +27,30 @@ DEFAULT_DROPS_CONFIG = {
     "rare_drop_executed": []      # List of executed drop timestamps
 }
 
+def get_card_thumbnail(player_data: dict) -> str | None:
+    if not player_data:
+        return None
+    imgs = player_data.get("images")
+    if isinstance(imgs, dict):
+        return (
+            imgs.get("playerCardImage")
+            or imgs.get("playerImage")
+            or imgs.get("cardImage")
+        )
+    return (
+        player_data.get("playerCardImage")
+        or player_data.get("playerImage")
+        or player_data.get("cardImage")
+    )
+
 class DropClaimView(discord.ui.View):
-    def __init__(self, vouchers: int, coins: int, max_claims: int, is_rare: bool = False):
+    def __init__(self, vouchers: int, coins: int, max_claims: int, is_rare: bool = False, player_data: dict = None):
         super().__init__(timeout=600)
         self.vouchers = vouchers
         self.coins = coins
         self.max_claims = max_claims
         self.is_rare = is_rare
+        self.player_data = player_data
         self.claimed_users = set()
 
     @discord.ui.button(label="🎁 Claim Crate!", style=discord.ButtonStyle.success, custom_id="claim_drop_btn")
@@ -47,9 +64,12 @@ class DropClaimView(discord.ui.View):
         self.claimed_users.add(interaction.user.id)
         
         # Grant rewards
-        await database.add_vouchers(interaction.user.id, self.vouchers)
+        if self.vouchers > 0:
+            await database.add_vouchers(interaction.user.id, self.vouchers)
         if self.coins > 0:
             await database.add_coins(interaction.user.id, self.coins)
+        if self.player_data:
+            await database.add_player_to_inventory(interaction.user.id, self.player_data)
 
         remaining = self.max_claims - len(self.claimed_users)
         label_prefix = "🌟 CLAIM RARE GIFT" if self.is_rare else "🎟️ Claim Crate!"
@@ -62,10 +82,154 @@ class DropClaimView(discord.ui.View):
 
         await interaction.response.edit_message(view=self)
         banner = "🌟 **RARE DAILY GIFT CLAIMED!**" if self.is_rare else "🎉 **Loot Claimed!**"
+        
+        rewards_text = []
+        if self.player_data:
+            pname = self.player_data.get('cardName') or self.player_data.get('lastName', 'Player')
+            povr = self.player_data.get('rating', 0)
+            ppos = self.player_data.get('position') or self.player_data.get('pos', 'ST')
+            rewards_text.append(f"⚽ **{povr} OVR {pname} ({ppos})**")
+        if self.vouchers > 0:
+            rewards_text.append(f"🎟️ **+{self.vouchers} Draft Vouchers**")
+        if self.coins > 0:
+            rewards_text.append(f"🪙 **+{self.coins:,} Coins**")
+
+        details = " & ".join(rewards_text) if rewards_text else "rewards"
         await interaction.followup.send(
-            f"{banner} You received **+{self.vouchers} Draft Vouchers**" + (f" & **+{self.coins:,} Coins**!" if self.coins > 0 else "!"),
+            f"{banner} You received {details}!",
             ephemeral=True
         )
+
+class AdminPlayerDropSelect(discord.ui.Select):
+    def __init__(self, candidates: list, vouchers: int, coins: int, max_claims: int):
+        self.candidates = candidates
+        self.vouchers = vouchers
+        self.coins = coins
+        self.max_claims = max_claims
+
+        options = []
+        for idx, card in enumerate(candidates[:25]):
+            name = card.get("cardName") or card.get("lastName", "Player")
+            ovr = card.get("rating", 0)
+            pos = card.get("position") or card.get("pos", "ST")
+            prog = card.get("program") or ("CUSTOM" if card.get("is_custom") else "")
+            desc = f"{pos} • {prog}" if prog else f"{pos} • Card"
+            options.append(discord.SelectOption(
+                label=f"{ovr} OVR - {name[:70]}",
+                value=str(idx),
+                description=desc[:100]
+            ))
+
+        super().__init__(
+            placeholder="Select a player version to drop...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_idx = int(self.values[0])
+        chosen_card = self.candidates[selected_idx]
+
+        name = chosen_card.get("cardName") or chosen_card.get("lastName", "Player")
+        ovr = chosen_card.get("rating", 0)
+        pos = chosen_card.get("position") or chosen_card.get("pos", "ST")
+        prog = chosen_card.get("program") or ("CUSTOM" if chosen_card.get("is_custom") else "")
+
+        embed = discord.Embed(
+            title="🎁 A WILD PLAYER CRATE HAS DROPPED!",
+            description=(
+                f"An admin summoned an elite player supply crate!\n\n"
+                f"⭐ **Player:** `{ovr} OVR` **{name}** (`{pos}`)" + (f" [{prog}]" if prog else "") + f"\n"
+                + (f"🎟️ **Vouchers:** `+{self.vouchers} Draft Vouchers`\n" if self.vouchers > 0 else "")
+                + (f"🪙 **Coins:** `+{self.coins:,} Coins`\n" if self.coins > 0 else "")
+                + f"\n⚡ **First {self.max_claims} players** to click claim get this player card!"
+            ),
+            color=discord.Color.gold()
+        )
+        thumb = get_card_thumbnail(chosen_card)
+        if thumb:
+            embed.set_thumbnail(url=thumb)
+        embed.set_footer(text="Random Server Drop • DestiFC Stadium")
+
+        view = DropClaimView(self.vouchers, self.coins, self.max_claims, player_data=chosen_card)
+        await interaction.channel.send(embed=embed, view=view)
+        await interaction.response.edit_message(
+            content=f"✅ Successfully dropped **{ovr} OVR {name}** into this channel!",
+            view=None
+        )
+
+
+class AdminPlayerDropSelectView(discord.ui.View):
+    def __init__(self, candidates: list, vouchers: int, coins: int, max_claims: int):
+        super().__init__(timeout=180)
+        self.add_item(AdminPlayerDropSelect(candidates, vouchers, coins, max_claims))
+
+
+async def search_cards_for_drop(query: str, limit: int = 25) -> list:
+    """Searches custom inventory, RenderZ API, and official_cards DB."""
+    results = []
+    seen = set()
+
+    p = await database.get_db()
+
+    # 1. Check custom cards in inventory first
+    try:
+        custom_rows = await p.fetch(
+            "SELECT player_name, ovr, player_data FROM inventory WHERE player_data->>'is_custom' = 'true' AND player_name ILIKE $1 ORDER BY ovr DESC",
+            f"%{query}%"
+        )
+        for r in custom_rows:
+            pd = r["player_data"]
+            if isinstance(pd, str):
+                pd = json.loads(pd)
+            pname = r["player_name"]
+            povr = r["ovr"]
+            card_id = str(pd.get("id") or f"custom_{pname}_{povr}")
+            key = (card_id, povr)
+            if key not in seen:
+                seen.add(key)
+                results.append(pd)
+    except Exception as e:
+        print(f"[Drops Search] Error searching custom inventory: {e}")
+
+    # 2. Check RenderZ API
+    try:
+        from renderz_api import search_fifarenderz
+        renderz_matches = await asyncio.to_thread(search_fifarenderz, query, 25)
+        for card in renderz_matches:
+            cid = str(card.get("id") or card.get("assetId") or "")
+            covr = card.get("rating", 0)
+            key = (cid, covr)
+            if key not in seen:
+                seen.add(key)
+                results.append(card)
+    except Exception as e:
+        print(f"[Drops Search] Error querying RenderZ: {e}")
+
+    # 3. Check official_cards DB if needed
+    if len(results) < limit:
+        try:
+            db_rows = await p.fetch(
+                "SELECT player_name, card_name, rating, player_data FROM official_cards WHERE card_name ILIKE $1 OR player_name ILIKE $1 ORDER BY rating DESC LIMIT $2",
+                f"%{query}%", limit
+            )
+            for r in db_rows:
+                pd = r["player_data"]
+                if isinstance(pd, str):
+                    pd = json.loads(pd)
+                cid = str(pd.get("id") or pd.get("assetId") or "")
+                covr = r["rating"]
+                key = (cid, covr)
+                if key not in seen:
+                    seen.add(key)
+                    results.append(pd)
+        except Exception as e:
+            print(f"[Drops Search] Error querying official_cards: {e}")
+
+    results.sort(key=lambda x: x.get("rating", 0), reverse=True)
+    return results[:limit]
+
 
 class DropsCog(commands.Cog):
     def __init__(self, bot):
@@ -260,18 +424,51 @@ class DropsCog(commands.Cog):
     async def before_drop_loop(self):
         await self.bot.wait_until_ready()
 
-    @app_commands.command(name="admin_drop", description="Admin: Manually drop a voucher loot crate into this channel")
+    @app_commands.command(name="admin_drop", description="Admin: Manually drop a loot crate into this channel (with optional player)")
     @app_commands.describe(
-        vouchers="Vouchers per claim (default 3)",
-        coins="Coins per claim (default 5,000,000)",
-        max_claims="Number of players who can claim (default 3)"
+        vouchers="Vouchers per claim (default 0)",
+        coins="Coins per claim (default 0)",
+        max_claims="Number of players who can claim (default 3)",
+        player_name="Optional player name to drop (shows choice menu of versions)"
     )
-    async def admin_drop(self, interaction: discord.Interaction, vouchers: int = 3, coins: int = 5_000_000, max_claims: int = 3):
+    async def admin_drop(
+        self,
+        interaction: discord.Interaction,
+        vouchers: int = 0,
+        coins: int = 0,
+        max_claims: int = 3,
+        player_name: str | None = None
+    ):
         await interaction.response.defer(ephemeral=True)
         try:
             from auth import is_team_admin_or_owner
             if not await is_team_admin_or_owner(self.bot, interaction.user):
                 return await interaction.followup.send("❌ Admin command only.", ephemeral=True)
+
+            if max_claims < 1:
+                max_claims = 1
+
+            # If player_name is provided, search and show dropdown menu
+            if player_name and player_name.strip():
+                clean_query = player_name.strip()
+                matches = await search_cards_for_drop(clean_query, limit=25)
+                if not matches:
+                    return await interaction.followup.send(
+                        f"❌ No player versions found matching **'{clean_query}'**.",
+                        ephemeral=True
+                    )
+
+                view = AdminPlayerDropSelectView(matches, vouchers=vouchers, coins=coins, max_claims=max_claims)
+                return await interaction.followup.send(
+                    f"🔍 Found **{len(matches)}** versions for **{clean_query}**.\nSelect the version you want to drop below:",
+                    view=view,
+                    ephemeral=True
+                )
+
+            # Otherwise, drop standard voucher/coin crate
+            if vouchers == 0 and coins == 0:
+                vouchers = 3
+                coins = 5_000_000
 
             embed = discord.Embed(
                 title="🎁 A WILD SUPPLY CRATE HAS DROPPED!",
@@ -285,7 +482,7 @@ class DropsCog(commands.Cog):
             embed.set_footer(text="Random Server Drop • DestiFC Stadium")
             view = DropClaimView(vouchers, coins, max_claims)
             await interaction.channel.send(embed=embed, view=view)
-            await interaction.followup.send("✅ Mystery voucher crate successfully dropped into this channel!", ephemeral=True)
+            await interaction.followup.send("✅ Mystery loot crate successfully dropped into this channel!", ephemeral=True)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -293,3 +490,4 @@ class DropsCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(DropsCog(bot))
+
