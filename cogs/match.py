@@ -366,27 +366,45 @@ class MatchCog(commands.Cog):
             threat_a = (s_a["atk_p"] * 0.65 + s_a["mid_p"] * 0.35) - (s_b["def_p"] * 0.65 + s_b["gk_p"] * 0.35)
             threat_b = (s_b["atk_p"] * 0.65 + s_b["mid_p"] * 0.35) - (s_a["def_p"] * 0.65 + s_a["gk_p"] * 0.35)
 
-            chances_a = max(2, int(4 + (threat_a * 0.35) + random.randint(-1, 2)))
-            chances_b = max(2, int(4 + (threat_b * 0.35) + random.randint(-1, 2)))
+            # High-intensity chances (5 to 8 chances per team for high excitement & realistic end-to-end action)
+            chances_a = max(3, int(5 + (threat_a * 0.30) + random.randint(0, 2)))
+            chances_b = max(3, int(5 + (threat_b * 0.30) + random.randint(0, 2)))
 
             goals_a = 0
             for _ in range(chances_a):
-                p_score = 0.28 + (threat_a * 0.035)
-                if random.random() < max(0.08, min(0.60, p_score)):
+                p_score = 0.38 + (threat_a * 0.03) + random.uniform(-0.05, 0.08)
+                if random.random() < max(0.12, min(0.68, p_score)):
                     goals_a += 1
 
             goals_b = 0
             for _ in range(chances_b):
-                p_score = 0.28 + (threat_b * 0.035)
-                if random.random() < max(0.08, min(0.60, p_score)):
+                p_score = 0.38 + (threat_b * 0.03) + random.uniform(-0.05, 0.08)
+                if random.random() < max(0.12, min(0.68, p_score)):
                     goals_b += 1
 
-            goals_a = min(5, goals_a)
-            goals_b = min(5, goals_b)
+            # Cap goals realistically at 6
+            goals_a = min(6, goals_a)
+            goals_b = min(6, goals_b)
+
+            # Late Drama Roll: 30% chance for an 88'-90' thriller goal if match is tied or 1-goal gap
+            late_drama = random.random() < 0.35
+            if late_drama:
+                if goals_a == goals_b and random.random() < 0.60:
+                    # Someone grabs a dramatic 89' winner!
+                    if random.random() < (0.5 + (threat_a - threat_b) * 0.02):
+                        goals_a += 1
+                    else:
+                        goals_b += 1
+                elif abs(goals_a - goals_b) == 1 and random.random() < 0.45:
+                    # Trailing team grabs a last-gasp 90' equalizer!
+                    if goals_a < goals_b:
+                        goals_a += 1
+                    else:
+                        goals_b += 1
 
             # Distribute goals across 90 minutes with positional roles (attackers, midfielders, defenders)
             all_goals = []
-            for _ in range(goals_a):
+            for idx in range(goals_a):
                 r = random.random()
                 if r < 0.65 and s_a["atk"]:
                     cands, ptype = s_a["atk"], "atk"
@@ -397,9 +415,11 @@ class MatchCog(commands.Cog):
                 else:
                     cands, ptype = starters_a, "atk"
                 scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
-                all_goals.append((player_a, random.randint(6, 88), scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype))
+                # If late drama, push the last goal to 88-90'
+                min_g = random.randint(87, 90) if (late_drama and idx == goals_a - 1) else random.randint(7, 86)
+                all_goals.append((player_a, min_g, scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype))
 
-            for _ in range(goals_b):
+            for idx in range(goals_b):
                 r = random.random()
                 if r < 0.65 and s_b["atk"]:
                     cands, ptype = s_b["atk"], "atk"
@@ -410,7 +430,8 @@ class MatchCog(commands.Cog):
                 else:
                     cands, ptype = starters_b, "atk"
                 scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
-                all_goals.append((player_b, random.randint(6, 88), scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype))
+                min_g = random.randint(87, 90) if (late_drama and idx == goals_b - 1) else random.randint(7, 86)
+                all_goals.append((player_b, min_g, scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype))
 
             all_goals.sort(key=lambda x: x[1])
 
@@ -420,10 +441,10 @@ class MatchCog(commands.Cog):
             current_score_b = 0
 
             # Realistic statistics totals
-            shots_on_target_a = goals_a + random.randint(2, 5)
-            shots_total_a = shots_on_target_a + random.randint(3, 6)
-            shots_on_target_b = goals_b + random.randint(2, 5)
-            shots_total_b = shots_on_target_b + random.randint(3, 6)
+            shots_on_target_a = goals_a + random.randint(3, 7)
+            shots_total_a = shots_on_target_a + random.randint(4, 8)
+            shots_on_target_b = goals_b + random.randint(3, 7)
+            shots_total_b = shots_on_target_b + random.randint(4, 8)
 
             saves_a = max(0, shots_on_target_b - goals_b)
             saves_b = max(0, shots_on_target_a - goals_a)
@@ -458,12 +479,15 @@ class MatchCog(commands.Cog):
                         current_score_b += 1
                         team_name = player_b.display_name
 
-                    if ptype == "def":
-                        goal_commentary = f"⚽ **{minute}' GOAL!** TOWERING CORNER HEADER! Defender **{scorer}** (`{pos}`) thumps it home for **{team_name}**! 📐🔥"
+                    is_stoppage = (minute >= 88)
+                    if is_stoppage:
+                        goal_commentary = f"🚨 **{minute}' GOAL! UNBELIEVABLE DRAMA!** Stoppage-time pandemonium as **{scorer}** (`{pos}`) nets a breathless stunner for **{team_name}**! ⚡🔥"
+                    elif ptype == "def":
+                        goal_commentary = f"⚽ **{minute}' GOAL!** BULLET CORNER HEADER! Defender **{scorer}** (`{pos}`) rises above everyone and thumps it home for **{team_name}**! 📐🔥"
                     elif ptype == "mid":
-                        goal_commentary = f"⚽ **{minute}' GOAL!** LONG-RANGE STUNNER! **{scorer}** (`{pos}`) drills a rocket into the top corner for **{team_name}**! ☄️"
+                        goal_commentary = f"⚽ **{minute}' GOAL!** 30-YARD SCREAMER! **{scorer}** (`{pos}`) unleashes an unstoppable rocket into the top corner for **{team_name}**! ☄️"
                     else:
-                        goal_commentary = f"⚽ **{minute}' GOAL!** CLINICAL FINISH! **{scorer}** (`{pos}`) beats his marker and slots it home for **{team_name}**! 🔥"
+                        goal_commentary = f"⚽ **{minute}' GOAL!** PURE CLASS! **{scorer}** (`{pos}`) cuts past the keeper with filthy footwork and finishes with ice in his veins for **{team_name}**! 🧊⚽"
 
                     tick_events.append(goal_commentary)
                     scoresheet_events.append(f"⚽ **{minute}'** - **{scorer}** ({team_name})")
@@ -487,21 +511,21 @@ class MatchCog(commands.Cog):
                     om = random.choice(opp_mid_pool)
 
                     commentary_choices = [
-                        f"🛡️ **MIDFIELD RECOVERY!** Anchor **{om}** tracks back and makes a brilliant sliding tackle to shut down {att_team_name}'s counter!",
-                        f"⚡ **MIDFIELD MAESTRO!** **{m}** threads a pinpoint pass between the center-backs, opening up space!",
-                        f"🧤 **WORLD-CLASS SAVE!** **{g}** reacts with lightning reflexes to tip a curled strike from **{a}** over the crossbar!",
-                        f"⚔️ **CRUNCHING TACKLE!** Defender **{d}** steps out with textbook timing to dispossess **{a}** inside the box!",
-                        f"🚀 **OFF THE POST!** **{a}** creates half a yard of space and unleashes a ferocious strike that rattles off the upright!",
-                        f"📐 **CORNER DELIVERY!** **{m}** delivers a curling set-piece into the 6-yard box, headed clear by **{d}**!",
-                        f"💨 **LIGHTNING COUNTER!** **{a}** bursts down the wing on a fast break, but **{om}** recovers cleanly to halt danger!",
-                        f"🟨 **TACTICAL FOUL!** **{d}** stops a dangerous counter with a professional challenge."
+                        f"⚡ **ELECTRIC COUNTER-ATTACK!** **{m}** threads an audacious trivela through-ball, slicing {att_team_name}'s midfield wide open!",
+                        f"🧤 **FINGERTIP HEROICS!** **{g}** produces an acrobatic top-corner save to deny a blistering volley from **{a}**!",
+                        f"🚀 **CROSSBAR SHUDDER!** **{a}** connects sweetly on the half-volley from 25 yards... the woodwork is still vibrating!",
+                        f"🛡️ **DESPERATE GOAL-LINE CLEARANCE!** Defender **{d}** slides across the goal-line to hook **{a}**'s chipped effort to safety!",
+                        f"⚔️ **CRUNCHING TACKLE!** Anchor **{om}** flies in with an inch-perfect sliding challenge, stopping a certain 1-on-1 break!",
+                        f"🎯 **MAGIC FOOTWORK!** **{a}** leaves two defenders grasping for air with a silky roulette before firing just wide of the post!",
+                        f"📐 **WHIPPED INSWINGER!** **{m}** whips a treacherous curled set-piece towards the back stick, headed out for another corner!",
+                        f"🟨 **CYNICAL TACTICAL FOUL!** **{d}** drags down **{a}** on the breakaway — yellow card shown by the referee!"
                     ]
                     chosen_comm = random.choice(commentary_choices)
                     tick_events.append(f"🎙️ *{chosen_comm}*")
 
-                    if "save" in chosen_comm.lower():
-                        scoresheet_events.append(f"🧤 **{current_minute}'** - **{g}** (Crucial Save)")
-                    elif "tactical foul" in chosen_comm.lower():
+                    if "fingertip heroics" in chosen_comm.lower() or "save" in chosen_comm.lower():
+                        scoresheet_events.append(f"🧤 **{current_minute}'** - **{g}** (Heroic Save)")
+                    elif "yellow card" in chosen_comm.lower():
                         scoresheet_events.append(f"🟨 **{current_minute}'** - **{d}** (Yellow Card)")
 
                 # Build live scoreboard message
@@ -547,7 +571,7 @@ class MatchCog(commands.Cog):
 
                 if current_minute < 90:
                     await safe_update_ui(content=msg_content, view=None)
-                    await asyncio.sleep(3.2)
+                    await asyncio.sleep(4.2)
 
             # Match winner resolution
             if current_score_a > current_score_b:
