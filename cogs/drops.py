@@ -128,36 +128,64 @@ class AdminPlayerDropSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        selected_idx = int(self.values[0])
-        chosen_card = self.candidates[selected_idx]
+        try:
+            await interaction.response.defer(ephemeral=True)
+            selected_idx = int(self.values[0])
+            chosen_card = self.candidates[selected_idx]
 
-        name = chosen_card.get("cardName") or chosen_card.get("lastName", "Player")
-        ovr = chosen_card.get("rating", 0)
-        pos = chosen_card.get("position") or chosen_card.get("pos", "ST")
-        prog = chosen_card.get("program") or ("CUSTOM" if chosen_card.get("is_custom") else "")
+            name = chosen_card.get("cardName") or chosen_card.get("lastName", "Player")
+            ovr = chosen_card.get("rating", 0)
+            pos = chosen_card.get("position") or chosen_card.get("pos", "ST")
+            prog = chosen_card.get("program") or ("CUSTOM" if chosen_card.get("is_custom") else "")
 
-        embed = discord.Embed(
-            title="🎁 A WILD PLAYER CRATE HAS DROPPED!",
-            description=(
-                f"An admin summoned an elite player supply crate!\n\n"
-                f"⭐ **Player:** `{ovr} OVR` **{name}** (`{pos}`)" + (f" [{prog}]" if prog else "") + f"\n"
-                + (f"🎟️ **Vouchers:** `+{self.vouchers} Draft Vouchers`\n" if self.vouchers > 0 else "")
-                + (f"🪙 **Coins:** `+{self.coins:,} Coins`\n" if self.coins > 0 else "")
-                + f"\n⚡ **First {self.max_claims} players** to click claim get this player card!"
-            ),
-            color=discord.Color.gold()
-        )
-        thumb = get_card_thumbnail(chosen_card)
-        if thumb:
-            embed.set_thumbnail(url=thumb)
-        embed.set_footer(text="Random Server Drop • DestiFC Stadium")
+            embed = discord.Embed(
+                title="🎁 A WILD PLAYER CRATE HAS DROPPED!",
+                description=(
+                    f"An admin summoned an elite player supply crate!\n\n"
+                    f"⭐ **Player:** `{ovr} OVR` **{name}** (`{pos}`)" + (f" [{prog}]" if prog else "") + f"\n"
+                    + (f"🎟️ **Vouchers:** `+{self.vouchers} Draft Vouchers`\n" if self.vouchers > 0 else "")
+                    + (f"🪙 **Coins:** `+{self.coins:,} Coins`\n" if self.coins > 0 else "")
+                    + f"\n⚡ **First {self.max_claims} players** to click claim get this player card!"
+                ),
+                color=discord.Color.gold()
+            )
 
-        view = DropClaimView(self.vouchers, self.coins, self.max_claims, player_data=chosen_card)
-        await interaction.channel.send(embed=embed, view=view)
-        await interaction.response.edit_message(
-            content=f"✅ Successfully dropped **{ovr} OVR {name}** into this channel!",
-            view=None
-        )
+            file_attachment = None
+            thumb = get_card_thumbnail(chosen_card)
+            if thumb:
+                if str(thumb).startswith("data:image/"):
+                    try:
+                        import base64
+                        import io
+                        mime, b64_str = str(thumb).split(";base64,")
+                        ext = mime.split("/")[-1].split("+")[0]
+                        img_bytes = base64.b64decode(b64_str)
+                        file_attachment = discord.File(fp=io.BytesIO(img_bytes), filename=f"custom_card.{ext}")
+                        embed.set_thumbnail(url=f"attachment://custom_card.{ext}")
+                    except Exception as b64_err:
+                        print(f"[Drops] Error converting base64 thumbnail: {b64_err}")
+                elif str(thumb).startswith("http://") or str(thumb).startswith("https://"):
+                    embed.set_thumbnail(url=thumb)
+
+            embed.set_footer(text="Random Server Drop • DestiFC Stadium")
+
+            view = DropClaimView(self.vouchers, self.coins, self.max_claims, player_data=chosen_card)
+            if file_attachment:
+                await interaction.channel.send(embed=embed, file=file_attachment, view=view)
+            else:
+                await interaction.channel.send(embed=embed, view=view)
+
+            await interaction.edit_original_response(
+                content=f"✅ Successfully dropped **{ovr} OVR {name}** into this channel!",
+                view=None
+            )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            try:
+                await interaction.followup.send(f"❌ Error dropping player card: `{e}`", ephemeral=True)
+            except Exception:
+                pass
 
 
 class AdminPlayerDropSelectView(discord.ui.View):
