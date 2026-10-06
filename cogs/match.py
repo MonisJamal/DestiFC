@@ -23,64 +23,47 @@ class MatchMomentView(discord.ui.View):
         self.attacker_action = None
         self.defender_action = None
 
-    # Row 0: Primary Attacker Moves
-    @discord.ui.button(label="🎯 Pass", style=discord.ButtonStyle.primary, row=0, custom_id="btn_pass")
-    async def btn_pass(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "pass", "🎯 Through Pass")
+    # ATTACKER ROW (Exclusively for Attacking Manager)
+    @discord.ui.button(label=f"Pass / Cross", style=discord.ButtonStyle.primary, row=0, emoji="🎯", custom_id="btn_atk_pass")
+    async def btn_atk_pass(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_atk(interaction, "pass", "🎯 Pass / Cross")
 
-    @discord.ui.button(label="⚡ Dribble", style=discord.ButtonStyle.success, row=0, custom_id="btn_dribble")
-    async def btn_dribble(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "dribble", "⚡ Skill Dribble")
+    @discord.ui.button(label=f"Dribble / Skill", style=discord.ButtonStyle.success, row=0, emoji="⚡", custom_id="btn_atk_dribble")
+    async def btn_atk_dribble(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_atk(interaction, "dribble", "⚡ Dribble / Skill")
 
-    @discord.ui.button(label="🚀 Power Shot", style=discord.ButtonStyle.danger, row=0, custom_id="btn_shoot")
-    async def btn_shoot(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "shoot", "🚀 Power Shot")
+    @discord.ui.button(label=f"Shoot / Finish", style=discord.ButtonStyle.danger, row=0, emoji="🚀", custom_id="btn_atk_shoot")
+    async def btn_atk_shoot(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_atk(interaction, "shoot", "🚀 Shoot / Finish")
 
-    @discord.ui.button(label="💫 Finesse Curl", style=discord.ButtonStyle.primary, row=0, custom_id="btn_finesse")
-    async def btn_finesse(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "finesse", "💫 Finesse Curl")
+    # DEFENDER ROW (Exclusively for Defending Manager)
+    @discord.ui.button(label=f"Intercept / Cut Lane", style=discord.ButtonStyle.primary, row=1, emoji="🛡️", custom_id="btn_def_intercept")
+    async def btn_def_intercept(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_def(interaction, "intercept", "🛡️ Intercept / Cut Lane")
 
-    @discord.ui.button(label="🪄 Chip Shot", style=discord.ButtonStyle.secondary, row=0, custom_id="btn_chip")
-    async def btn_chip(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "chip", "🪄 Chip Shot")
+    @discord.ui.button(label=f"Crunch Tackle", style=discord.ButtonStyle.danger, row=1, emoji="⚔️", custom_id="btn_def_tackle")
+    async def btn_def_tackle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_def(interaction, "tackle", "⚔️ Crunch Tackle")
 
-    # Row 1: Primary Defender Counter-Moves
-    @discord.ui.button(label="🛡️ Cut Pass", style=discord.ButtonStyle.primary, row=1, custom_id="btn_intercept")
-    async def btn_intercept(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "intercept", "🛡️ Cut Pass Lane")
+    @discord.ui.button(label=f"Rush / Save", style=discord.ButtonStyle.secondary, row=1, emoji="🧤", custom_id="btn_def_save")
+    async def btn_def_save(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_def(interaction, "save", "🧤 Rush / Save")
 
-    @discord.ui.button(label="⚔️ Crunch Tackle", style=discord.ButtonStyle.danger, row=1, custom_id="btn_tackle")
-    async def btn_tackle(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "tackle", "⚔️ Crunch Tackle")
+    async def _handle_atk(self, interaction: discord.Interaction, action_key: str, action_label: str):
+        if interaction.user.id != self.attacker_member.id:
+            if interaction.user.id == self.defender_member.id:
+                return await interaction.response.send_message("❌ **You are the Defender!** You can only choose Defender actions on Row 2.", ephemeral=True)
+            return await interaction.response.send_message("❌ You are a spectator in this match!", ephemeral=True)
+        self.attacker_action = action_key
+        await interaction.response.send_message(f"🎯 **Locked In:** You selected **{action_label}**! Waiting for defender...", ephemeral=True)
 
-    @discord.ui.button(label="🧤 Rush GK", style=discord.ButtonStyle.danger, row=1, custom_id="btn_save")
-    async def btn_save(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "save", "🧤 Rush GK")
-
-    @discord.ui.button(label="🧱 Jockey Block", style=discord.ButtonStyle.success, row=1, custom_id="btn_jockey")
-    async def btn_jockey(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "jockey", "🧱 Jockey Block")
-
-    @discord.ui.button(label="🚩 Offside Trap", style=discord.ButtonStyle.secondary, row=1, custom_id="btn_trap")
-    async def btn_trap(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self._handle_click(interaction, "trap", "🚩 Offside Trap")
-
-    async def _handle_click(self, interaction: discord.Interaction, action_key: str, action_label: str):
-        uid = interaction.user.id
-        atk_keys = ["pass", "dribble", "shoot", "finesse", "chip"]
-        def_keys = ["intercept", "tackle", "save", "jockey", "trap"]
-        if uid == self.attacker_member.id:
-            if action_key not in atk_keys:
-                return await interaction.response.send_message("❌ You are **Attacking**! Use the top row buttons (`Pass`, `Dribble`, `Power Shot`, `Finesse`, `Chip`).", ephemeral=True)
-            self.attacker_action = action_key
-            await interaction.response.send_message(f"✅ Locked in: **{action_label}**! Waiting for defending manager...", ephemeral=True)
-        elif uid == self.defender_member.id:
-            if action_key not in def_keys:
-                return await interaction.response.send_message("❌ You are **Defending**! Use the bottom row buttons (`Cut Pass`, `Tackle`, `Rush GK`, `Jockey`, `Trap`).", ephemeral=True)
-            self.defender_action = action_key
-            await interaction.response.send_message(f"✅ Locked in: **{action_label}**! Counter-action ready...", ephemeral=True)
-        else:
-            await interaction.response.send_message("❌ You are a spectator in this match!", ephemeral=True)
+    async def _handle_def(self, interaction: discord.Interaction, action_key: str, action_label: str):
+        if interaction.user.id != self.defender_member.id:
+            if interaction.user.id == self.attacker_member.id:
+                return await interaction.response.send_message("❌ **You are the Attacker!** You can only choose Attacker actions on Row 1.", ephemeral=True)
+            return await interaction.response.send_message("❌ You are a spectator in this match!", ephemeral=True)
+        self.defender_action = action_key
+        await interaction.response.send_message(f"🛡️ **Locked In:** You selected **{action_label}**! Counter ready...", ephemeral=True)
 
 class MatchRequestView(discord.ui.View):
     def __init__(self, challenger: discord.Member, opponent: discord.Member, cog, squad_a, squad_b, fans_a, fans_b, ovr_a, ovr_b, timeout_secs: int = 60):
@@ -323,6 +306,7 @@ class MatchCog(commands.Cog):
                 
                 tactic = squad.get('tactic', 'Tiki-Taka')
                 formation = squad.get('formation', '4-3-3 Flat')
+                theme = squad.get('theme', 'default')
                 t_data = TACTICS.get(tactic, TACTICS["Tiki-Taka"])
                 is_synergy = any(f.lower() in formation.lower() for f in t_data.get('best_formations', []))
                 
@@ -347,10 +331,39 @@ class MatchCog(commands.Cog):
                         mid_p += 4.0
                         atk_p += 3.5
 
+                # Apply Stadium Turf Perks (Home Venue Advantage)
+                stadium_name = "⚡ Neon Stadium"
+                if theme == "snow":
+                    def_p += 1.5
+                    stadium_name = "❄️ Frostbite Arena"
+                elif theme == "lava":
+                    atk_p += 2.5
+                    stadium_name = "🌋 Volcanic Caldera"
+                elif theme == "cyberpunk":
+                    mid_p += 2.0
+                    stadium_name = "🤖 Neo-Tokyo Cyber City"
+                elif theme == "desert":
+                    def_p += 3.0
+                    gk_p += 1.5
+                    stadium_name = "🌙 Arabian Oasis Coliseum"
+                elif theme == "galaxy":
+                    atk_p += 2.0
+                    mid_p += 2.0
+                    def_p += 2.0
+                    gk_p += 2.0
+                    stadium_name = "🌌 Celestial Orbit Stadium"
+                elif theme == "gold":
+                    atk_p += 3.0
+                    mid_p += 3.0
+                    def_p += 3.0
+                    gk_p += 3.0
+                    stadium_name = "👑 Champions Royal Colosseum"
+
                 return {
                     "atk": atk, "mid": mid, "defn": defn, "gk": gk, "starters": starters,
                     "atk_p": atk_p, "mid_p": mid_p, "def_p": def_p, "gk_p": gk_p,
-                    "tactic": tactic, "formation": formation, "is_synergy": is_synergy
+                    "tactic": tactic, "formation": formation, "is_synergy": is_synergy,
+                    "theme": theme, "stadium_name": stadium_name
                 }
 
             s_a = get_team_sectors(squad_a, ovr_a)
@@ -511,17 +524,19 @@ class MatchCog(commands.Cog):
                     f"🏟️ **LIVE DIVISION RIVALS MATCH**\n\n"
                     f"{scoreboard}\n{time_label}\n\n"
                     f"🎙️ *{scenario_text}*\n\n"
-                    f"⚽ **{att_team_name} (Attacker)**: `🎯 Pass` | `⚡ Dribble` | `🚀 Power Shot` | `💫 Finesse` | `🪄 Chip`\n"
-                    f"🛡️ **{def_team_name} (Defender)**: `🛡️ Cut Pass` | `⚔️ Tackle` | `🧤 Rush GK` | `🧱 Jockey` | `🚩 Offside Trap`\n"
-                    f"*(Quick 7s to lock in your play!)*"
+                    f"⚔️ **ATTACKER:** {att_member.mention} ({att_team_name})\n"
+                    f"👉 **YOUR OPTIONS (Row 1):** `🎯 Pass` | `⚡ Dribble` | `🚀 Shoot`\n\n"
+                    f"🛡️ **DEFENDER:** {def_member.mention} ({def_team_name})\n"
+                    f"👉 **YOUR OPTIONS (Row 2):** `🛡️ Intercept` | `⚔️ Tackle` | `🧤 Rush/Save`\n\n"
+                    f"*(⏱️ 7 seconds to lock in! If you don't pick, your AI squad will react automatically)*"
                 )
 
                 await interaction.edit_original_response(content=prompt_content, view=view)
                 await asyncio.sleep(7.0)
 
                 # Default fallback actions if not selected
-                atk_act = view.attacker_action or random.choice(["pass", "dribble", "shoot", "finesse", "chip"])
-                def_act = view.defender_action or random.choice(["intercept", "tackle", "save", "jockey", "trap"])
+                atk_act = view.attacker_action or random.choice(["pass", "dribble", "shoot"])
+                def_act = view.defender_action or random.choice(["intercept", "tackle", "save"])
 
                 # Resolve circumstance outcome matrix
                 ovr_delta = active_atk['ovr'] - active_def['ovr']
@@ -677,16 +692,20 @@ class MatchCog(commands.Cog):
                 action_summary = f"*(Attacker chose `{atk_act.upper()}` vs Defender `{def_act.upper()}`)*"
                 interim_scoreboard = f"**{player_a.display_name}** `{current_score_a} - {current_score_b}` **{player_b.display_name}**"
 
+                # Check if this is the final moment before Full Time
+                is_last_moment = (m_idx == len(moments_minutes) - 1)
+                status_line = "🏁 *Whistle blowing for Full Time...*" if is_last_moment else "⏳ *Match continuing...*"
+
                 await interaction.edit_original_response(
                     content=(
                         f"🏟️ **LIVE DIVISION RIVALS MATCH**\n\n"
                         f"{interim_scoreboard}\n⏱️ **{minute}' Outcome**\n\n"
                         f"{outcome_text}\n{action_summary}\n\n"
-                        f"⏳ *Match continuing...*"
+                        f"{status_line}"
                     ),
                     view=None
                 )
-                await asyncio.sleep(3.5)
+                await asyncio.sleep(3.0)
 
             # Match winner resolution
             if current_score_a > current_score_b:
@@ -711,7 +730,12 @@ class MatchCog(commands.Cog):
             ratings_a = calc_full_team_ratings(starters_a, is_a_win, is_draw, current_score_b, current_score_a)
             ratings_b = calc_full_team_ratings(starters_b, is_b_win, is_draw, current_score_a, current_score_b)
             all_rated_final = [(r, player_a.display_name) for r in ratings_a] + [(r, player_b.display_name) for r in ratings_b]
-            motm_entry, motm_team = max(all_rated_final, key=lambda x: (x[0]["goals"] * 2 + x[0]["rating"]))
+            if all_rated_final:
+                motm_entry, motm_team = max(all_rated_final, key=lambda x: (x[0].get("goals", 0) * 2 + x[0].get("rating", 6.0)))
+            else:
+                motm_entry = {"name": "Match MVP", "rating": 8.0, "goals": 0}
+                motm_team = player_a.display_name
+
             motm_str = f"⭐ **{motm_entry['name']}** `({motm_entry['rating']} Rating)` — *{motm_team}*"
             # Background AI analysis task (never delays the match)
             events_summary = [f"{g[1]}' {g[2]} ({g[0].display_name})" for g in all_goals]
@@ -737,19 +761,23 @@ class MatchCog(commands.Cog):
                 result_text = f"🏆 **{player_a.display_name} WINS!**\nFinal Score: `{current_score_a} - {current_score_b}`"
                 color = discord.Color.green()
                 fan_change_str = f"**{player_a.display_name}** gained **+10,000 Fans**\n**{player_b.display_name}** lost **-2,000 Fans**"
-                bonus_a_str = "💰 **+25,000,000 Coins**\n🎫 **+1x Draft Voucher**"
+                coins_won_a = "💰 **+28,750,000 Coins** *(👑 +15% Stadium Bonus!)*" if s_a.get('theme') == 'gold' else "💰 **+25,000,000 Coins**"
+                bonus_a_str = f"{coins_won_a}\n🎫 **+1x Draft Voucher**"
                 bonus_b_str = ""
             else:
                 result_text = f"🏆 **{player_b.display_name} WINS!**\nFinal Score: `{current_score_a} - {current_score_b}`"
                 color = discord.Color.red()
                 fan_change_str = f"**{player_b.display_name}** gained **+10,000 Fans**\n**{player_a.display_name}** lost **-2,000 Fans**"
+                coins_won_b = "💰 **+28,750,000 Coins** *(👑 +15% Stadium Bonus!)*" if s_b.get('theme') == 'gold' else "💰 **+25,000,000 Coins**"
                 bonus_a_str = ""
-                bonus_b_str = "💰 **+25,000,000 Coins**\n🎫 **+1x Draft Voucher**"
+                bonus_b_str = f"{coins_won_b}\n🎫 **+1x Draft Voucher**"
 
             embed = discord.Embed(title="FULL TIME ⏱️", description=result_text, color=color)
             
             # 1. Match Score Sheet & Key Events
             sheet_text = "\n".join(scoresheet_events) if scoresheet_events else "*No goals or major incidents.*"
+            if len(sheet_text) > 1024:
+                sheet_text = sheet_text[:1020] + "..."
             embed.add_field(name="📋 Match Events", value=sheet_text, inline=False)
             
             # 2. Detailed Real-Life Team Match Statistics
@@ -778,11 +806,13 @@ class MatchCog(commands.Cog):
             def format_full_ratings(r_list):
                 lines = []
                 for r in r_list:
-                    icon = "🧤" if r["pos"] == "GK" else ("🛡️" if r["pos"] in ['CB', 'LB', 'RB', 'LWB', 'RWB'] else ("⚡" if r["pos"] in ['CAM', 'CM', 'CDM', 'LM', 'RM'] else "🔥"))
-                    star = " ⭐" if r["name"] == motm_entry["name"] else ""
-                    goal_badge = f" {'⚽' * r['goals']}" if r['goals'] > 0 else ""
-                    lines.append(f"{icon} `[{r['pos']:<3}]` **{r['name'][:14]}** `{r['rating']}`{star}{goal_badge}")
-                return "\n".join(lines)
+                    icon = "🧤" if r.get("pos") == "GK" else ("🛡️" if r.get("pos") in ['CB', 'LB', 'RB', 'LWB', 'RWB'] else ("⚡" if r.get("pos") in ['CAM', 'CM', 'CDM', 'LM', 'RM'] else "🔥"))
+                    star = " ⭐" if r.get("name") == motm_entry.get("name") else ""
+                    goals_cnt = r.get('goals', 0)
+                    goal_badge = f" {'⚽' * goals_cnt}" if goals_cnt > 0 else ""
+                    lines.append(f"{icon} `[{r.get('pos', 'SUB'):<3}]` **{r.get('name', 'Player')[:14]}** `{r.get('rating', 6.0)}`{star}{goal_badge}")
+                txt = "\n".join(lines) if lines else "*No rating data*"
+                return txt[:1024]
 
             embed.add_field(name=f"👥 {player_a.display_name} XI", value=format_full_ratings(ratings_a), inline=True)
             embed.add_field(name=f"👥 {player_b.display_name} XI", value=format_full_ratings(ratings_b), inline=True)
@@ -795,8 +825,23 @@ class MatchCog(commands.Cog):
             )
             embed.set_footer(text="DestiFC Match Engine • Stats recorded to /club_stats & /player_stats")
             
-            # INSTANT SCOREBOARD PRESENTATION (0 delay)
-            await interaction.edit_original_response(content=None, embed=embed, view=None)
+            # PRESENT FULL TIME EMBED SAFELY
+            ft_sent = False
+            try:
+                await interaction.edit_original_response(content=None, embed=embed, view=None)
+                ft_sent = True
+            except Exception as e_edit:
+                print(f"[Match] Failed to edit_original_response for FT: {e_edit}")
+                try:
+                    # Clear view on original response first if possible
+                    await interaction.edit_original_response(view=None)
+                except Exception:
+                    pass
+                try:
+                    await interaction.channel.send(content=f"🏁 **FULL TIME** — {player_a.mention} vs {player_b.mention}", embed=embed)
+                    ft_sent = True
+                except Exception as e_send:
+                    print(f"[Match] Fallback channel send failed: {e_send}")
 
             gp_cfg = await database.get_gameplay_config()
             step_delay = float(gp_cfg.get('match_sim_step_delay_secs', 0))
@@ -819,6 +864,9 @@ class MatchCog(commands.Cog):
                     loss_fans = int(gp_cfg.get('match_loss_fans', -2_000))
                     win_xp = int(gp_cfg.get('match_win_xp', 75))
 
+                    win_coins_a = int(win_coins * 1.15) if s_a.get('theme') == 'gold' else win_coins
+                    win_coins_b = int(win_coins * 1.15) if s_b.get('theme') == 'gold' else win_coins
+
                     if winner is None:
                         await database.add_fans(player_a.id, draw_fans)
                         await database.add_fans(player_b.id, draw_fans)
@@ -827,7 +875,7 @@ class MatchCog(commands.Cog):
                     elif winner == player_a:
                         await database.add_fans(player_a.id, win_fans)
                         await database.add_fans(player_b.id, loss_fans)
-                        await database.add_coins(player_a.id, win_coins)
+                        await database.add_coins(player_a.id, win_coins_a)
                         await database.add_coins(player_b.id, loss_coins)
                         await database.add_vouchers(player_a.id, 1)
                         try:
@@ -840,7 +888,7 @@ class MatchCog(commands.Cog):
                     else:
                         await database.add_fans(player_b.id, win_fans)
                         await database.add_fans(player_a.id, loss_fans)
-                        await database.add_coins(player_b.id, win_coins)
+                        await database.add_coins(player_b.id, win_coins_b)
                         await database.add_coins(player_a.id, loss_coins)
                         await database.add_vouchers(player_b.id, 1)
                         try:

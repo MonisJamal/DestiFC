@@ -10,13 +10,55 @@ from renderz_api import query_players_by_program, fetch_all_players_by_rating
 from auth import is_team_admin_or_owner
 
 THEMES = {
-    "default":   {"name": "⚡ Neon Stadium",         "price": 0,           "file": "pitch_bg.jpg"},
-    "snow":      {"name": "❄️ Frostbite Winter",      "price": 250_000_000, "file": "pitch_snow.jpg"},
-    "lava":      {"name": "🌋 Volcanic Inferno",       "price": 400_000_000, "file": "pitch_lava.jpg"},
-    "cyberpunk": {"name": "🤖 Cyberpunk City",         "price": 600_000_000, "file": "pitch_cyber.jpg"},
-    "desert":    {"name": "🌙 Arabian Nights",         "price": 750_000_000, "file": "pitch_desert.jpg"},
-    "galaxy":    {"name": "🌌 Galaxy Edition",         "price": 1_000_000_000, "file": "pitch_galaxy.jpg"},
-    "gold":      {"name": "👑 Champions Final",        "price": 1_500_000_000, "file": "pitch_gold.jpg"},
+    "default": {
+        "name": "⚡ Neon Stadium",
+        "price": 0,
+        "file": "pitch_bg.jpg",
+        "perk": "Standard Home Turf (No Buffs)",
+        "buff": {}
+    },
+    "snow": {
+        "name": "❄️ Frostbite Arena",
+        "price": 250_000_000,
+        "file": "pitch_snow.jpg",
+        "perk": "🥶 **Freezing Conditions:** Opponents lose -2% pass accuracy in H2H",
+        "buff": {"def_boost": 1.5, "opp_pass_penalty": 2}
+    },
+    "lava": {
+        "name": "🌋 Volcanic Caldera",
+        "price": 400_000_000,
+        "file": "pitch_lava.jpg",
+        "perk": "🔥 **Scorching Pressure:** +2.5 ATK Power & +10% higher foul draw rate",
+        "buff": {"atk_boost": 2.5}
+    },
+    "cyberpunk": {
+        "name": "🤖 Neo-Tokyo Cyber City",
+        "price": 600_000_000,
+        "file": "pitch_cyber.jpg",
+        "perk": "⚡ **Synthesized Precision:** +2.0 MID Power & +3% Counter-Attack pace",
+        "buff": {"mid_boost": 2.0}
+    },
+    "desert": {
+        "name": "🌙 Arabian Oasis Coliseum",
+        "price": 750_000_000,
+        "file": "pitch_desert.jpg",
+        "perk": "🏜️ **Dune Fortress:** +3.0 DEF Power & +5% GK reflex saves",
+        "buff": {"def_boost": 3.0, "gk_boost": 1.5}
+    },
+    "galaxy": {
+        "name": "🌌 Celestial Orbit Stadium",
+        "price": 1_000_000_000,
+        "file": "pitch_galaxy.jpg",
+        "perk": "🌠 **Zero-Gravity Momentum:** +2.0 to ALL Squad Sectors (ATK/MID/DEF) + Cosmic Hologram Card Glow",
+        "buff": {"all_boost": 2.0}
+    },
+    "gold": {
+        "name": "👑 Champions Royal Colosseum",
+        "price": 1_500_000_000,
+        "file": "pitch_gold.jpg",
+        "perk": "✨ **Champions Prestige:** +3.0 to ALL Sectors + +15% Match Win Coins bonus (💰 +3.75M Extra Coins per Win!)",
+        "buff": {"all_boost": 3.0, "coin_multiplier": 0.15}
+    },
 }
 
 def calculate_player_store_price(player_data: dict) -> int:
@@ -341,19 +383,20 @@ class StoreCog(commands.Cog):
         unlocked = squad.get("unlocked_themes", ["default"])
         active = squad.get("theme", "default")
         
-        desc = "Buy stunning custom pitches for your `/squad view`!\n\n"
+        desc = "🏟️ **UPGRADE YOUR HOME STADIUM & UNLOCK EXCLUSIVE MATCH BUFFS!**\nEquipping custom pitches grants your squad visual 3D glory in `/squad view` **PLUS** gameplay boosts during live `/play` matches!\n\n"
         for key, theme in THEMES.items():
             if key in unlocked:
                 status = "✅ **Unlocked**"
                 if key == active:
-                    status += " (Active)"
+                    status += " 🌟 *(Equipped)*"
             else:
                 status = f"💰 **{theme['price']:,} Coins**"
                 
-            desc += f"**{theme['name']}**\nID: `{key}` | Status: {status}\n\n"
+            perk_desc = theme.get("perk", "Standard Home Turf")
+            desc += f"**{theme['name']}** (`{key}`)\n• **Price / Status:** {status}\n• **Perk:** {perk_desc}\n\n"
             
-        embed = discord.Embed(title="🏟️ Pitch Theme Store", description=desc, color=discord.Color.gold())
-        embed.set_footer(text="Use /store buy_theme <id> to purchase!")
+        embed = discord.Embed(title="🏟️ DestiFC Grand Stadium Pavilion", description=desc, color=discord.Color.gold())
+        embed.set_footer(text="Use /store buy_theme <id> to purchase | /squad theme <id> to equip")
         await interaction.followup.send(embed=embed)
         
     @store_group.command(name="buy_theme", description="Purchase a pitch theme")

@@ -1760,3 +1760,79 @@ async def enforce_inventory_limit(user_id: int):
     await update_balance(user_id, total_coins)
     
     print(f"[Inventory] Auto-quicksold {len(to_sell)} extra cards for {user_id} for {total_coins} coins.")
+
+# -------------------------------------------------------------
+# BLACK MARKET DATABASE FUNCTIONS
+# -------------------------------------------------------------
+async def get_black_market_config() -> dict:
+    p = await get_db()
+    row = await p.fetchrow("SELECT * FROM black_market_config WHERE id = 1")
+    if not row:
+        return {
+            "id": 1,
+            "is_active": False,
+            "opens_at": None,
+            "closes_at": None,
+            "voucher_packages": [],
+            "player_deals": [],
+            "channels": [],
+            "role_id": "",
+            "ping_type": "none"
+        }
+    d = dict(row)
+    if isinstance(d.get("voucher_packages"), str):
+        try: d["voucher_packages"] = json.loads(d["voucher_packages"])
+        except Exception: d["voucher_packages"] = []
+    if isinstance(d.get("player_deals"), str):
+        try: d["player_deals"] = json.loads(d["player_deals"])
+        except Exception: d["player_deals"] = []
+    if isinstance(d.get("channels"), str):
+        try: d["channels"] = json.loads(d["channels"])
+        except Exception: d["channels"] = []
+    if not d.get("channels"):
+        d["channels"] = []
+    d["role_id"] = str(d.get("role_id") or "")
+    d["ping_type"] = str(d.get("ping_type") or "none")
+    return d
+
+async def update_black_market_config(is_active: bool, opens_at, closes_at, voucher_packages: list, player_deals: list, channels: list = None, role_id: str = None, ping_type: str = None):
+    p = await get_db()
+    v_json = json.dumps(voucher_packages or [])
+    p_json = json.dumps(player_deals or [])
+    c_json = json.dumps(channels or []) if channels is not None else None
+    
+    # Check existing channels and role_id if not passed
+    curr = await get_black_market_config()
+    final_channels = c_json if c_json is not None else json.dumps(curr.get("channels", []))
+    final_role_id = role_id if role_id is not None else curr.get("role_id", "")
+    final_ping_type = ping_type if ping_type is not None else curr.get("ping_type", "none")
+
+    await p.execute("""
+        INSERT INTO black_market_config (id, is_active, opens_at, closes_at, voucher_packages, player_deals, channels, role_id, ping_type, updated_at)
+        VALUES (1, $1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, CURRENT_TIMESTAMP)
+        ON CONFLICT (id) DO UPDATE SET
+            is_active = EXCLUDED.is_active,
+            opens_at = EXCLUDED.opens_at,
+            closes_at = EXCLUDED.closes_at,
+            voucher_packages = EXCLUDED.voucher_packages,
+            player_deals = EXCLUDED.player_deals,
+            channels = EXCLUDED.channels,
+            role_id = EXCLUDED.role_id,
+            ping_type = EXCLUDED.ping_type,
+            updated_at = CURRENT_TIMESTAMP
+    """, is_active, opens_at, closes_at, v_json, p_json, final_channels, final_role_id, final_ping_type)
+
+async def has_purchased_black_market_deal(user_id: int, market_session_id: str, deal_id: str) -> bool:
+    p = await get_db()
+    row = await p.fetchrow(
+        "SELECT 1 FROM user_black_market_purchases WHERE user_id = $1 AND market_session_id = $2 AND deal_id = $3",
+        user_id, market_session_id, deal_id
+    )
+    return bool(row)
+
+async def record_black_market_purchase(user_id: int, market_session_id: str, deal_id: str):
+    p = await get_db()
+    await p.execute(
+        "INSERT INTO user_black_market_purchases (user_id, market_session_id, deal_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+        user_id, market_session_id, deal_id
+    )
