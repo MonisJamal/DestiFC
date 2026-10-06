@@ -22,6 +22,8 @@ class DestiFC(commands.Bot):
             help_command=commands.DefaultHelpCommand()
         )
         self.last_presence_state = None
+        self.user_command_cooldowns = {}   # user_id -> timestamp of last command
+        self.active_user_commands = set()     # set of user_ids currently running a command
 
     async def setup_hook(self):
         self.tree.on_error = self.on_app_command_error
@@ -82,6 +84,39 @@ class DestiFC(commands.Bot):
                             f"⚠️ The `/{cmd_name}` command is temporarily disabled by administrators. Please check back shortly!",
                             ephemeral=True
                         )
+                    return False
+
+                # Rate Limiting & Concurrency Guard for application commands (slash commands)
+                if interaction.type == discord.InteractionType.application_command:
+                    uid = interaction.user.id
+
+                    # 1. Concurrency Guard: prevent running another command while one is still in progress
+                    if uid in self.active_user_commands:
+                        if not interaction.response.is_done():
+                            await interaction.response.send_message(
+                                "⏳ **Please wait!** You already have another command running. Please let it finish before running a new one.",
+                                ephemeral=True
+                            )
+                        return False
+
+                    # 2. Command Slowdown Rate Limit: 6 seconds cooldown between commands
+                    import time
+                    now = time.time()
+                    last_cmd_time = self.user_command_cooldowns.get(uid, 0)
+                    cooldown_duration = 6.0
+
+                    if now - last_cmd_time < cooldown_duration:
+                        rem = round(cooldown_duration - (now - last_cmd_time), 1)
+                        if not interaction.response.is_done():
+                            await interaction.response.send_message(
+                                f"⏳ **Slow down!** You can use another command in **{rem}s**.",
+                                ephemeral=True
+                            )
+                        return False
+
+                    # Mark user as currently running a command
+                    self.active_user_commands.add(uid)
+
                 # Auto-Role Grant for any user executing a command
                 if bot_cfg.get('auto_role_enabled') and bot_cfg.get('auto_role_id'):
                     async def _assign_role():
@@ -131,6 +166,13 @@ class DestiFC(commands.Bot):
         @self.tree.error
         async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
             import traceback
+            import time
+            uid = interaction.user.id
+            self.active_user_commands.discard(uid)
+            # Only set cooldown if it wasn't a check failure (e.g. cooldown/concurrency checks themselves)
+            if not isinstance(error, app_commands.CheckFailure):
+                self.user_command_cooldowns[uid] = time.time()
+
             cmd_name = interaction.command.name if interaction.command else "command"
             print(f"[AppCommandError] Command '/{cmd_name}' failed for user {interaction.user.id} ({interaction.user.display_name}): {error}")
             traceback.print_exception(type(error), error, error.__traceback__)
@@ -327,6 +369,12 @@ class DestiFC(commands.Bot):
     @sync_presence_loop.before_loop
     async def before_presence_loop(self):
         await self.wait_until_ready()
+
+    async def on_app_command_completion(self, interaction: discord.Interaction, command: discord.app_commands.Command):
+        import time
+        uid = interaction.user.id
+        self.active_user_commands.discard(uid)
+        self.user_command_cooldowns[uid] = time.time()
 
     async def on_ready(self):
         print(f'Logged in as {self.user} (ID: {self.user.id})')

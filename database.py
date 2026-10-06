@@ -61,7 +61,7 @@ async def get_db():
             SUPABASE_URL,
             ssl=ctx,
             min_size=1,
-            max_size=6,
+            max_size=10,
             command_timeout=20,
             timeout=20,
             max_inactive_connection_lifetime=60.0,
