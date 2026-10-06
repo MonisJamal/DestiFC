@@ -557,7 +557,12 @@ class MatchCog(commands.Cog):
             pass_acc_b = random.randint(82, 93)
             corners_a = random.randint(2, 6)
             corners_b = random.randint(2, 6)
+            fouls_a = random.randint(4, 11)
+            fouls_b = random.randint(4, 11)
+            yellows_a = random.randint(0, min(3, fouls_a // 3))
+            yellows_b = random.randint(0, min(3, fouls_b // 3))
             xg_a = round(current_score_a * 0.65 + (shots_on_target_a * 0.18) + random.uniform(0.1, 0.25), 2)
+            xg_b = round(current_score_b * 0.65 + (shots_on_target_b * 0.18) + random.uniform(0.1, 0.25), 2)
             # Re-calculate accurate final ratings with actual player scores
             ratings_a = calc_full_team_ratings(starters_a, is_a_win, is_draw, current_score_b, current_score_a)
             ratings_b = calc_full_team_ratings(starters_b, is_b_win, is_draw, current_score_a, current_score_b)
