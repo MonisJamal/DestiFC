@@ -459,5 +459,24 @@ class BlackMarketCog(commands.Cog):
         await self.trigger_market_opening(force=True)
         await interaction.followup.send("✅ The Black Market has been opened for 1 hour and server-wide announcement broadcasted!", ephemeral=True)
 
+    @app_commands.command(name="admin_blackmarket_close", description="Admin: Manually close the Black Market immediately")
+    async def admin_close(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        if not await is_team_admin_or_owner(self.bot, interaction.user):
+            return await interaction.followup.send("❌ Admin command only.", ephemeral=True)
+
+        cfg = await database.get_black_market_config()
+        if not cfg.get("is_active"):
+            return await interaction.followup.send("ℹ️ The Black Market is already closed.", ephemeral=True)
+
+        await database.update_black_market_config(
+            is_active=False,
+            opens_at=None,
+            closes_at=None,
+            voucher_packages=cfg.get("voucher_packages", []),
+            player_deals=cfg.get("player_deals", [])
+        )
+        await interaction.followup.send("🔒 The Black Market has been closed manually! Purchases and `/blackmarket` access are now locked.", ephemeral=True)
+
 async def setup(bot):
     await bot.add_cog(BlackMarketCog(bot))
