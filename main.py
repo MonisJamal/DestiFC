@@ -225,7 +225,7 @@ class DestiFC(commands.Bot):
                 """
                 SELECT id, job_type, payload
                 FROM portal_jobs
-                WHERE status = 'pending' AND job_type IN ('mass_dm', 'SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES')
+                WHERE status = 'pending' AND job_type IN ('mass_dm', 'SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES', 'open_black_market')
                 ORDER BY created_at ASC
                 LIMIT 1
                 """
@@ -306,6 +306,18 @@ class DestiFC(commands.Bot):
                     await self.close()
                     import sys
                     sys.exit(0)
+
+                elif job_type == 'open_black_market':
+                    print("[Remote Control] Received open_black_market signal from Admin Panel! Triggering opening...")
+                    try:
+                        bm_cog = self.get_cog('BlackMarketCog')
+                        if bm_cog:
+                            await bm_cog.trigger_market_opening(force=True)
+                            print("[Remote Control] Black Market successfully opened and announced via remote signal!")
+                        else:
+                            print("[Remote Control] BlackMarketCog not loaded!")
+                    except Exception as bm_err:
+                        print(f"[Remote Control] Error triggering Black Market opening: {bm_err}")
 
                 elif job_type == 'SIGNAL_FLUSH_CACHES':
                     print("[Remote Control] Flushing all in-memory caches...")

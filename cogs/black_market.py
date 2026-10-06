@@ -47,6 +47,26 @@ class BlackMarketView(discord.ui.View):
         user_id = interaction.user.id
         deal_key = self.select_menu.values[0]
 
+        # Strictly check if market is still open and within 1-hour window
+        cfg = await database.get_black_market_config()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        closes_at_str = cfg.get("closes_at")
+        is_closed = not cfg.get("is_active", False)
+        if closes_at_str:
+            try:
+                closes_dt = datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00"))
+                if now >= closes_dt:
+                    is_closed = True
+            except Exception:
+                pass
+
+        if is_closed:
+            return await interaction.followup.send(
+                "🔒 **THE BLACK MARKET HAS CLOSED!**\n"
+                "The smuggler has already packed up and fled. This deal is no longer active!",
+                ephemeral=True
+            )
+
         # Check if already purchased
         already_bought = await database.has_purchased_black_market_deal(user_id, self.session_id, deal_key)
         if already_bought:
@@ -324,7 +344,26 @@ class BlackMarketCog(commands.Cog):
     async def blackmarket(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
         cfg = await database.get_black_market_config()
-        if not cfg.get("is_active"):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        closes_at_str = cfg.get("closes_at")
+        is_closed = not cfg.get("is_active", False)
+        if closes_at_str:
+            try:
+                closes_dt = datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00"))
+                if now >= closes_dt:
+                    is_closed = True
+                    # Auto mark inactive
+                    await database.update_black_market_config(
+                        is_active=False,
+                        opens_at=None,
+                        closes_at=None,
+                        voucher_packages=cfg.get("voucher_packages", []),
+                        player_deals=cfg.get("player_deals", [])
+                    )
+            except Exception:
+                pass
+
+        if is_closed:
             return await interaction.followup.send(
                 "🔒 **THE BLACK MARKET IS CURRENTLY CLOSED!**\n"
                 "The Black Market opens at an unexpected random hour each day for strictly **1 hour**.\n"
