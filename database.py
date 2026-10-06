@@ -944,7 +944,7 @@ async def get_max_official_ovr() -> int:
             return max(valid_ratings)
     try:
         p = await get_db()
-        max_r = await p.fetchval('SELECT MAX(rating) FROM official_cards')
+        max_r = await p.fetchval('SELECT MAX(rating) FROM official_cards WHERE (exchange_exclusive IS NULL OR exchange_exclusive = 0)')
         return int(max_r) if max_r else 122
     except Exception:
         return 122
@@ -1832,3 +1832,115 @@ async def record_black_market_purchase(user_id: int, market_session_id: str, dea
         "INSERT INTO user_black_market_purchases (user_id, market_session_id, deal_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
         user_id, market_session_id, deal_id
     )
+
+# ================= Exchange Exclusives & Top Tier Config =================
+
+DEFAULT_EXCHANGE_EXCLUSIVE_SETTINGS = {
+    "target_ovr": 122,
+    "enabled": True
+}
+
+_EXCHANGE_EXCLUSIVE_SETTINGS_CACHE = None
+_EXCHANGE_EXCLUSIVE_SETTINGS_EXP = 0
+
+async def get_exchange_exclusive_settings() -> dict:
+    global _EXCHANGE_EXCLUSIVE_SETTINGS_CACHE, _EXCHANGE_EXCLUSIVE_SETTINGS_EXP
+    now = time.time()
+    if _EXCHANGE_EXCLUSIVE_SETTINGS_CACHE and now - _EXCHANGE_EXCLUSIVE_SETTINGS_EXP < 30:
+        return _EXCHANGE_EXCLUSIVE_SETTINGS_CACHE
+
+    p = await get_db()
+    try:
+        row = await p.fetchrow("SELECT value FROM system_settings WHERE key = 'exchange_exclusive_settings'")
+        if not row:
+            _EXCHANGE_EXCLUSIVE_SETTINGS_CACHE = DEFAULT_EXCHANGE_EXCLUSIVE_SETTINGS
+            _EXCHANGE_EXCLUSIVE_SETTINGS_EXP = now
+            return DEFAULT_EXCHANGE_EXCLUSIVE_SETTINGS
+        val = row['value']
+        if isinstance(val, str):
+            try: val = json.loads(val)
+            except Exception: val = {}
+        merged = {**DEFAULT_EXCHANGE_EXCLUSIVE_SETTINGS, **(val or {})}
+        _EXCHANGE_EXCLUSIVE_SETTINGS_CACHE = merged
+        _EXCHANGE_EXCLUSIVE_SETTINGS_EXP = now
+        return merged
+    except Exception as e:
+        print(f"[Database] Error in get_exchange_exclusive_settings: {e}")
+        return DEFAULT_EXCHANGE_EXCLUSIVE_SETTINGS
+
+async def save_exchange_exclusive_settings(settings_dict: dict) -> bool:
+    global _EXCHANGE_EXCLUSIVE_SETTINGS_CACHE, _EXCHANGE_EXCLUSIVE_SETTINGS_EXP
+    p = await get_db()
+    try:
+        merged = {**DEFAULT_EXCHANGE_EXCLUSIVE_SETTINGS, **settings_dict}
+        await p.execute('''
+            INSERT INTO system_settings (key, value, updated_at)
+            VALUES ('exchange_exclusive_settings', $1, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET
+                value = EXCLUDED.value,
+                updated_at = CURRENT_TIMESTAMP
+        ''', json.dumps(merged))
+        _EXCHANGE_EXCLUSIVE_SETTINGS_CACHE = merged
+        _EXCHANGE_EXCLUSIVE_SETTINGS_EXP = time.time()
+        return True
+    except Exception as e:
+        print(f"[Database] Error in save_exchange_exclusive_settings: {e}")
+        return False
+
+async def get_exchange_exclusive_cards(rating: int = None):
+    """
+    Returns all official (and custom) cards that have exchange_exclusive = 1.
+    If rating is specified, only cards matching that rating are returned.
+    """
+    p = await get_db()
+    try:
+        if rating is not None:
+            rows = await p.fetch('''
+                SELECT asset_id, player_name, card_name, rating, position, source, club_name, nation_name, player_data
+                FROM official_cards
+                WHERE rating = $1 AND exchange_exclusive = 1
+                ORDER BY card_name ASC
+            ''', rating)
+        else:
+            rows = await p.fetch('''
+                SELECT asset_id, player_name, card_name, rating, position, source, club_name, nation_name, player_data
+                FROM official_cards
+                WHERE exchange_exclusive = 1
+                ORDER BY rating DESC, card_name ASC
+            ''')
+        cards = []
+        for r in rows:
+            pd = json.loads(r['player_data']) if isinstance(r['player_data'], str) else r['player_data']
+            cards.append(pd)
+        return cards
+    except Exception as e:
+        print(f"[Database] Error in get_exchange_exclusive_cards: {e}")
+        return []
+
+async def set_card_exchange_exclusive(asset_id: int, is_exclusive: bool) -> bool:
+    """
+    Sets a card's exchange_exclusive flag in official_cards and refreshes official card cache.
+    """
+    global _OFFICIAL_CARDS_CACHE
+    p = await get_db()
+    val = 1 if is_exclusive else 0
+    try:
+        await p.execute("UPDATE official_cards SET exchange_exclusive = $1 WHERE asset_id = $2", val, int(asset_id))
+        _OFFICIAL_CARDS_CACHE = {}
+        return True
+    except Exception as e:
+        print(f"[Database] Error in set_card_exchange_exclusive: {e}")
+        return False
+
+async def get_exchange_top_candidates(target_ovr: int = 122):
+    """
+    Returns the designated top walkouts for Exchange rotation.
+    If exchange_exclusive = 1 cards exist at target_ovr, ONLY THOSE cards are eligible.
+    If none are configured yet, falls back to non-exclusive target_ovr cards to avoid empty pools.
+    """
+    exclusive_cards = await get_exchange_exclusive_cards(target_ovr)
+    if exclusive_cards:
+        return exclusive_cards
+    # Fallback to non-exclusive if admin hasn't flagged any cards yet
+    return await get_official_cards_by_rating(target_ovr, target_ovr, 100)
+

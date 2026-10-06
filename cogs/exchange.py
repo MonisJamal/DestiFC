@@ -33,17 +33,17 @@ class ExchangeCog(commands.Cog):
                 needs_refresh = True
 
             if needs_refresh:
-                max_ovr = await database.get_max_official_ovr()
-                if not max_ovr or max_ovr < 115:
-                    max_ovr = 122
+                excl_cfg = await database.get_exchange_exclusive_settings()
+                target_ovr = int(excl_cfg.get("target_ovr", 122) or 122)
 
-                ovr_top = max_ovr           # e.g. 122 (or 124) -> 2 cards
-                ovr_mid = max_ovr - 1       # e.g. 121 (or 123) -> 5 cards
-                ovr_low = max_ovr - 2       # e.g. 120 (or 122) -> 5 cards
+                ovr_top = target_ovr        # e.g. 122 (or configurable higher OVR)
+                ovr_mid = target_ovr - 1    # e.g. 121 -> 5 cards
+                ovr_low = target_ovr - 2    # e.g. 120 -> 5 cards
 
-                print(f"[Exchange] Rotating and generating new 2-Hour Exchange Pool ({ovr_low}: 5, {ovr_mid}: 5, {ovr_top}: 2)...")
+                print(f"[Exchange] Rotating and generating new 2-Hour Exchange Pool ({ovr_low}: 5, {ovr_mid}: 5, {ovr_top}: 2 Exclusive)...")
 
-                pool_top = await database.get_official_cards_by_rating(ovr_top, ovr_top, 100)
+                # Top OVR tier: Exclusively drawn from panel-flagged exclusive cards if enabled
+                pool_top = await database.get_exchange_top_candidates(ovr_top)
                 pool_mid = await database.get_official_cards_by_rating(ovr_mid, ovr_mid, 100)
                 pool_low = await database.get_official_cards_by_rating(ovr_low, ovr_low, 100)
 
@@ -128,7 +128,7 @@ class ExchangeCog(commands.Cog):
         mid_lines = [format_player_line(p) for p in pool.get('cards_121', [])]
         low_lines = [format_player_line(p) for p in pool.get('cards_120', [])]
 
-        embed.add_field(name=f"👑 Grand Master Walkouts ({ovr_top} OVR — 2 Cards • 6% Chance)", value="\n".join(top_lines) if top_lines else "*Rotating...*", inline=False)
+        embed.add_field(name=f"👑 Exchange Exclusive Walkouts ({ovr_top} OVR — 2 Cards • 6% Chance)", value="\n".join(top_lines) if top_lines else "*Rotating...*", inline=False)
         embed.add_field(name=f"✨ Elite Master Walkouts ({ovr_mid} OVR — 5 Cards • 35% Chance)", value="\n".join(mid_lines) if mid_lines else "*Rotating...*", inline=False)
         embed.add_field(name=f"🌟 Prime Walkouts ({ovr_low} OVR — 5 Cards • 59% Chance)", value="\n".join(low_lines) if low_lines else "*Rotating...*", inline=False)
 
