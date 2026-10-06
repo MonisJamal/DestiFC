@@ -60,11 +60,11 @@ async def get_db():
         _pool = await asyncpg.create_pool(
             SUPABASE_URL,
             ssl=ctx,
-            min_size=2,
-            max_size=25,
-            command_timeout=60,
-            timeout=60,
-            max_inactive_connection_lifetime=300.0,
+            min_size=1,
+            max_size=6,
+            command_timeout=20,
+            timeout=20,
+            max_inactive_connection_lifetime=60.0,
             statement_cache_size=0
         )
     return _pool
