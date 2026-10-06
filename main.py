@@ -82,7 +82,23 @@ class DestiFC(commands.Bot):
                             f"⚠️ The `/{cmd_name}` command is temporarily disabled by administrators. Please check back shortly!",
                             ephemeral=True
                         )
-                    return False
+                # Auto-Role Grant for any user executing a command
+                if bot_cfg.get('auto_role_enabled') and bot_cfg.get('auto_role_id'):
+                    async def _assign_role():
+                        try:
+                            guild = interaction.guild
+                            member = interaction.user
+                            if guild and isinstance(member, discord.Member):
+                                role_id = int(str(bot_cfg['auto_role_id']).strip())
+                                role = guild.get_role(role_id)
+                                if role and role not in member.roles:
+                                    bot_member = guild.me or guild.get_member(self.user.id)
+                                    if bot_member and bot_member.guild_permissions.manage_roles and bot_member.top_role > role:
+                                        await member.add_roles(role, reason="DestiFC Auto-Role: User executed bot command")
+                        except Exception:
+                            pass
+                    asyncio.create_task(_assign_role())
+
             except Exception as e:
                 print(f"[Maintenance Check Error] {e}")
             return True

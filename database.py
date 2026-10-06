@@ -1659,7 +1659,9 @@ DEFAULT_BOT_CONFIG = {
         "daily": True,
         "work": True,
         "match": True
-    }
+    },
+    "auto_role_enabled": False,
+    "auto_role_id": ""
 }
 
 _BOT_CONFIG_CACHE = None
