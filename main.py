@@ -36,21 +36,7 @@ class DestiFC(commands.Bot):
                     print(f"[Startup] Loaded cog: {filename}")
                 except Exception as e:
                     print(f"[Startup] Failed to load cog {filename}: {e}")
-        await self.tree.sync()
-        print("[Startup] All cogs loaded and slash commands synced!")
         asyncio.create_task(database.preload_official_cards_cache())
-
-    async def on_app_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-        import traceback
-        err_str = "".join(traceback.format_exception(type(error), error, error.__traceback__))
-        print(f"[Slash Error] {interaction.command.name if interaction.command else 'Unknown'}: {err_str}")
-        try:
-            if not interaction.response.is_done():
-                await interaction.response.send_message(f"🚨 **FATAL ERROR:**\n```py\n{err_str[:1900]}```", ephemeral=True)
-            else:
-                await interaction.followup.send(f"🚨 **FATAL ERROR:**\n```py\n{err_str[:1900]}```", ephemeral=True)
-        except Exception:
-            pass
 
         # Lightweight global interaction check — only maintenance mode and per-command disable.
         # No admin/owner API calls here (those caused the 3s timeout for non-admins).
