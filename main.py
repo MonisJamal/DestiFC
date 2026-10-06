@@ -26,7 +26,6 @@ class DestiFC(commands.Bot):
         self.active_user_commands = set()     # set of user_ids currently running a command
 
     async def setup_hook(self):
-        self.tree.on_error = self.on_app_command_error
         await database.setup()
         # Load all cogs on startup
         for filename in os.listdir('./cogs'):
