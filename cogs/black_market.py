@@ -114,11 +114,11 @@ class BlackMarketCog(commands.Cog):
 
     async def generate_random_deals(self) -> tuple[list, list]:
         """Generates 50% half-price vouchers and 5 random 120+ players with 30-45% discounts."""
-        # 1. Voucher Deals (50% Half Price!)
+        # 1. Voucher Deals (50% Half Price based on 20M/voucher: 10M discounted!)
         voucher_deals = [
-            {"id": "v1", "title": "5x Draft Vouchers Pack", "vouchers": 5, "original_price": 50_000_000, "discount_price": 25_000_000, "discount_pct": 50},
-            {"id": "v2", "title": "15x Draft Vouchers Pack", "vouchers": 15, "original_price": 140_000_000, "discount_price": 70_000_000, "discount_pct": 50},
-            {"id": "v3", "title": "30x Mega Voucher Hoard", "vouchers": 30, "original_price": 270_000_000, "discount_price": 135_000_000, "discount_pct": 50},
+            {"id": "v1", "title": "10x Draft Vouchers Pack", "vouchers": 10, "original_price": 200_000_000, "discount_price": 100_000_000, "discount_pct": 50},
+            {"id": "v2", "title": "25x Draft Vouchers Bundle", "vouchers": 25, "original_price": 500_000_000, "discount_price": 250_000_000, "discount_pct": 50},
+            {"id": "v3", "title": "50x Mega Voucher Hoard", "vouchers": 50, "original_price": 1_000_000_000, "discount_price": 500_000_000, "discount_pct": 50},
         ]
 
         # 2. Pick 5 random 120+ players with variable 30-45% discounts
