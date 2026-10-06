@@ -1860,6 +1860,92 @@ async def record_black_market_purchase(user_id: int, market_session_id: str, dea
         user_id, market_session_id, deal_id
     )
 
+# -------------------------------------------------------------
+# VIP SPECIAL MARKET (ADMIN ONLY - MANUAL ONLY)
+# -------------------------------------------------------------
+async def get_special_market_config() -> dict:
+    p = await get_db()
+    row = await p.fetchrow("SELECT * FROM special_market_config WHERE id = 1")
+    if not row:
+        return {
+            "id": 1,
+            "is_active": False,
+            "opens_at": None,
+            "closes_at": None,
+            "title": "👑 OWNER VIP SPECIAL MARKET 👑",
+            "custom_rewards": [],
+            "channels": [],
+            "role_id": "",
+            "ping_type": "none"
+        }
+    d = dict(row)
+    if isinstance(d.get("custom_rewards"), str):
+        try: d["custom_rewards"] = json.loads(d["custom_rewards"])
+        except Exception: d["custom_rewards"] = []
+    if isinstance(d.get("channels"), str):
+        try: d["channels"] = json.loads(d["channels"])
+        except Exception: d["channels"] = []
+    if not d.get("channels"):
+        d["channels"] = []
+    d["title"] = str(d.get("title") or "👑 OWNER VIP SPECIAL MARKET 👑")
+    d["role_id"] = str(d.get("role_id") or "")
+    d["ping_type"] = str(d.get("ping_type") or "none")
+    return d
+
+async def update_special_market_config(is_active: bool, opens_at, closes_at, title: str, custom_rewards: list, channels: list = None, role_id: str = None, ping_type: str = None):
+    p = await get_db()
+    r_json = json.dumps(custom_rewards or [])
+    curr = await get_special_market_config()
+    final_channels = json.dumps(channels or []) if channels is not None else json.dumps(curr.get("channels", []))
+    final_role_id = role_id if role_id is not None else curr.get("role_id", "")
+    final_ping_type = ping_type if ping_type is not None else curr.get("ping_type", "none")
+    final_title = title if title is not None else curr.get("title", "👑 OWNER VIP SPECIAL MARKET 👑")
+
+    import datetime
+    dt_opens_at = opens_at
+    if isinstance(opens_at, str):
+        try: dt_opens_at = datetime.datetime.fromisoformat(opens_at.replace("Z", "+00:00"))
+        except Exception: dt_opens_at = None
+    if isinstance(dt_opens_at, datetime.datetime) and dt_opens_at.tzinfo is not None:
+        dt_opens_at = dt_opens_at.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+    dt_closes_at = closes_at
+    if isinstance(closes_at, str):
+        try: dt_closes_at = datetime.datetime.fromisoformat(closes_at.replace("Z", "+00:00"))
+        except Exception: dt_closes_at = None
+    if isinstance(dt_closes_at, datetime.datetime) and dt_closes_at.tzinfo is not None:
+        dt_closes_at = dt_closes_at.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+    await p.execute("""
+        INSERT INTO special_market_config (id, is_active, opens_at, closes_at, title, custom_rewards, channels, role_id, ping_type, updated_at)
+        VALUES (1, $1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, CURRENT_TIMESTAMP)
+        ON CONFLICT (id) DO UPDATE SET
+            is_active = EXCLUDED.is_active,
+            opens_at = EXCLUDED.opens_at,
+            closes_at = EXCLUDED.closes_at,
+            title = EXCLUDED.title,
+            custom_rewards = EXCLUDED.custom_rewards,
+            channels = EXCLUDED.channels,
+            role_id = EXCLUDED.role_id,
+            ping_type = EXCLUDED.ping_type,
+            updated_at = CURRENT_TIMESTAMP
+    """, is_active, dt_opens_at, dt_closes_at, final_title, r_json, final_channels, final_role_id, final_ping_type)
+
+async def has_purchased_special_market_deal(user_id: int, market_session_id: str, deal_id: str) -> bool:
+    p = await get_db()
+    row = await p.fetchrow(
+        "SELECT 1 FROM user_black_market_purchases WHERE user_id = $1 AND market_session_id = $2 AND deal_id = $3",
+        user_id, f"special_{market_session_id}", deal_id
+    )
+    return bool(row)
+
+async def record_special_market_purchase(user_id: int, market_session_id: str, deal_id: str):
+    p = await get_db()
+    await p.execute(
+        "INSERT INTO user_black_market_purchases (user_id, market_session_id, deal_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+        user_id, f"special_{market_session_id}", deal_id
+    )
+
 # ================= Exchange Exclusives & Top Tier Config =================
 
 DEFAULT_EXCHANGE_EXCLUSIVE_SETTINGS = {

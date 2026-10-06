@@ -225,7 +225,7 @@ class DestiFC(commands.Bot):
                 """
                 SELECT id, job_type, payload
                 FROM portal_jobs
-                WHERE status = 'pending' AND job_type IN ('mass_dm', 'SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES', 'open_black_market')
+                WHERE status = 'pending' AND job_type IN ('mass_dm', 'SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES', 'open_black_market', 'open_special_market')
                 ORDER BY created_at ASC
                 LIMIT 1
                 """
@@ -318,6 +318,18 @@ class DestiFC(commands.Bot):
                             print("[Remote Control] BlackMarketCog not loaded!")
                     except Exception as bm_err:
                         print(f"[Remote Control] Error triggering Black Market opening: {bm_err}")
+
+                elif job_type == 'open_special_market':
+                    print("[Remote Control] Received open_special_market signal from Admin Panel! Triggering VIP market...")
+                    try:
+                        bm_cog = self.get_cog('BlackMarketCog')
+                        if bm_cog:
+                            await bm_cog.trigger_special_market_opening()
+                            print("[Remote Control] VIP Special Market successfully opened and announced via remote signal!")
+                        else:
+                            print("[Remote Control] BlackMarketCog not loaded!")
+                    except Exception as bm_err:
+                        print(f"[Remote Control] Error triggering VIP Special Market opening: {bm_err}")
 
                 elif job_type == 'SIGNAL_FLUSH_CACHES':
                     print("[Remote Control] Flushing all in-memory caches...")

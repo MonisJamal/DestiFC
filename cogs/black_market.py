@@ -478,5 +478,246 @@ class BlackMarketCog(commands.Cog):
         )
         await interaction.followup.send("🔒 The Black Market has been closed manually! Purchases and `/blackmarket` access are now locked.", ephemeral=True)
 
+    # -----------------------------------------------------------------
+    # OWNER VIP SPECIAL MARKET (MANUAL ONLY - NEVER RANDOM)
+    # -----------------------------------------------------------------
+    async def trigger_special_market_opening(self):
+        """Manually opens the VIP Special Market for 1 hour."""
+        cfg = await database.get_special_market_config()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        closes_at = now + datetime.timedelta(hours=1)
+        session_id = now.strftime("%Y%m%d_%H%M")
+
+        await database.update_special_market_config(
+            is_active=True,
+            opens_at=now.isoformat(),
+            closes_at=closes_at.isoformat(),
+            title=cfg.get("title", "👑 OWNER VIP SPECIAL MARKET 👑"),
+            custom_rewards=cfg.get("custom_rewards", []),
+            channels=cfg.get("channels", []),
+            role_id=cfg.get("role_id", ""),
+            ping_type=cfg.get("ping_type", "none")
+        )
+
+        channels = []
+        raw_channels = cfg.get("channels") or []
+        if isinstance(raw_channels, str):
+            raw_channels = [c.strip() for c in raw_channels.replace(',', ' ').split() if c.strip()]
+
+        for raw_id in raw_channels:
+            try:
+                cid = int(str(raw_id).strip())
+                ch = self.bot.get_channel(cid) or await self.bot.fetch_channel(cid)
+                if ch: channels.append(ch)
+            except Exception: pass
+
+        if not channels:
+            # Fallback to standard black market channels
+            bm_cfg = await database.get_black_market_config()
+            for raw_id in (bm_cfg.get("channels") or []):
+                try:
+                    cid = int(str(raw_id).strip())
+                    ch = self.bot.get_channel(cid) or await self.bot.fetch_channel(cid)
+                    if ch: channels.append(ch)
+                except Exception: pass
+
+        ping_type = str(cfg.get("ping_type") or "none").lower()
+        role_id = str(cfg.get("role_id") or "").strip()
+
+        ping_str = ""
+        if ping_type == "everyone":
+            ping_str = "@everyone "
+        elif ping_type == "here":
+            ping_str = "@here "
+        elif ping_type == "role" and role_id:
+            ping_str = f"<@&{role_id}> "
+
+        rewards = cfg.get("custom_rewards", [])
+        title = cfg.get("title", "👑 OWNER VIP SPECIAL MARKET 👑")
+
+        embed = discord.Embed(
+            title=f"👑 {title} HAS SURFACED! 👑",
+            description=(
+                f"🚨 **EXCLUSIVE HIGH-ROLLER MARKET UNLOCKED!** 🚨\n\n"
+                f"An exclusive VIP bazaar curated by the Owner is open for **EXACTLY 1 HOUR**!\n"
+                f"Featuring rare custom rewards, mega voucher packs, and hand-selected superstar cards.\n\n"
+                f"⏳ **CLOSES AT:** <t:{int(closes_at.timestamp())}:R> (<t:{int(closes_at.timestamp())}:t>)\n\n"
+                f"👉 Use `/specialmarket` or tap below to purchase your exclusive items!"
+            ),
+            color=discord.Color.from_rgb(255, 215, 0)
+        )
+        embed.set_footer(text="DestiFC VIP Special Market • 1-Hour Flash Event")
+
+        for ch in channels:
+            try:
+                view = SpecialMarketView(self.bot, session_id, rewards)
+                msg = f"{ping_str}🌟 **THE SPECIAL OWNER MARKET IS LIVE FOR 1 HOUR!**".strip()
+                await ch.send(content=msg, embed=embed, view=view)
+                print(f"[SpecialMarket] Broadcast sent to #{ch.name}!")
+            except Exception as e:
+                print(f"[SpecialMarket] Failed to send broadcast to #{ch.name}: {e}")
+
+    @app_commands.command(name="specialmarket", description="Browse and purchase items from the active VIP Special Market")
+    async def specialmarket(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=False)
+        cfg = await database.get_special_market_config()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        closes_at_str = cfg.get("closes_at")
+        is_closed = not cfg.get("is_active", False)
+        if closes_at_str:
+            try:
+                closes_dt = datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00"))
+                if now >= closes_dt:
+                    is_closed = True
+                    await database.update_special_market_config(
+                        is_active=False,
+                        opens_at=None,
+                        closes_at=None,
+                        title=cfg.get("title", ""),
+                        custom_rewards=cfg.get("custom_rewards", [])
+                    )
+            except Exception: pass
+
+        if is_closed:
+            return await interaction.followup.send(
+                "🔒 **THE VIP SPECIAL MARKET IS CURRENTLY CLOSED!**\n"
+                "This exclusive market is summoned strictly by the Owner during special events.",
+                ephemeral=True
+            )
+
+        closes_ts = int(datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00")).timestamp()) if closes_at_str else int(time.time() + 3600)
+        session_id = cfg.get("opens_at", "active_special_session")
+        rewards = cfg.get("custom_rewards", [])
+
+        desc_lines = []
+        for r in rewards:
+            cost = int(r.get("cost_coins", 0))
+            desc_lines.append(f"• **{r.get('title', 'VIP Deal')}**: `🪙 {cost:,} Coins` ({r.get('description', '')})")
+
+        embed = discord.Embed(
+            title=cfg.get("title", "👑 OWNER VIP SPECIAL MARKET 👑"),
+            description=(
+                f"Welcome to the VIP Special Bazaar.\n"
+                f"Every deal is strictly limited to **1 purchase per manager**!\n\n"
+                f"⏳ **Market Closing:** <t:{closes_ts}:R>\n\n"
+                + ("\n".join(desc_lines) if desc_lines else "*No active items configured.*")
+            ),
+            color=discord.Color.from_rgb(255, 215, 0)
+        )
+        embed.set_footer(text="DestiFC VIP Special Market • Use dropdown menu below to buy")
+        view = SpecialMarketView(self.bot, session_id, rewards)
+        await interaction.followup.send(embed=embed, view=view)
+
+    @app_commands.command(name="admin_special_market_open", description="Admin: Manually open the VIP Special Market for 1 hour")
+    async def admin_special_open(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        if not await is_team_admin_or_owner(self.bot, interaction.user):
+            return await interaction.followup.send("❌ Admin command only.", ephemeral=True)
+
+        await self.trigger_special_market_opening()
+        await interaction.followup.send("✅ The VIP Special Market has been opened for 1 hour and broadcasted!", ephemeral=True)
+
+    @app_commands.command(name="admin_special_market_close", description="Admin: Manually close the VIP Special Market immediately")
+    async def admin_special_close(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        if not await is_team_admin_or_owner(self.bot, interaction.user):
+            return await interaction.followup.send("❌ Admin command only.", ephemeral=True)
+
+        cfg = await database.get_special_market_config()
+        await database.update_special_market_config(
+            is_active=False,
+            opens_at=None,
+            closes_at=None,
+            title=cfg.get("title", ""),
+            custom_rewards=cfg.get("custom_rewards", [])
+        )
+        await interaction.followup.send("🔒 The VIP Special Market has been closed manually!", ephemeral=True)
+
+class SpecialMarketView(discord.ui.View):
+    def __init__(self, bot, session_id: str, rewards: list):
+        super().__init__(timeout=3600)
+        self.bot = bot
+        self.session_id = session_id
+        self.rewards = rewards
+
+        options = []
+        for r in rewards[:25]:
+            cost = int(r.get("cost_coins", 0))
+            options.append(discord.SelectOption(
+                label=f"👑 {r.get('title', 'Deal')[:60]}",
+                value=f"vip_{r.get('id', '1')}",
+                description=f"Cost: {cost:,} coins • {r.get('description', '')[:50]}"
+            ))
+
+        if options:
+            self.select_menu = discord.ui.Select(
+                placeholder="👑 Select a VIP Special Market item to purchase...",
+                min_values=1,
+                max_values=1,
+                options=options
+            )
+            self.select_menu.callback = self.on_select_deal
+            self.add_item(self.select_menu)
+
+    async def on_select_deal(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        user_id = interaction.user.id
+        deal_key = self.select_menu.values[0]
+
+        cfg = await database.get_special_market_config()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        closes_at_str = cfg.get("closes_at")
+        is_closed = not cfg.get("is_active", False)
+        if closes_at_str:
+            try:
+                closes_dt = datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00"))
+                if now >= closes_dt: is_closed = True
+            except Exception: pass
+
+        if is_closed:
+            return await interaction.followup.send("🔒 **THE VIP SPECIAL MARKET HAS CLOSED!** This deal is no longer active.", ephemeral=True)
+
+        deal_id = deal_key.replace("vip_", "")
+        already_bought = await database.has_purchased_special_market_deal(user_id, self.session_id, deal_id)
+        if already_bought:
+            return await interaction.followup.send("❌ You already claimed this VIP deal during this session!", ephemeral=True)
+
+        deal = next((r for r in self.rewards if str(r.get('id')) == deal_id), None)
+        if not deal:
+            return await interaction.followup.send("❌ Deal no longer available.", ephemeral=True)
+
+        cost = int(deal.get("cost_coins", 0))
+        user = await database.get_user(user_id)
+        balance = user.get("coins", 0)
+        if balance < cost:
+            return await interaction.followup.send(f"❌ Insufficient coins! You need **{cost:,} Coins**, but have **{balance:,}**.", ephemeral=True)
+
+        # Process payment
+        await database.add_coins(user_id, -cost)
+        
+        # Grant rewards (vouchers / player card)
+        granted_msgs = []
+        vouchers = int(deal.get("vouchers", 0))
+        if vouchers > 0:
+            await database.add_vouchers(user_id, vouchers)
+            granted_msgs.append(f"🎟️ **+{vouchers} Draft Vouchers**")
+
+        player_data = deal.get("player_data")
+        if player_data:
+            await database.add_player_to_inventory(user_id, player_data)
+            pname = player_data.get('cardName') or player_data.get('lastName', 'Card')
+            povr = player_data.get('rating', 0)
+            granted_msgs.append(f"⚽ **{povr} OVR {pname}**")
+
+        await database.record_special_market_purchase(user_id, self.session_id, deal_id)
+        
+        details = " & ".join(granted_msgs) if granted_msgs else "VIP rewards"
+        await interaction.followup.send(
+            f"👑 **VIP SPECIAL DEAL PURCHASED!**\n"
+            f"You bought **{deal.get('title')}** for **{cost:,} Coins**!\n"
+            f"Granted: {details}\nRemaining Coins: **{balance - cost:,}** 💰",
+            ephemeral=True
+        )
+
 async def setup(bot):
     await bot.add_cog(BlackMarketCog(bot))
