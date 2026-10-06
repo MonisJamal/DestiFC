@@ -181,11 +181,16 @@ class BlackMarketCog(commands.Cog):
         session_id = now.strftime("%Y%m%d_%H%M")
         closes_at = now + datetime.timedelta(hours=1)
 
-        v_deals = custom_vouchers if custom_vouchers is not None else cfg.get("voucher_packages", [])
-        p_deals = custom_players if custom_players is not None else cfg.get("player_deals", [])
+        # Always generate fresh random 120+ superstar deals on each opening session
+        if custom_players is not None:
+            p_deals = custom_players
+        else:
+            _, p_deals = await self.generate_random_deals()
 
-        if not v_deals or not p_deals or force:
-            v_deals, p_deals = await self.generate_random_deals()
+        if custom_vouchers is not None:
+            v_deals = custom_vouchers
+        else:
+            v_deals, _ = await self.generate_random_deals()
 
         await database.update_black_market_config(
             is_active=True,
@@ -281,13 +286,14 @@ class BlackMarketCog(commands.Cog):
             cfg = await database.get_black_market_config()
             now = datetime.datetime.now(datetime.timezone.utc)
 
-            # Auto close if past closes_at
+            # 1. Auto close if past closes_at & immediately schedule the NEXT drop
             if cfg.get("is_active"):
                 closes_at_str = cfg.get("closes_at")
                 if closes_at_str:
                     try:
                         closes_dt = datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00"))
                         if now >= closes_dt:
+                            # Close the market
                             await database.update_black_market_config(
                                 is_active=False,
                                 opens_at=None,
@@ -296,10 +302,37 @@ class BlackMarketCog(commands.Cog):
                                 player_deals=cfg.get("player_deals", [])
                             )
                             print("[BlackMarket] 1-hour session has concluded. Market closed.")
+
+                            # AUTOMATICALLY generate the next random drop time in the future!
+                            # If remaining hours in today allow (> 2 hours remaining before 22:00), schedule later today;
+                            # Otherwise schedule for tomorrow.
+                            p = await database.get_db()
+                            if now.hour < 20:
+                                next_hour = random.randint(now.hour + 2, 22)
+                                next_min = random.randint(0, 59)
+                                next_date_str = now.strftime("%Y-%m-%d")
+                            else:
+                                tomorrow = now + datetime.timedelta(days=1)
+                                next_date_str = tomorrow.strftime("%Y-%m-%d")
+                                next_hour = random.randint(2, 21)
+                                next_min = random.randint(0, 59)
+
+                            new_sched = {
+                                "date": next_date_str,
+                                "target_hour": next_hour,
+                                "target_min": next_min,
+                                "executed": False
+                            }
+                            await p.execute(
+                                "INSERT INTO system_settings (key, value) VALUES ('black_market_schedule', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+                                json.dumps(new_sched)
+                            )
+                            print(f"[BlackMarket] Automatically rolled NEXT drop time: {next_date_str} at {next_hour:02d}:{next_min:02d} UTC")
+                            cfg["is_active"] = False
                     except Exception as e:
                         print(f"[BlackMarket] Error parsing close time: {e}")
 
-            # Check if scheduled to open today
+            # 2. Check current schedule from DB
             p = await database.get_db()
             sched_row = await p.fetchrow("SELECT value FROM system_settings WHERE key = 'black_market_schedule'")
             today_str = now.strftime("%Y-%m-%d")
@@ -309,12 +342,21 @@ class BlackMarketCog(commands.Cog):
                 val = sched_row['value']
                 sched = json.loads(val) if isinstance(val, str) else val
 
-            if sched.get("date") != today_str:
-                # Pick a random minute between 02:00 and 22:00 UTC today
-                rand_hour = random.randint(2, 21)
+            # If no schedule exists at all or date is older than today, create a valid future schedule
+            if not sched or sched.get("date", "") < today_str:
+                # Pick a random future time today if possible
+                min_hour = max(2, now.hour + 1)
+                if min_hour <= 22:
+                    rand_hour = random.randint(min_hour, 22)
+                    sched_date = today_str
+                else:
+                    tomorrow = now + datetime.timedelta(days=1)
+                    sched_date = tomorrow.strftime("%Y-%m-%d")
+                    rand_hour = random.randint(2, 21)
+
                 rand_min = random.randint(0, 59)
                 sched = {
-                    "date": today_str,
+                    "date": sched_date,
                     "target_hour": rand_hour,
                     "target_min": rand_min,
                     "executed": False
@@ -323,16 +365,29 @@ class BlackMarketCog(commands.Cog):
                     "INSERT INTO system_settings (key, value) VALUES ('black_market_schedule', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
                     json.dumps(sched)
                 )
-                print(f"[BlackMarket] Scheduled random opening for today at {rand_hour:02d}:{rand_min:02d} UTC")
+                print(f"[BlackMarket] Initialized schedule for {sched_date} at {rand_hour:02d}:{rand_min:02d} UTC")
 
+            # 3. Check if scheduled drop moment has been reached
             if not sched.get("executed", False) and not cfg.get("is_active", False):
-                if now.hour > sched.get("target_hour", 0) or (now.hour == sched.get("target_hour", 0) and now.minute >= sched.get("target_min", 0)):
-                    sched["executed"] = True
-                    await p.execute(
-                        "INSERT INTO system_settings (key, value) VALUES ('black_market_schedule', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
-                        json.dumps(sched)
-                    )
-                    await self.trigger_market_opening()
+                sched_date = sched.get("date", "")
+                target_h = int(sched.get("target_hour", 0))
+                target_m = int(sched.get("target_min", 0))
+
+                # Build exact scheduled target timestamp
+                try:
+                    s_year, s_month, s_day = [int(x) for x in sched_date.split("-")]
+                    target_dt = datetime.datetime(s_year, s_month, s_day, target_h, target_m, 0, tzinfo=datetime.timezone.utc)
+                    # ONLY fire when current time has actually reached or passed target_dt
+                    if now >= target_dt:
+                        sched["executed"] = True
+                        await p.execute(
+                            "INSERT INTO system_settings (key, value) VALUES ('black_market_schedule', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+                            json.dumps(sched)
+                        )
+                        print(f"[BlackMarket] Scheduled time reached ({sched_date} {target_h:02d}:{target_m:02d} UTC). Triggering opening!")
+                        await self.trigger_market_opening()
+                except Exception as ex_dt:
+                    print(f"[BlackMarket] Error comparing scheduled time: {ex_dt}")
         except Exception as e:
             print(f"[BlackMarket Loop Error] {e}")
 
