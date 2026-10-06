@@ -91,6 +91,10 @@ class TradeConfirmView(discord.ui.View):
                 for c in self.recv_cards:
                     await conn.execute("UPDATE inventory SET user_id = $1 WHERE id = $2", self.sender.id, c["id"])
 
+        # Immediately invalidate caches so cards appear instantly in inventory / squad
+        database.invalidate_user_cache(self.sender.id)
+        database.invalidate_user_cache(self.recipient.id)
+
         # Disable buttons
         for child in self.children:
             child.disabled = True

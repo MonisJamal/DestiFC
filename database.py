@@ -49,6 +49,12 @@ def flush_all_caches():
         pass
     print("[Database] All in-memory caches flushed!")
 
+def invalidate_user_cache(user_id: int):
+    """Evicts in-memory cached inventory, squad, and user balances for a user."""
+    _USER_INVENTORY_CACHE.pop(user_id, None)
+    _USER_SQUAD_CACHE.pop(user_id, None)
+    _USER_CACHE.pop(user_id, None)
+
 import ssl
 
 async def get_db():
