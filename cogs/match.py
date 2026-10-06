@@ -52,8 +52,8 @@ class MatchRequestView(discord.ui.View):
             child.disabled = True
         await interaction.response.edit_message(content=f"⚔️ **Match Accepted!** The players are walking onto the pitch...", view=self)
         
-        # Start simulation in background using the button interaction to edit the webhook
-        asyncio.create_task(self.cog.simulate_live_match(interaction, self.challenger, self.opponent, self.ovr_a, self.ovr_b, self.squad_a, self.squad_b))
+        # Start simulation in background passing both the interaction and self.message
+        asyncio.create_task(self.cog.simulate_live_match(interaction, self.challenger, self.opponent, self.ovr_a, self.ovr_b, self.squad_a, self.squad_b, message=self.message))
 
     @discord.ui.button(label="Decline", style=discord.ButtonStyle.red, emoji="❌")
     async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -198,7 +198,7 @@ class MatchCog(commands.Cog):
         )
         view.message = msg
 
-    async def simulate_live_match(self, interaction, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b):
+    async def simulate_live_match(self, interaction, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b, message=None):
         try:
             # 1. Extract players, positions, and sectoral power ratings
             inv_a = await database.get_inventory(player_a.id) or []
@@ -532,11 +532,21 @@ class MatchCog(commands.Cog):
                     f"*{status_footer}*"
                 )
 
-                if current_minute < 90:
+                async def safe_update_ui(content=None, embed=None, view=None):
                     try:
-                        await interaction.edit_original_response(content=msg_content, view=None)
-                    except Exception as e_live:
-                        print(f"[Match] Live update error: {e_live}")
+                        await interaction.edit_original_response(content=content, embed=embed, view=view)
+                        return True
+                    except Exception as e_resp:
+                        if message:
+                            try:
+                                await message.edit(content=content, embed=embed, view=view)
+                                return True
+                            except Exception:
+                                pass
+                        return False
+
+                if current_minute < 90:
+                    await safe_update_ui(content=msg_content, view=None)
                     await asyncio.sleep(3.2)
 
             # Match winner resolution
@@ -663,17 +673,8 @@ class MatchCog(commands.Cog):
             embed.set_footer(text="DestiFC Match Engine • Stats recorded to /club_stats & /player_stats")
             
             # PRESENT FULL TIME EMBED SAFELY
-            ft_sent = False
-            try:
-                await interaction.edit_original_response(content=None, embed=embed, view=None)
-                ft_sent = True
-            except Exception as e_edit:
-                print(f"[Match] Failed to edit_original_response for FT: {e_edit}")
-                try:
-                    # Clear view on original response first if possible
-                    await interaction.edit_original_response(view=None)
-                except Exception:
-                    pass
+            ft_sent = await safe_update_ui(content=None, embed=embed, view=None)
+            if not ft_sent:
                 try:
                     await interaction.channel.send(content=f"🏁 **FULL TIME** — {player_a.mention} vs {player_b.mention}", embed=embed)
                     ft_sent = True
