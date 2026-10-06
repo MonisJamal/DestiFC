@@ -185,6 +185,11 @@ class BlackMarketCog(commands.Cog):
             try:
                 cid = int(str(raw_id).strip())
                 ch = self.bot.get_channel(cid)
+                if not ch:
+                    try:
+                        ch = await self.bot.fetch_channel(cid)
+                    except Exception as fe:
+                        print(f"[BlackMarket] Could not fetch channel {cid}: {fe}")
                 if ch:
                     channels.append(ch)
             except Exception:
