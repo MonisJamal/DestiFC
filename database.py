@@ -1876,7 +1876,8 @@ async def get_special_market_config() -> dict:
             "custom_rewards": [],
             "channels": [],
             "role_id": "",
-            "ping_type": "none"
+            "ping_type": "none",
+            "duration_minutes": 60
         }
     d = dict(row)
     if isinstance(d.get("custom_rewards"), str):
@@ -1890,9 +1891,10 @@ async def get_special_market_config() -> dict:
     d["title"] = str(d.get("title") or "👑 OWNER VIP SPECIAL MARKET 👑")
     d["role_id"] = str(d.get("role_id") or "")
     d["ping_type"] = str(d.get("ping_type") or "none")
+    d["duration_minutes"] = int(d.get("duration_minutes") or 60)
     return d
 
-async def update_special_market_config(is_active: bool, opens_at, closes_at, title: str, custom_rewards: list, channels: list = None, role_id: str = None, ping_type: str = None):
+async def update_special_market_config(is_active: bool, opens_at, closes_at, title: str, custom_rewards: list, channels: list = None, role_id: str = None, ping_type: str = None, duration_minutes: int = None):
     p = await get_db()
     r_json = json.dumps(custom_rewards or [])
     curr = await get_special_market_config()
@@ -1900,6 +1902,7 @@ async def update_special_market_config(is_active: bool, opens_at, closes_at, tit
     final_role_id = role_id if role_id is not None else curr.get("role_id", "")
     final_ping_type = ping_type if ping_type is not None else curr.get("ping_type", "none")
     final_title = title if title is not None else curr.get("title", "👑 OWNER VIP SPECIAL MARKET 👑")
+    final_duration = duration_minutes if duration_minutes is not None else int(curr.get("duration_minutes") or 60)
 
     import datetime
     dt_opens_at = opens_at
@@ -1917,8 +1920,8 @@ async def update_special_market_config(is_active: bool, opens_at, closes_at, tit
         dt_closes_at = dt_closes_at.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
     await p.execute("""
-        INSERT INTO special_market_config (id, is_active, opens_at, closes_at, title, custom_rewards, channels, role_id, ping_type, updated_at)
-        VALUES (1, $1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, CURRENT_TIMESTAMP)
+        INSERT INTO special_market_config (id, is_active, opens_at, closes_at, title, custom_rewards, channels, role_id, ping_type, duration_minutes, updated_at)
+        VALUES (1, $1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, CURRENT_TIMESTAMP)
         ON CONFLICT (id) DO UPDATE SET
             is_active = EXCLUDED.is_active,
             opens_at = EXCLUDED.opens_at,
@@ -1928,8 +1931,9 @@ async def update_special_market_config(is_active: bool, opens_at, closes_at, tit
             channels = EXCLUDED.channels,
             role_id = EXCLUDED.role_id,
             ping_type = EXCLUDED.ping_type,
+            duration_minutes = EXCLUDED.duration_minutes,
             updated_at = CURRENT_TIMESTAMP
-    """, is_active, dt_opens_at, dt_closes_at, final_title, r_json, final_channels, final_role_id, final_ping_type)
+    """, is_active, dt_opens_at, dt_closes_at, final_title, r_json, final_channels, final_role_id, final_ping_type, final_duration)
 
 async def has_purchased_special_market_deal(user_id: int, market_session_id: str, deal_id: str) -> bool:
     p = await get_db()

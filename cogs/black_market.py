@@ -481,11 +481,17 @@ class BlackMarketCog(commands.Cog):
     # -----------------------------------------------------------------
     # OWNER VIP SPECIAL MARKET (MANUAL ONLY - NEVER RANDOM)
     # -----------------------------------------------------------------
-    async def trigger_special_market_opening(self):
-        """Manually opens the VIP Special Market for 1 hour."""
+    async def trigger_special_market_opening(self, duration_minutes: int = None):
+        """Manually opens the VIP Special Market for customizable duration (default 60 mins)."""
         cfg = await database.get_special_market_config()
         now = datetime.datetime.now(datetime.timezone.utc)
-        closes_at = now + datetime.timedelta(hours=1)
+        
+        mins = duration_minutes
+        if mins is None:
+            mins = int(cfg.get("duration_minutes") or 60)
+        mins = max(1, min(1440, mins))  # between 1 min and 24 hours
+
+        closes_at = now + datetime.timedelta(minutes=mins)
         session_id = now.strftime("%Y%m%d_%H%M")
 
         await database.update_special_market_config(
@@ -496,7 +502,8 @@ class BlackMarketCog(commands.Cog):
             custom_rewards=cfg.get("custom_rewards", []),
             channels=cfg.get("channels", []),
             role_id=cfg.get("role_id", ""),
-            ping_type=cfg.get("ping_type", "none")
+            ping_type=cfg.get("ping_type", "none"),
+            duration_minutes=mins
         )
 
         channels = []
@@ -535,23 +542,31 @@ class BlackMarketCog(commands.Cog):
         rewards = cfg.get("custom_rewards", [])
         title = cfg.get("title", "👑 OWNER VIP SPECIAL MARKET 👑")
 
+        # Format duration string nicely
+        if mins >= 60:
+            hrs = mins // 60
+            remaining_mins = mins % 60
+            dur_str = f"{hrs} HOUR{'S' if hrs > 1 else ''}" + (f" {remaining_mins} MINS" if remaining_mins else "")
+        else:
+            dur_str = f"{mins} MINUTES"
+
         embed = discord.Embed(
             title=f"👑 {title} HAS SURFACED! 👑",
             description=(
                 f"🚨 **EXCLUSIVE HIGH-ROLLER MARKET UNLOCKED!** 🚨\n\n"
-                f"An exclusive VIP bazaar curated by the Owner is open for **EXACTLY 1 HOUR**!\n"
+                f"An exclusive VIP bazaar curated by the Owner is open for **{dur_str}**!\n"
                 f"Featuring rare custom rewards, mega voucher packs, and hand-selected superstar cards.\n\n"
                 f"⏳ **CLOSES AT:** <t:{int(closes_at.timestamp())}:R> (<t:{int(closes_at.timestamp())}:t>)\n\n"
                 f"👉 Use `/specialmarket` or tap below to purchase your exclusive items!"
             ),
             color=discord.Color.from_rgb(255, 215, 0)
         )
-        embed.set_footer(text="DestiFC VIP Special Market • 1-Hour Flash Event")
+        embed.set_footer(text=f"DestiFC VIP Special Market • {dur_str} Event")
 
         for ch in channels:
             try:
                 view = SpecialMarketView(self.bot, session_id, rewards)
-                msg = f"{ping_str}🌟 **THE SPECIAL OWNER MARKET IS LIVE FOR 1 HOUR!**".strip()
+                msg = f"{ping_str}🌟 **THE SPECIAL OWNER MARKET IS LIVE FOR {dur_str}!**".strip()
                 await ch.send(content=msg, embed=embed, view=view)
                 print(f"[SpecialMarket] Broadcast sent to #{ch.name}!")
             except Exception as e:
@@ -574,7 +589,8 @@ class BlackMarketCog(commands.Cog):
                         opens_at=None,
                         closes_at=None,
                         title=cfg.get("title", ""),
-                        custom_rewards=cfg.get("custom_rewards", [])
+                        custom_rewards=cfg.get("custom_rewards", []),
+                        duration_minutes=cfg.get("duration_minutes", 60)
                     )
             except Exception: pass
 
@@ -608,14 +624,15 @@ class BlackMarketCog(commands.Cog):
         view = SpecialMarketView(self.bot, session_id, rewards)
         await interaction.followup.send(embed=embed, view=view)
 
-    @app_commands.command(name="admin_special_market_open", description="Admin: Manually open the VIP Special Market for 1 hour")
-    async def admin_special_open(self, interaction: discord.Interaction):
+    @app_commands.command(name="admin_special_market_open", description="Admin: Manually open the VIP Special Market")
+    @app_commands.describe(duration_minutes="Duration in minutes (e.g. 30, 60, 120, 1440)")
+    async def admin_special_open(self, interaction: discord.Interaction, duration_minutes: int = 60):
         await interaction.response.defer(ephemeral=True)
         if not await is_team_admin_or_owner(self.bot, interaction.user):
             return await interaction.followup.send("❌ Admin command only.", ephemeral=True)
 
-        await self.trigger_special_market_opening()
-        await interaction.followup.send("✅ The VIP Special Market has been opened for 1 hour and broadcasted!", ephemeral=True)
+        await self.trigger_special_market_opening(duration_minutes=duration_minutes)
+        await interaction.followup.send(f"✅ The VIP Special Market has been opened for {duration_minutes} minutes and broadcasted!", ephemeral=True)
 
     @app_commands.command(name="admin_special_market_close", description="Admin: Manually close the VIP Special Market immediately")
     async def admin_special_close(self, interaction: discord.Interaction):
@@ -629,7 +646,8 @@ class BlackMarketCog(commands.Cog):
             opens_at=None,
             closes_at=None,
             title=cfg.get("title", ""),
-            custom_rewards=cfg.get("custom_rewards", [])
+            custom_rewards=cfg.get("custom_rewards", []),
+            duration_minutes=cfg.get("duration_minutes", 60)
         )
         await interaction.followup.send("🔒 The VIP Special Market has been closed manually!", ephemeral=True)
 
