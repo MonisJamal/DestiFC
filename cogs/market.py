@@ -732,7 +732,7 @@ class MarketCog(commands.Cog):
 
         embed = discord.Embed(
             title=f"🪙 Bulk Quick Sold {len(eligible)} Cards!",
-            description=f"Successfully quick sold **{len(eligible)} cards** (OVR {min_ovr}–{max_ovr}) for a total of **{total_coins:,} Coins** 💰!\n*(75% of minimum market valuation each)*",
+            description=f"Successfully quick sold **{len(eligible)} cards** (OVR {min_ovr}–{max_ovr}) for a total of **{total_coins:,} Coins** 💰!\n*(70% of minimum market valuation each)*",
             color=discord.Color.gold()
         )
         embed.set_footer(text="Active starting XI and locked cards were safely protected.")

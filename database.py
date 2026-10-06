@@ -1405,12 +1405,8 @@ def get_quicksell_value_for_ovr(ovr: int) -> int:
         ovr_int = int(ovr)
     except Exception:
         return 50
-    ovr_str = str(ovr_int)
-    cache = _OVR_PRICES_CACHE or DEFAULT_OVR_PRICES
-    entry = cache.get(ovr_int) or cache.get(ovr_str)
-    if entry and isinstance(entry, dict) and entry.get('quicksell'):
-        return int(entry['quicksell'])
     min_p, _ = get_price_limits_for_ovr(ovr_int)
+    # 70% Static guarantee: Always calculate strictly as 70% of minimum price floor
     return max(1, int(min_p * 0.70))
 
 async def get_ovr_price_settings() -> dict:
