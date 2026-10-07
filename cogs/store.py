@@ -61,56 +61,56 @@ THEMES = {
     },
     "bernabeu": {
         "name": "⚪ Santiago Bernabéu (Real Madrid)",
-        "price": 850_000_000,
+        "price": 3_000_000_000,
         "file": "pitch_bernabeu.jpg",
         "perk": "👑 **Remontada DNA:** +3.0 ATK in final 15 minutes of H2H & +2.0 MID Power",
         "buff": {"atk_boost": 3.0, "mid_boost": 2.0}
     },
     "campnou": {
         "name": "🔵🔴 Spotify Camp Nou (FC Barcelona)",
-        "price": 850_000_000,
+        "price": 3_000_000_000,
         "file": "pitch_campnou.jpg",
         "perk": "🪄 **Tiki-Taka Mastery:** +3.5 MID Power & +3% higher match possession",
         "buff": {"mid_boost": 3.5}
     },
     "oldtrafford": {
         "name": "🔴 Old Trafford (Manchester United)",
-        "price": 750_000_000,
+        "price": 3_000_000_000,
         "file": "pitch_oldtrafford.jpg",
         "perk": "⚡ **Fergie Time:** +3.0 ATK during extra stoppage time & +1.5 DEF Power",
         "buff": {"atk_boost": 3.0, "def_boost": 1.5}
     },
     "anfield": {
         "name": "🔥 Anfield (Liverpool FC)",
-        "price": 750_000_000,
+        "price": 3_000_000_000,
         "file": "pitch_anfield.jpg",
         "perk": "🔊 **Kop Roar:** +3.0 Gegenpressing ATK Power & +2.5 DEF Power",
         "buff": {"atk_boost": 3.0, "def_boost": 2.5}
     },
     "sansiro": {
         "name": "⚔️ San Siro (Milan / Inter)",
-        "price": 700_000_000,
+        "price": 3_000_000_000,
         "file": "pitch_sansiro.jpg",
         "perk": "🛡️ **Catenaccio Wall:** +3.5 DEF Power & +2.0 GK Reflexes",
         "buff": {"def_boost": 3.5, "gk_boost": 2.0}
     },
     "allianz": {
         "name": "🔴 Allianz Arena (Bayern Munich)",
-        "price": 700_000_000,
+        "price": 3_000_000_000,
         "file": "pitch_allianz.jpg",
         "perk": "🚜 **Bavarian Blitz:** +3.0 ATK Power & +2.0 MID Power",
         "buff": {"atk_boost": 3.0, "mid_boost": 2.0}
     },
     "maracana": {
         "name": "🇧🇷 Maracanã (Brazil)",
-        "price": 800_000_000,
+        "price": 3_000_000_000,
         "file": "pitch_maracana.jpg",
         "perk": "✨ **Joga Bonito:** +3.5 Dribbling/Attacking flair & +2.0 MID Power",
         "buff": {"atk_boost": 3.5, "mid_boost": 2.0}
     },
     "wembley": {
         "name": "🦁 Wembley Stadium (England)",
-        "price": 800_000_000,
+        "price": 3_000_000_000,
         "file": "pitch_wembley.jpg",
         "perk": "🏆 **National Stage:** +2.0 to ALL Squad Sectors (ATK/MID/DEF)",
         "buff": {"all_boost": 2.0}

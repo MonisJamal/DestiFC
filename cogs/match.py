@@ -379,21 +379,22 @@ class MatchCog(commands.Cog):
             possession_a = max(35, min(65, possession_a))
             possession_b = 100 - possession_a
 
-            def calc_full_team_ratings(starters, is_winning_team, is_draw_match, goals_conceded, goals_scored):
+            def calc_full_team_ratings(starters, is_winning_team, is_draw_match, goals_conceded, goals_scored, team_goals, team_assists, team_saves):
                 ratings = []
                 for s in starters:
                     p_name = s['name']
                     pos = s['pos']
-                    goals = player_scores.get(p_name, 0)
+                    goals = team_goals.get(p_name, 0)
+                    assists = team_assists.get(p_name, 0)
                     
                     base = 6.8 + random.uniform(-0.2, 0.3)
                     if is_winning_team: base += 0.7
                     elif is_draw_match: base += 0.2
                     else: base -= 0.5
                     
-                    base += goals * 1.3
+                    base += goals * 1.3 + assists * 0.7
                     if pos == 'GK':
-                        base += (saves_a if is_winning_team else saves_b) * 0.2
+                        base += team_saves * 0.2
                         if goals_conceded == 0: base += 0.8
                     elif pos in ['CB', 'LB', 'RB', 'LWB', 'RWB']:
                         if goals_conceded == 0: base += 0.6
@@ -405,7 +406,7 @@ class MatchCog(commands.Cog):
                             base += random.uniform(-0.2, 0.2)
                             
                     rating = round(min(10.0, max(5.5, base)), 1)
-                    ratings.append({"name": p_name, "pos": pos, "rating": rating, "goals": goals, "ovr": s['ovr']})
+                    ratings.append({"name": p_name, "pos": pos, "rating": rating, "goals": goals, "assists": assists, "ovr": s['ovr']})
                 return ratings
 
             # Threat and goal probability calculations based on squad sectors & tactical synergy
@@ -505,7 +506,8 @@ class MatchCog(commands.Cog):
             all_goals.sort(key=lambda x: x[1])
 
             scoresheet_events = []
-            player_scores = {p["name"]: 0 for p in (starters_a + starters_b)}
+            team_a_player_goals = {}
+            team_b_player_goals = {}
             current_score_a = 0
             current_score_b = 0
 
@@ -594,14 +596,14 @@ class MatchCog(commands.Cog):
                     goal_happened = True
                     team_target, min_scored, scorer, pos, ptype = g[0], g[1], g[2], g[3], g[4]
                     assister = g[5] if len(g) > 5 else None
-                    player_scores[scorer] = player_scores.get(scorer, 0) + 1
-
                     if team_target == player_a:
                         current_score_a += 1
                         team_name = player_a.display_name
+                        team_a_player_goals[scorer] = team_a_player_goals.get(scorer, 0) + 1
                     else:
                         current_score_b += 1
                         team_name = player_b.display_name
+                        team_b_player_goals[scorer] = team_b_player_goals.get(scorer, 0) + 1
 
                     assist_comm = f" assisted by **{assister}**" if assister else ""
                     is_stoppage_goal = (is_et or min_scored >= 88)
@@ -726,13 +728,13 @@ class MatchCog(commands.Cog):
             xg_a = round(current_score_a * 0.65 + (shots_on_target_a * 0.18) + random.uniform(0.1, 0.25), 2)
             xg_b = round(current_score_b * 0.65 + (shots_on_target_b * 0.18) + random.uniform(0.1, 0.25), 2)
             # Re-calculate accurate final ratings with actual player scores
-            ratings_a = calc_full_team_ratings(starters_a, is_a_win, is_draw, current_score_b, current_score_a)
-            ratings_b = calc_full_team_ratings(starters_b, is_b_win, is_draw, current_score_a, current_score_b)
+            ratings_a = calc_full_team_ratings(starters_a, is_a_win, is_draw, current_score_b, current_score_a, team_a_player_goals, team_a_assists, saves_a)
+            ratings_b = calc_full_team_ratings(starters_b, is_b_win, is_draw, current_score_a, current_score_b, team_b_player_goals, team_b_assists, saves_b)
             all_rated_final = [(r, player_a.display_name) for r in ratings_a] + [(r, player_b.display_name) for r in ratings_b]
             if all_rated_final:
-                motm_entry, motm_team = max(all_rated_final, key=lambda x: (x[0].get("goals", 0) * 2 + x[0].get("rating", 6.0)))
+                motm_entry, motm_team = max(all_rated_final, key=lambda x: (x[0].get("goals", 0) * 2 + x[0].get("assists", 0) * 1.5 + x[0].get("rating", 6.0)))
             else:
-                motm_entry = {"name": "Match MVP", "rating": 8.0, "goals": 0}
+                motm_entry = {"name": "Match MVP", "rating": 8.0, "goals": 0, "assists": 0}
                 motm_team = player_a.display_name
 
             motm_str = f"⭐ **{motm_entry['name']}** `({motm_entry['rating']} Rating)` — *{motm_team}*"
@@ -802,11 +804,12 @@ class MatchCog(commands.Cog):
             embed.add_field(name="🎖️ Man of the Match", value=motm_str, inline=False)
 
             # 4. Full Squad Player Ratings (All 11 Starters for both teams with goals & assists)
-            def format_full_ratings(r_list, assists_dict):
+            def format_full_ratings(r_list, assists_dict, is_team_a=True):
                 lines = []
+                current_team_name = player_a.display_name if is_team_a else player_b.display_name
                 for r in r_list:
                     icon = "🧤" if r.get("pos") == "GK" else ("🛡️" if r.get("pos") in ['CB', 'LB', 'RB', 'LWB', 'RWB'] else ("⚡" if r.get("pos") in ['CAM', 'CM', 'CDM', 'LM', 'RM'] else "🔥"))
-                    star = " ⭐" if r.get("name") == motm_entry.get("name") else ""
+                    star = " ⭐" if (r.get("name") == motm_entry.get("name") and motm_team == current_team_name) else ""
                     goals_cnt = r.get('goals', 0)
                     assists_cnt = assists_dict.get(r.get('name', ''), 0)
                     
@@ -820,8 +823,8 @@ class MatchCog(commands.Cog):
                 txt = "\n".join(lines) if lines else "*No rating data*"
                 return txt[:1024]
 
-            embed.add_field(name=f"👥 {player_a.display_name} XI", value=format_full_ratings(ratings_a, team_a_assists), inline=True)
-            embed.add_field(name=f"👥 {player_b.display_name} XI", value=format_full_ratings(ratings_b, team_b_assists), inline=True)
+            embed.add_field(name=f"👥 {player_a.display_name} XI", value=format_full_ratings(ratings_a, team_a_assists, is_team_a=True), inline=True)
+            embed.add_field(name=f"👥 {player_b.display_name} XI", value=format_full_ratings(ratings_b, team_b_assists, is_team_a=False), inline=True)
 
             # 5. Fans & Rewards
             embed.add_field(
