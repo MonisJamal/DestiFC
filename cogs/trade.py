@@ -23,93 +23,132 @@ class TradeConfirmView(discord.ui.View):
         self.recv_cards = recv_cards
         self.recv_coins = recv_coins
         self.recv_vouchers = recv_vouchers
+        self._processing = False
+        self._accepted = False
+        self._lock = asyncio.Lock()
 
     @discord.ui.button(label="Accept Trade ✅", style=discord.ButtonStyle.success)
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.recipient.id:
             return await interaction.response.send_message("❌ Only the recipient can accept this trade proposal.", ephemeral=True)
-            
-        await interaction.response.defer()
 
-        # Re-verify Sender Assets
-        s_user = await database.get_user(self.sender.id)
-        if s_user.get("coins", 0) < self.give_coins:
-            return await interaction.followup.send(f"❌ Trade failed: {self.sender.mention} no longer has enough coins.")
-        if s_user.get("vouchers", 0) < self.give_vouchers:
-            return await interaction.followup.send(f"❌ Trade failed: {self.sender.mention} no longer has enough vouchers.")
-            
-        s_locked = await database.get_squad_locked_ids(self.sender.id)
-        s_inv = await database.get_inventory(self.sender.id)
-        s_inv_map = {p["id"]: p for p in s_inv}
-        for c in self.give_cards:
-            if c["id"] not in s_inv_map:
-                return await interaction.followup.send(f"❌ Trade failed: {self.sender.mention} no longer owns **{c['player_name']}** (ID: `{c['id']}`).")
-            if c["id"] in s_locked or s_inv_map[c["id"]].get("locked", 0):
-                return await interaction.followup.send(f"❌ Trade failed: **{c['player_name']}** is locked or in {self.sender.mention}'s squad.")
+        # Strict concurrency lock: prevent double-clicks from cutting coins twice
+        if self._processing or self._accepted:
+            return await interaction.response.send_message("⏳ Trade is already processing or completed! Please wait a moment...", ephemeral=True)
 
-        # Re-verify Recipient Assets
-        r_user = await database.get_user(self.recipient.id)
-        if r_user.get("coins", 0) < self.recv_coins:
-            return await interaction.followup.send(f"❌ Trade failed: {self.recipient.mention} does not have enough coins ({self.recv_coins:,} required).")
-        if r_user.get("vouchers", 0) < self.recv_vouchers:
-            return await interaction.followup.send(f"❌ Trade failed: {self.recipient.mention} does not have enough vouchers ({self.recv_vouchers} required).")
+        async with self._lock:
+            if self._processing or self._accepted:
+                return await interaction.response.send_message("⏳ Trade is already processing or completed! Please wait a moment...", ephemeral=True)
+            self._processing = True
 
-        r_locked = await database.get_squad_locked_ids(self.recipient.id)
-        r_inv = await database.get_inventory(self.recipient.id)
-        r_inv_map = {p["id"]: p for p in r_inv}
-        for c in self.recv_cards:
-            if c["id"] not in r_inv_map:
-                return await interaction.followup.send(f"❌ Trade failed: {self.recipient.mention} does not own **{c['player_name']}** (ID: `{c['id']}`).")
-            if c["id"] in r_locked or r_inv_map[c["id"]].get("locked", 0):
-                return await interaction.followup.send(f"❌ Trade failed: **{c['player_name']}** is locked or in {self.recipient.mention}'s squad.")
-
-        # Execute Atomic Transfer
-        p = await database.get_db()
-        async with p.acquire() as conn:
-            async with conn.transaction():
-                # Transfer Coins
-                if self.give_coins > 0:
-                    await conn.execute("UPDATE users SET coins = GREATEST(0, coins - $1) WHERE user_id = $2", self.give_coins, self.sender.id)
-                    await conn.execute("UPDATE users SET coins = coins + $1 WHERE user_id = $2", self.give_coins, self.recipient.id)
-                if self.recv_coins > 0:
-                    await conn.execute("UPDATE users SET coins = GREATEST(0, coins - $1) WHERE user_id = $2", self.recv_coins, self.recipient.id)
-                    await conn.execute("UPDATE users SET coins = coins + $1 WHERE user_id = $2", self.recv_coins, self.sender.id)
-
-                # Transfer Vouchers
-                if self.give_vouchers > 0:
-                    await conn.execute("UPDATE users SET vouchers = GREATEST(0, vouchers - $1) WHERE user_id = $2", self.give_vouchers, self.sender.id)
-                    await conn.execute("UPDATE users SET vouchers = vouchers + $1 WHERE user_id = $2", self.give_vouchers, self.recipient.id)
-                if self.recv_vouchers > 0:
-                    await conn.execute("UPDATE users SET vouchers = GREATEST(0, vouchers - $1) WHERE user_id = $2", self.recv_vouchers, self.recipient.id)
-                    await conn.execute("UPDATE users SET vouchers = vouchers + $1 WHERE user_id = $2", self.recv_vouchers, self.sender.id)
-
-                # Transfer Sender Cards to Recipient
-                for c in self.give_cards:
-                    await conn.execute("UPDATE inventory SET user_id = $1 WHERE id = $2", self.recipient.id, c["id"])
-
-                # Transfer Recipient Cards to Sender
-                for c in self.recv_cards:
-                    await conn.execute("UPDATE inventory SET user_id = $1 WHERE id = $2", self.sender.id, c["id"])
-
-        # Immediately invalidate caches so cards appear instantly in inventory / squad
-        database.invalidate_user_cache(self.sender.id)
-        database.invalidate_user_cache(self.recipient.id)
-
-        # Disable buttons
+        # Disable all buttons and show processing indicator immediately on first click
         for child in self.children:
             child.disabled = True
-            
-        success_embed = discord.Embed(
-            title="🎉 Trade Completed Successfully!",
-            description=f"**{self.sender.display_name}** and **{self.recipient.display_name}** have successfully swapped assets!",
-            color=discord.Color.green()
-        )
+        button.label = "Processing Trade... ⏳"
         try:
-            await interaction.edit_original_response(embed=success_embed, view=self)
+            await interaction.response.edit_message(view=self)
         except Exception:
-            if interaction.message:
-                await interaction.message.edit(embed=success_embed, view=self)
-        self.stop()
+            try:
+                await interaction.response.defer()
+            except Exception:
+                pass
+
+        try:
+            # Re-verify Sender Assets
+            s_user = await database.get_user(self.sender.id)
+            if s_user.get("coins", 0) < self.give_coins:
+                return await interaction.followup.send(f"❌ Trade failed: {self.sender.mention} no longer has enough coins.")
+            if s_user.get("vouchers", 0) < self.give_vouchers:
+                return await interaction.followup.send(f"❌ Trade failed: {self.sender.mention} no longer has enough vouchers.")
+                
+            s_locked = await database.get_squad_locked_ids(self.sender.id)
+            s_inv = await database.get_inventory(self.sender.id)
+            s_inv_map = {p["id"]: p for p in s_inv}
+            for c in self.give_cards:
+                if c["id"] not in s_inv_map:
+                    return await interaction.followup.send(f"❌ Trade failed: {self.sender.mention} no longer owns **{c['player_name']}** (ID: `{c['id']}`).")
+                if c["id"] in s_locked or s_inv_map[c["id"]].get("locked", 0):
+                    return await interaction.followup.send(f"❌ Trade failed: **{c['player_name']}** is locked or in {self.sender.mention}'s squad.")
+
+            # Re-verify Recipient Assets
+            r_user = await database.get_user(self.recipient.id)
+            if r_user.get("coins", 0) < self.recv_coins:
+                return await interaction.followup.send(f"❌ Trade failed: {self.recipient.mention} does not have enough coins ({self.recv_coins:,} required).")
+            if r_user.get("vouchers", 0) < self.recv_vouchers:
+                return await interaction.followup.send(f"❌ Trade failed: {self.recipient.mention} does not have enough vouchers ({self.recv_vouchers} required).")
+
+            r_locked = await database.get_squad_locked_ids(self.recipient.id)
+            r_inv = await database.get_inventory(self.recipient.id)
+            r_inv_map = {p["id"]: p for p in r_inv}
+            for c in self.recv_cards:
+                if c["id"] not in r_inv_map:
+                    return await interaction.followup.send(f"❌ Trade failed: {self.recipient.mention} does not own **{c['player_name']}** (ID: `{c['id']}`).")
+                if c["id"] in r_locked or r_inv_map[c["id"]].get("locked", 0):
+                    return await interaction.followup.send(f"❌ Trade failed: **{c['player_name']}** is locked or in {self.recipient.mention}'s squad.")
+
+            # Execute Atomic Transfer
+            p = await database.get_db()
+            async with p.acquire() as conn:
+                async with conn.transaction():
+                    # Transfer Coins
+                    if self.give_coins > 0:
+                        await conn.execute("UPDATE users SET coins = GREATEST(0, coins - $1) WHERE user_id = $2", self.give_coins, self.sender.id)
+                        await conn.execute("UPDATE users SET coins = coins + $1 WHERE user_id = $2", self.give_coins, self.recipient.id)
+                    if self.recv_coins > 0:
+                        await conn.execute("UPDATE users SET coins = GREATEST(0, coins - $1) WHERE user_id = $2", self.recv_coins, self.recipient.id)
+                        await conn.execute("UPDATE users SET coins = coins + $1 WHERE user_id = $2", self.recv_coins, self.sender.id)
+
+                    # Transfer Vouchers
+                    if self.give_vouchers > 0:
+                        await conn.execute("UPDATE users SET vouchers = GREATEST(0, vouchers - $1) WHERE user_id = $2", self.give_vouchers, self.sender.id)
+                        await conn.execute("UPDATE users SET vouchers = vouchers + $1 WHERE user_id = $2", self.give_vouchers, self.recipient.id)
+                    if self.recv_vouchers > 0:
+                        await conn.execute("UPDATE users SET vouchers = GREATEST(0, vouchers - $1) WHERE user_id = $2", self.recv_vouchers, self.recipient.id)
+                        await conn.execute("UPDATE users SET vouchers = vouchers + $1 WHERE user_id = $2", self.recv_vouchers, self.sender.id)
+
+                    # Transfer Sender Cards to Recipient
+                    for c in self.give_cards:
+                        await conn.execute("UPDATE inventory SET user_id = $1 WHERE id = $2", self.recipient.id, c["id"])
+
+                    # Transfer Recipient Cards to Sender
+                    for c in self.recv_cards:
+                        await conn.execute("UPDATE inventory SET user_id = $1 WHERE id = $2", self.sender.id, c["id"])
+
+            # Immediately invalidate caches so cards appear instantly in inventory / squad
+            database.invalidate_user_cache(self.sender.id)
+            database.invalidate_user_cache(self.recipient.id)
+
+            self._accepted = True
+
+            # Disable buttons
+            for child in self.children:
+                child.disabled = True
+                
+            success_embed = discord.Embed(
+                title="🎉 Trade Completed Successfully!",
+                description=f"**{self.sender.display_name}** and **{self.recipient.display_name}** have successfully swapped assets!",
+                color=discord.Color.green()
+            )
+            try:
+                await interaction.edit_original_response(embed=success_embed, view=self)
+            except Exception:
+                if interaction.message:
+                    await interaction.message.edit(embed=success_embed, view=self)
+            self.stop()
+        except Exception as err:
+            self._processing = False
+            # Re-enable buttons if error occurred
+            for child in self.children:
+                child.disabled = False
+            button.label = "Accept Trade ✅"
+            try:
+                if interaction.message:
+                    await interaction.message.edit(view=self)
+            except Exception:
+                pass
+            return await interaction.followup.send(f"❌ An error occurred during trade execution: {err}", ephemeral=True)
+        finally:
+            self._processing = False
 
     @discord.ui.button(label="Decline / Cancel ❌", style=discord.ButtonStyle.danger)
     async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -230,6 +269,7 @@ class TradeBuilderView(discord.ui.View):
         self.give_vouchers = 0
         self.recv_coins = 0
         self.recv_vouchers = 0
+        self._submitting = False
 
         self.select_menu = TradeCardSelect(self, eligible_cards)
         self.add_item(self.select_menu)
@@ -276,11 +316,21 @@ class TradeBuilderView(discord.ui.View):
         if interaction.user.id != self.sender.id:
             return await interaction.response.send_message("❌ This is not your trade session.", ephemeral=True)
 
+        if self._submitting:
+            return await interaction.response.send_message("⏳ Dispatching trade proposal, please wait...", ephemeral=True)
+
         if not self.selected_cards and self.give_coins == 0 and self.give_vouchers == 0 and self.recv_coins == 0 and self.recv_vouchers == 0:
             return await interaction.response.send_message("❌ You cannot send an empty trade proposal.", ephemeral=True)
 
-        # Defer immediately to guarantee 100% reliable 1st-click response
-        await interaction.response.defer()
+        self._submitting = True
+        button.disabled = True
+        try:
+            await interaction.response.edit_message(view=self)
+        except Exception:
+            try:
+                await interaction.response.defer()
+            except Exception:
+                pass
 
         # Sender balance validation
         sender_data = await database.get_user(self.sender.id)
