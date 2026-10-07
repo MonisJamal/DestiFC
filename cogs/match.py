@@ -207,6 +207,9 @@ class MatchCog(commands.Cog):
             for c in (inv_a + inv_b):
                 inv_map[str(c.get('id', ''))] = c
 
+            gp_cfg = await database.get_gameplay_config()
+            default_custom_boost = float(gp_cfg.get('custom_card_match_boost', 1.15))
+
             def get_team_sectors(squad, team_avg_ovr):
                 atk, mid, defn, gk = [], [], [], []
                 starters = []
@@ -220,18 +223,38 @@ class MatchCog(commands.Cog):
                     
                     # Apply custom card / signature card buffs directly to the player's OVR for the match engine
                     is_custom = False
-                    boost_val = 1.15
+                    boost_val = default_custom_boost
                     if inv_id_str in inv_map:
                         full_p = inv_map[inv_id_str]
-                        is_custom = full_p.get('is_custom') or full_p.get('is_signature_box') or 'CUSTOM' in str(full_p.get('source', '')).upper() or 'SIGNATURE' in str(full_p.get('source', '')).upper()
-                        boost_val = full_p.get('performance_boost', 1.15)
+                        # Parse inner player_data JSON if string
+                        pd = full_p.get('player_data')
+                        if isinstance(pd, str):
+                            try:
+                                pd = json.loads(pd)
+                            except Exception:
+                                pd = {}
+                        elif not isinstance(pd, dict):
+                            pd = {}
+
+                        pid_str = str(full_p.get('player_id', '') or pd.get('id', '')).lower()
+                        src_str = (str(full_p.get('source', '') or pd.get('source', ''))).upper()
+                        
+                        is_custom = bool(
+                            full_p.get('is_custom') or full_p.get('is_signature_box') or
+                            pd.get('is_custom') or pd.get('is_signature_box') or
+                            'CUSTOM' in src_str or 'SIGNATURE' in src_str or
+                            pid_str.startswith('sig_') or pid_str.startswith('custom_') or
+                            inv_id_str.startswith('custom_') or inv_id_str.startswith('sig_')
+                        )
+                        boost_val = float(pd.get('performance_boost') or full_p.get('performance_boost') or default_custom_boost)
                     elif inv_id_str.startswith('custom_') or inv_id_str.startswith('sig_'):
                         is_custom = True
+                        boost_val = default_custom_boost
                         
                     if is_custom:
                         p_ovr = int(p_ovr * boost_val)
                     
-                    entry = {"name": name, "pos": pos, "raw_pos": pos_raw, "ovr": p_ovr, "is_custom": is_custom}
+                    entry = {"name": name, "pos": pos, "raw_pos": pos_raw, "ovr": p_ovr, "is_custom": is_custom, "boost_val": boost_val}
                     starters.append(entry)
                     if pos in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF']:
                         atk.append(entry)
@@ -401,12 +424,11 @@ class MatchCog(commands.Cog):
                         base += random.uniform(-0.1, 0.3)
                     elif pos in ['CAM', 'CM', 'CDM', 'LM', 'RM']:
                         base += random.uniform(-0.1, 0.4)
-                    elif pos in ['ST', 'CF', 'LW', 'RW']:
-                        if goals == 0 and goals_scored > 0:
-                            base += random.uniform(-0.2, 0.2)
+                    if s.get('is_custom'):
+                        base += 0.8
                             
                     rating = round(min(10.0, max(5.5, base)), 1)
-                    ratings.append({"name": p_name, "pos": pos, "rating": rating, "goals": goals, "assists": assists, "ovr": s['ovr']})
+                    ratings.append({"name": p_name, "pos": pos, "rating": rating, "goals": goals, "assists": assists, "ovr": s['ovr'], "is_custom": s.get('is_custom', False)})
                 return ratings
 
             # Threat and goal probability calculations based on squad sectors & tactical synergy
@@ -814,6 +836,8 @@ class MatchCog(commands.Cog):
                     assists_cnt = assists_dict.get(r.get('name', ''), 0)
                     
                     stats_badge = ""
+                    if r.get('is_custom'):
+                        stats_badge += " ⚡"
                     if goals_cnt > 0:
                         stats_badge += f" {'⚽' * goals_cnt}"
                     if assists_cnt > 0:
