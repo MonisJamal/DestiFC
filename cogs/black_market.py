@@ -228,6 +228,33 @@ class BlackMarketCog(commands.Cog):
             player_deals=p_deals
         )
 
+        # When manually or automatically opened, advance the schedule so today's drop time is refreshed/completed
+        try:
+            p_sched = await database.get_db()
+            if now.hour < 20:
+                next_hour = random.randint(now.hour + 2, 22)
+                next_min = random.randint(0, 59)
+                next_date_str = now.strftime("%Y-%m-%d")
+            else:
+                tomorrow = now + datetime.timedelta(days=1)
+                next_date_str = tomorrow.strftime("%Y-%m-%d")
+                next_hour = random.randint(2, 21)
+                next_min = random.randint(0, 59)
+
+            new_sched = {
+                "date": next_date_str,
+                "target_hour": next_hour,
+                "target_min": next_min,
+                "executed": False
+            }
+            await p_sched.execute(
+                "INSERT INTO system_settings (key, value) VALUES ('black_market_schedule', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+                json.dumps(new_sched)
+            )
+            print(f"[BlackMarket] Refreshed future drop schedule: {next_date_str} at {next_hour:02d}:{next_min:02d} UTC")
+        except Exception as ex_sched:
+            print(f"[BlackMarket] Error updating schedule on open: {ex_sched}")
+
         # Broadcast to all configured Black Market channels across multiple servers
         channels = []
         raw_channels = cfg.get("channels") or []
