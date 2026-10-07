@@ -425,13 +425,17 @@ class SquadCog(commands.Cog):
     @squad_group.command(name="tactic", description="Select or view your team's tactical playstyle & formation synergy")
     @app_commands.describe(tactic="Select playstyle tactic for your club")
     @app_commands.choices(tactic=[
-        app_commands.Choice(name="Tiki-Taka (Best: 4-3-3 Holding, 4-1-4-1)", value="Tiki-Taka"),
-        app_commands.Choice(name="Gegenpressing (Best: 4-3-3 Attack, 4-2-3-1)", value="Gegenpressing"),
-        app_commands.Choice(name="Wing Play (Best: 4-4-2 Flat, 4-3-3 Flat)", value="Wing Play"),
-        app_commands.Choice(name="Counter-Attack (Best: 5-2-1-2, 4-4-2 Holding)", value="Counter-Attack"),
-        app_commands.Choice(name="Kick and Rush (Best: 4-4-2 Flat, 5-4-1)", value="Kick and Rush"),
-        app_commands.Choice(name="Park the Bus (Best: 5-4-1, 4-5-1)", value="Park the Bus"),
-        app_commands.Choice(name="Vertical Tiki-Taka (Best: 4-3-2-1, 4-1-2-1-2 Narrow)", value="Vertical Tiki-Taka"),
+        app_commands.Choice(name="🪄 Tiki-Taka (4-3-3 Holding, 4-1-4-1, 4-3-3 False 9)", value="Tiki-Taka"),
+        app_commands.Choice(name="🔺 Vertical Tiki-Taka (4-3-2-1, 4-1-2-1-2 Narrow, 4-3-1-2)", value="Vertical Tiki-Taka"),
+        app_commands.Choice(name="⚡ Gegenpressing (4-3-3 Attack, 4-2-3-1, 4-1-2-1-2 Wide)", value="Gegenpressing"),
+        app_commands.Choice(name="🏃 Wing Play (4-4-2 Flat, 4-3-3 Flat, 3-4-3, 4-2-4)", value="Wing Play"),
+        app_commands.Choice(name="🏹 Counter-Attack (5-2-1-2, 4-4-2 Holding, 4-3-3 Defend, 5-3-2)", value="Counter-Attack"),
+        app_commands.Choice(name="🚌 Park the Bus (5-4-1 Flat, 5-4-1 Defend, 4-5-1)", value="Park the Bus"),
+        app_commands.Choice(name="🚀 Kick and Rush (4-4-2 Flat, 4-4-1-1, 4-1-3-2, 3-1-4-2)", value="Kick and Rush"),
+        app_commands.Choice(name="🌀 Total Football (3-4-3 Diamond, 4-3-3 False 9, 4-2-2-2, 3-5-2)", value="Total Football"),
+        app_commands.Choice(name="🔒 Catenaccio (5-3-2, 5-4-1 Defend, 5-2-1-2, 3-5-2)", value="Catenaccio"),
+        app_commands.Choice(name="🎸 Heavy Metal Football (4-2-4, 4-2-2-2, 4-3-3 Attack)", value="Heavy Metal Football"),
+        app_commands.Choice(name="🎯 Direct Play (4-4-1-1 Attack, 4-1-4-1, 5-2-2-1, 3-4-1-2)", value="Direct Play"),
     ])
     async def set_tactic(self, interaction: discord.Interaction, tactic: str = None):
         await interaction.response.defer()

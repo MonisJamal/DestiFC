@@ -276,6 +276,20 @@ class MatchCog(commands.Cog):
                     elif tactic == "Vertical Tiki-Taka":
                         mid_p += 4.0
                         atk_p += 3.5
+                    elif tactic == "Total Football":
+                        atk_p += 3.0
+                        mid_p += 3.5
+                        def_p += 3.0
+                    elif tactic == "Catenaccio":
+                        def_p += 6.5
+                        gk_p += 4.5
+                    elif tactic == "Heavy Metal Football":
+                        atk_p += 5.5
+                        mid_p += 2.5
+                    elif tactic == "Direct Play":
+                        atk_p += 4.0
+                        mid_p += 2.5
+                        def_p += 2.0
 
                 # Apply Stadium Turf Perks (Home Venue Advantage)
                 stadium_name = "⚡ Neon Stadium"

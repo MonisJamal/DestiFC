@@ -491,37 +491,37 @@ TACTICS = {
     "Tiki-Taka": {
         "name": "Tiki-Taka",
         "description": "Short passing, dominant midfield possession & patient build-up.",
-        "best_formations": ["4-3-3 Holding", "4-1-4-1"],
+        "best_formations": ["4-3-3 Holding", "4-1-4-1", "4-3-3 False 9", "3-4-2-1", "3-5-1-1"],
         "emoji": "🪄",
         "boost_focus": "Midfield Control & Possession (+8%)"
+    },
+    "Vertical Tiki-Taka": {
+        "name": "Vertical Tiki-Taka",
+        "description": "Quick vertical triangles slicing through central defensive channels.",
+        "best_formations": ["4-3-2-1", "4-1-2-1-2 Narrow", "4-3-1-2", "3-4-1-2"],
+        "emoji": "🔺",
+        "boost_focus": "Central Through Balls & xG Efficiency (+12%)"
     },
     "Gegenpressing": {
         "name": "Gegenpressing",
         "description": "Aggressive high-press to win turnovers instantly in the opponent third.",
-        "best_formations": ["4-3-3 Attack", "4-2-3-1 Narrow", "4-2-3-1 Wide"],
+        "best_formations": ["4-3-3 Attack", "4-2-3-1 Narrow", "4-2-3-1 Wide", "4-1-2-1-2 Wide", "4-2-1-3"],
         "emoji": "⚡",
         "boost_focus": "Turnovers, High-Press & Fast Shots (+10%)"
     },
     "Wing Play": {
         "name": "Wing Play",
         "description": "Exploit wide flanks with pacey wingers delivering dangerous crosses.",
-        "best_formations": ["4-4-2 Flat", "4-3-3 Flat"],
+        "best_formations": ["4-4-2 Flat", "4-3-3 Flat", "3-4-3 Flat", "3-4-3 Diamond", "4-2-4"],
         "emoji": "🏃",
         "boost_focus": "Crossing & Corner Aerial Threat (+10%)"
     },
     "Counter-Attack": {
         "name": "Counter-Attack",
         "description": "Absorb opponent pressure and hit lightning-fast clinical breakaways.",
-        "best_formations": ["5-2-1-2", "4-4-2 Holding", "4-3-3 Defend"],
+        "best_formations": ["5-2-1-2", "4-4-2 Holding", "4-3-3 Defend", "5-3-2", "5-2-2-1"],
         "emoji": "🏹",
         "boost_focus": "Breakaway Goals & Defensive Resilience (+12%)"
-    },
-    "Kick and Rush": {
-        "name": "Kick and Rush",
-        "description": "Direct long balls into the penalty box for powerful physical strikers.",
-        "best_formations": ["4-4-2 Flat", "5-4-1 Flat", "5-4-1 Defend"],
-        "emoji": "🚀",
-        "boost_focus": "Direct Long Balls & Box Power (+10%)"
     },
     "Park the Bus": {
         "name": "Park the Bus",
@@ -530,12 +530,40 @@ TACTICS = {
         "emoji": "🚌",
         "boost_focus": "Defensive Blocks & Clean Sheet Rate (+15%)"
     },
-    "Vertical Tiki-Taka": {
-        "name": "Vertical Tiki-Taka",
-        "description": "Quick vertical triangles slicing through central defensive channels.",
-        "best_formations": ["4-3-2-1", "4-1-2-1-2 Narrow"],
-        "emoji": "🔺",
-        "boost_focus": "Central Through Balls & xG Efficiency (+12%)"
+    "Kick and Rush": {
+        "name": "Kick and Rush",
+        "description": "Direct long balls into the penalty box for powerful physical strikers.",
+        "best_formations": ["4-4-2 Flat", "4-4-1-1 Flat", "4-4-1-1 Attack", "4-1-3-2", "3-1-4-2"],
+        "emoji": "🚀",
+        "boost_focus": "Direct Long Balls & Box Power (+10%)"
+    },
+    "Total Football": {
+        "name": "Total Football",
+        "description": "Fluid rotational football where every player seamlessly attacks and defends.",
+        "best_formations": ["3-4-3 Diamond", "4-3-3 False 9", "4-2-2-2", "3-5-2"],
+        "emoji": "🌀",
+        "boost_focus": "Fluid Movement, All-Round Team Synergy (+10%)"
+    },
+    "Catenaccio": {
+        "name": "Catenaccio",
+        "description": "Ultra-disciplined Italian tactical system with a sweeper and ruthless tackling.",
+        "best_formations": ["5-3-2", "5-4-1 Defend", "5-2-1-2", "3-5-2", "3-1-4-2"],
+        "emoji": "🔒",
+        "boost_focus": "Shutouts, Interceptions & Tackle Success (+14%)"
+    },
+    "Heavy Metal Football": {
+        "name": "Heavy Metal Football",
+        "description": "All-out blitzkrieg attack with relentless chaos and non-stop shooting.",
+        "best_formations": ["4-2-4", "4-2-2-2", "4-3-3 Attack", "4-1-3-2"],
+        "emoji": "🎸",
+        "boost_focus": "Fast Paced Shots & Overwhelming Firepower (+13%)"
+    },
+    "Direct Play": {
+        "name": "Direct Play",
+        "description": "Fast-paced direct distribution quickly bypassing the midfield transition.",
+        "best_formations": ["4-4-1-1 Attack", "4-4-1-1 Flat", "4-1-4-1", "5-2-2-1", "3-4-1-2"],
+        "emoji": "🎯",
+        "boost_focus": "Fast Transitions & Direct Finishing (+11%)"
     }
 }
 
