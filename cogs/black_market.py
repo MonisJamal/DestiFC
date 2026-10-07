@@ -141,22 +141,50 @@ class BlackMarketCog(commands.Cog):
             {"id": "v3", "title": "50x Mega Voucher Hoard", "vouchers": 50, "original_price": 1_000_000_000, "discount_price": 500_000_000, "discount_pct": 50},
         ]
 
-        # 2. Pick 5 random 120+ players with variable 30-45% discounts
-        cards_pool = await database.get_official_cards_by_rating(120, 125, 100)
-        random.shuffle(cards_pool)
+        # 2. Pick 5 random 120+ players with variable 30-45% discounts (guaranteeing at least 3 cards with OVR >= 122)
+        cards_122_plus = await database.get_official_cards_by_rating(122, 125, 100)
+        cards_120_plus = await database.get_official_cards_by_rating(120, 125, 100)
+        random.shuffle(cards_122_plus)
+        random.shuffle(cards_120_plus)
 
         player_deals = []
         seen = set()
-        for c in cards_pool:
+
+        # Step A: Pick at least 3 cards with rating >= 122
+        for c in cards_122_plus:
+            p_name = (c.get('cardName') or c.get('lastName') or '').strip()
+            if not p_name or p_name.lower() in seen:
+                continue
+            seen.add(p_name.lower())
+
+            ovr = int(c.get('rating', 122))
+            base_price = 4_000_000_000  # 122+ = 4.0B base
+            discount_pct = random.randint(30, 45)  # 30-45% variable discount
+            discount_price = int(base_price * (1.0 - (discount_pct / 100.0)))
+
+            deal_id = f"p_{len(player_deals)+1}_{ovr}"
+            player_deals.append({
+                "id": deal_id,
+                "name": p_name,
+                "ovr": ovr,
+                "original_price": base_price,
+                "discount_price": discount_price,
+                "discount_pct": discount_pct,
+                "player_data": c
+            })
+            if len(player_deals) >= 3:
+                break
+
+        # Step B: Pick remaining 2 cards from 120+ pool (deduplicated)
+        for c in cards_120_plus:
             p_name = (c.get('cardName') or c.get('lastName') or '').strip()
             if not p_name or p_name.lower() in seen:
                 continue
             seen.add(p_name.lower())
 
             ovr = int(c.get('rating', 120))
-            # Standard base valuation: 120 = 1.0B, 121 = 2.0B, 122+ = 4.0B
             base_price = 1_000_000_000 if ovr == 120 else (2_000_000_000 if ovr == 121 else 4_000_000_000)
-            discount_pct = random.randint(30, 45)  # 30%+ discount varying player by player
+            discount_pct = random.randint(30, 45)
             discount_price = int(base_price * (1.0 - (discount_pct / 100.0)))
 
             deal_id = f"p_{len(player_deals)+1}_{ovr}"

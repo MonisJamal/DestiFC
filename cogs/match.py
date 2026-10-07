@@ -449,27 +449,81 @@ class MatchCog(commands.Cog):
             saves_a = max(0, shots_on_target_b - goals_b)
             saves_b = max(0, shots_on_target_a - goals_a)
 
-            # Match intervals with dynamic live clock animation across 90 minutes
-            ticks = [12, 25, 38, 45, 58, 72, 84, 90]
+            # Match timeline: 90 real seconds (1 second = 1 match minute) + extra stoppage time
+            stoppage_ht = random.randint(1, 3)  # +1' to +3' first half stoppage
+            stoppage_ft = random.randint(2, 5)  # +2' to +5' second half stoppage
 
-            def render_clock_bar(min_val: int) -> str:
-                blocks = min(10, max(1, int((min_val / 90.0) * 10)))
+            # Distribute goals into match minutes (1 to 90 + stoppage)
+            # Re-adjust goal times if needed so they fall across 1-90 and stoppage
+            for i, g in enumerate(all_goals):
+                if late_drama and i == len(all_goals) - 1:
+                    # Score in 89-90 or extra time
+                    stoppage_goal_min = 90 + random.randint(1, stoppage_ft) if random.random() < 0.4 else random.randint(88, 90)
+                    all_goals[i] = (g[0], stoppage_goal_min, g[2], g[3], g[4])
+
+            def render_clock_bar(min_val: int, is_extra: bool = False, extra_min: int = 0) -> str:
+                progress_capped = min(90, min_val)
+                blocks = min(10, max(1, int((progress_capped / 90.0) * 10)))
                 bar = "▰" * blocks + "▱" * (10 - blocks)
-                if min_val == 45:
+                if min_val == 45 and is_extra:
+                    return f"`[{bar}]` ⏱️ **45+{extra_min}' ET**"
+                elif min_val == 45 and not is_extra:
                     return f"`[{bar}]` ⏱️ **45' HALF TIME ☕**"
+                elif min_val >= 90 and is_extra:
+                    return f"`[{bar}]` ⏱️ **90+{extra_min}' STOPPAGE TIME 🔥**"
                 elif min_val >= 90:
                     return f"`[{bar}]` ⏱️ **90' FULL TIME 🏁**"
                 else:
                     return f"`[{bar}]` ⏱️ **{min_val}' MIN**"
 
-            for idx, current_minute in enumerate(ticks):
-                prev_minute = ticks[idx - 1] if idx > 0 else 0
-                tick_events = []
+            async def safe_update_ui(content=None, embed=None, view=None):
+                try:
+                    await interaction.edit_original_response(content=content, embed=embed, view=view)
+                    return True
+                except Exception:
+                    if message:
+                        try:
+                            await message.edit(content=content, embed=embed, view=view)
+                            return True
+                        except Exception:
+                            pass
+                    return False
 
-                # Check if any goals were scored in this interval
-                interval_goals = [g for g in all_goals if prev_minute < g[1] <= current_minute]
-                for g in interval_goals:
-                    team_target, minute, scorer, pos, ptype = g[0], g[1], g[2], g[3], g[4]
+            stadium_display = s_a.get("stadium_name", "⚡ Neon Stadium")
+            latest_events_feed = []
+
+            # Timeline execution loop: 1 to 90 seconds (1 second = 1 match minute)
+            # Plus extra stoppage time
+            curr_sim_min = 1
+            last_edit_time = 0
+
+            # Construct full progression sequence of minutes:
+            # 1 to 45, 45+1..45+stoppage, HT pause, 46 to 90, 90+1..90+stoppage
+            minute_sequence = []
+            for m in range(1, 46):
+                minute_sequence.append((m, False, 0, "1st Half"))
+            for em in range(1, stoppage_ht + 1):
+                minute_sequence.append((45, True, em, "1st Half Extra Time"))
+            minute_sequence.append((45, False, 0, "Half Time Break"))
+            for m in range(46, 91):
+                minute_sequence.append((m, False, 0, "2nd Half"))
+            for em in range(1, stoppage_ft + 1):
+                minute_sequence.append((90, True, em, "2nd Half Extra Time"))
+
+            # Discord rate-limit safety: edit roughly every 2.5 - 3 seconds or immediately on goals / HT
+            for seq_idx, (m_val, is_et, et_val, phase_label) in enumerate(minute_sequence):
+                time_now = asyncio.get_event_loop().time()
+                time_label = f"45+{et_val}'" if (m_val == 45 and is_et) else (f"90+{et_val}'" if (m_val == 90 and is_et) else f"{m_val}'")
+
+                # Check if a goal happens at this exact minute
+                # For regular minutes match m_val. For stoppage time match 90+et_val or 45+et_val
+                effective_min = (90 + et_val) if (m_val == 90 and is_et) else ((45 + et_val) if (m_val == 45 and is_et) else m_val)
+                matched_goals = [g for g in all_goals if g[1] == effective_min]
+
+                goal_happened = False
+                for g in matched_goals:
+                    goal_happened = True
+                    team_target, min_scored, scorer, pos, ptype = g[0], g[1], g[2], g[3], g[4]
                     player_scores[scorer] = player_scores.get(scorer, 0) + 1
 
                     if team_target == player_a:
@@ -479,99 +533,101 @@ class MatchCog(commands.Cog):
                         current_score_b += 1
                         team_name = player_b.display_name
 
-                    is_stoppage = (minute >= 88)
-                    if is_stoppage:
-                        goal_commentary = f"🚨 **{minute}' GOAL! UNBELIEVABLE DRAMA!** Stoppage-time pandemonium as **{scorer}** (`{pos}`) nets a breathless stunner for **{team_name}**! ⚡🔥"
+                    is_stoppage_goal = (is_et or min_scored >= 88)
+                    if is_stoppage_goal:
+                        goal_commentary = f"🚨 **{time_label} GOAL! UNBELIEVABLE DRAMA!** Stoppage-time pandemonium as **{scorer}** (`{pos}`) nets a breathless stunner for **{team_name}**! ⚡🔥"
                     elif ptype == "def":
-                        goal_commentary = f"⚽ **{minute}' GOAL!** BULLET CORNER HEADER! Defender **{scorer}** (`{pos}`) rises above everyone and thumps it home for **{team_name}**! 📐🔥"
+                        goal_commentary = f"⚽ **{time_label} GOAL!** BULLET HEADER! Defender **{scorer}** (`{pos}`) rises highest from the corner and thumps it home for **{team_name}**! 📐🔥"
                     elif ptype == "mid":
-                        goal_commentary = f"⚽ **{minute}' GOAL!** 30-YARD SCREAMER! **{scorer}** (`{pos}`) unleashes an unstoppable rocket into the top corner for **{team_name}**! ☄️"
+                        goal_commentary = f"⚽ **{time_label} GOAL!** 30-YARD SCREAMER! **{scorer}** (`{pos}`) unleashes an unstoppable rocket into the top corner for **{team_name}**! ☄️"
                     else:
-                        goal_commentary = f"⚽ **{minute}' GOAL!** PURE CLASS! **{scorer}** (`{pos}`) cuts past the keeper with filthy footwork and finishes with ice in his veins for **{team_name}**! 🧊⚽"
+                        goal_commentary = f"⚽ **{time_label} GOAL!** PURE CLASS! **{scorer}** (`{pos}`) cuts past the keeper with silky footwork and finishes with ice in his veins for **{team_name}**! 🧊⚽"
 
-                    tick_events.append(goal_commentary)
-                    scoresheet_events.append(f"⚽ **{minute}'** - **{scorer}** ({team_name})")
+                    latest_events_feed.insert(0, goal_commentary)
+                    scoresheet_events.append(f"⚽ **{time_label}** - **{scorer}** ({team_name})")
 
-                # If no goals in this interval, generate contextual live play commentary
-                if not tick_events and current_minute < 90:
+                # Random key event commentary every ~10-15 minutes if no goal
+                if not matched_goals and (m_val % 8 == 0 or (is_et and et_val == 1)) and phase_label != "Half Time Break":
                     is_a_attack = random.random() < (possession_a / 100.0)
-                    if is_a_attack:
-                        att_team_name = player_a.display_name
-                        atk_pool, mid_pool, def_pool, gk_pool = atk_a, mid_a, def_b, gk_b
-                        opp_mid_pool = mid_b
-                    else:
-                        att_team_name = player_b.display_name
-                        atk_pool, mid_pool, def_pool, gk_pool = atk_b, mid_b, def_a, gk_a
-                        opp_mid_pool = mid_a
+                    att_team_name = player_a.display_name if is_a_attack else player_b.display_name
+                    atk_pool = atk_a if is_a_attack else atk_b
+                    mid_pool = mid_a if is_a_attack else mid_b
+                    def_pool = def_b if is_a_attack else def_a
+                    gk_pool = gk_b if is_a_attack else gk_a
+                    opp_mid_pool = mid_b if is_a_attack else mid_a
 
-                    a = random.choice(atk_pool)
-                    m = random.choice(mid_pool)
-                    d = random.choice(def_pool)
-                    g = random.choice(gk_pool)
-                    om = random.choice(opp_mid_pool)
+                    a_p = random.choice(atk_pool)
+                    m_p = random.choice(mid_pool)
+                    d_p = random.choice(def_pool)
+                    g_p = random.choice(gk_pool)
+                    om_p = random.choice(opp_mid_pool)
 
                     commentary_choices = [
-                        f"⚡ **ELECTRIC COUNTER-ATTACK!** **{m}** threads an audacious trivela through-ball, slicing {att_team_name}'s midfield wide open!",
-                        f"🧤 **FINGERTIP HEROICS!** **{g}** produces an acrobatic top-corner save to deny a blistering volley from **{a}**!",
-                        f"🚀 **CROSSBAR SHUDDER!** **{a}** connects sweetly on the half-volley from 25 yards... the woodwork is still vibrating!",
-                        f"🛡️ **DESPERATE GOAL-LINE CLEARANCE!** Defender **{d}** slides across the goal-line to hook **{a}**'s chipped effort to safety!",
-                        f"⚔️ **CRUNCHING TACKLE!** Anchor **{om}** flies in with an inch-perfect sliding challenge, stopping a certain 1-on-1 break!",
-                        f"🎯 **MAGIC FOOTWORK!** **{a}** leaves two defenders grasping for air with a silky roulette before firing just wide of the post!",
-                        f"📐 **WHIPPED INSWINGER!** **{m}** whips a treacherous curled set-piece towards the back stick, headed out for another corner!",
-                        f"🟨 **CYNICAL TACTICAL FOUL!** **{d}** drags down **{a}** on the breakaway — yellow card shown by the referee!"
+                        f"⚡ **{time_label}** **{m_p}** threads an audacious through-ball, slicing open {att_team_name}'s defense!",
+                        f"🧤 **{time_label}** FINGERTIP SAVE! **{g_p}** produces an acrobatic stop to deny a blistering volley from **{a_p}**!",
+                        f"🚀 **{time_label}** WOODWORK! **{a_p}** rattles the crossbar with a ferocious 25-yard strike!",
+                        f"🛡️ **{time_label}** GOAL-LINE CLEARANCE! **{d_p}** slides across the turf to hook **{a_p}**'s chip off the line!",
+                        f"⚔️ **{time_label}** CRUNCHING TACKLE! **{om_p}** stops a dangerous breakaway with an inch-perfect challenge!",
+                        f"🎯 **{time_label}** SILKY SKILLS! **{a_p}** beats two defenders with a roulette before curling just wide!",
+                        f"🟨 **{time_label}** YELLOW CARD! Tactical foul by **{d_p}** to break up a lightning counter!"
                     ]
                     chosen_comm = random.choice(commentary_choices)
-                    tick_events.append(f"🎙️ *{chosen_comm}*")
+                    latest_events_feed.insert(0, f"🎙️ *{chosen_comm}*")
+                    if "yellow card" in chosen_comm.lower():
+                        scoresheet_events.append(f"🟨 **{time_label}** - **{d_p}** (Yellow Card)")
+                    elif "fingertip save" in chosen_comm.lower():
+                        scoresheet_events.append(f"🧤 **{time_label}** - **{g_p}** (Great Save)")
 
-                    if "fingertip heroics" in chosen_comm.lower() or "save" in chosen_comm.lower():
-                        scoresheet_events.append(f"🧤 **{current_minute}'** - **{g}** (Heroic Save)")
-                    elif "yellow card" in chosen_comm.lower():
-                        scoresheet_events.append(f"🟨 **{current_minute}'** - **{d}** (Yellow Card)")
+                # Keep latest events compact (top 3)
+                events_display = "\n".join(latest_events_feed[:3]) if latest_events_feed else "🏁 *Intense battle for possession in midfield...*"
 
-                # Build live scoreboard message
-                scoreboard = f"**{player_a.display_name}** `[ {current_score_a} - {current_score_b} ]` **{player_b.display_name}**"
-                clock_str = render_clock_bar(current_minute)
+                # Determine if we should update Discord UI on this second
+                # Always update if goal happened, or at half-time, or if >= 3 seconds elapsed
+                time_since_edit = time_now - last_edit_time
+                is_ht_break = (phase_label == "Half Time Break")
+                is_last_step = (seq_idx == len(minute_sequence) - 1)
 
-                live_shots_a = max(current_score_a, int(shots_total_a * (current_minute / 90.0)))
-                live_shots_b = max(current_score_b, int(shots_total_b * (current_minute / 90.0)))
-                stats_mini = f"📊 Possession: `{possession_a}%` ⬝ `{possession_b}%` | Shots: `{live_shots_a}` ⬝ `{live_shots_b}`"
+                should_update_ui = goal_happened or is_ht_break or (time_since_edit >= 2.8) or is_last_step
 
-                events_display = "\n".join(tick_events) if tick_events else "🏁 *Action unfolding on the pitch...*"
+                if should_update_ui:
+                    scoreboard = f"**{player_a.display_name}** `[ {current_score_a} - {current_score_b} ]` **{player_b.display_name}**"
+                    clock_str = render_clock_bar(m_val, is_extra=is_et, extra_min=et_val)
 
-                recent_goals_str = ""
-                if scoresheet_events:
+                    live_shots_a = max(current_score_a, int(shots_total_a * (min(90, m_val) / 90.0)))
+                    live_shots_b = max(current_score_b, int(shots_total_b * (min(90, m_val) / 90.0)))
+                    stats_mini = f"📊 Possession: `{possession_a}%` ⬝ `{possession_b}%` | Shots: `{live_shots_a}` ⬝ `{live_shots_b}`"
+
+                    recent_goals_str = ""
                     goals_only = [e for e in scoresheet_events if "⚽" in e]
                     if goals_only:
                         recent_goals_str = "📋 **Goals:** " + " • ".join(goals_only[-3:]) + "\n\n"
 
-                stadium_display = s_a.get("stadium_name", "⚡ Neon Stadium")
-                status_footer = "🏁 *Final moments of the match...*" if current_minute >= 84 else ("☕ *Half time team talk underway...*" if current_minute == 45 else "⚡ *Ball in play...*")
+                    if is_ht_break:
+                        status_footer = f"☕ **HALF TIME BREAK** • 1st Half Stoppage was +{stoppage_ht}'"
+                    elif is_et:
+                        status_footer = f"🔥 **+{stoppage_ft if m_val == 90 else stoppage_ht} MIN EXTRA STOPPAGE TIME ADDED!**"
+                    elif m_val >= 85:
+                        status_footer = "⚡ *Final minutes of regulation time! Huge tension on the pitch...*"
+                    else:
+                        status_footer = "⚡ *Ball in play... Match in progress!*"
 
-                msg_content = (
-                    f"🏟️ **LIVE DIVISION RIVALS MATCH** • *{stadium_display}*\n\n"
-                    f"{scoreboard}\n"
-                    f"{clock_str}  •  {stats_mini}\n\n"
-                    f"{recent_goals_str}"
-                    f"{events_display}\n\n"
-                    f"*{status_footer}*"
-                )
+                    msg_content = (
+                        f"🏟️ **LIVE DIVISION RIVALS MATCH** • *{stadium_display}*\n\n"
+                        f"{scoreboard}\n"
+                        f"{clock_str}  •  {stats_mini}\n\n"
+                        f"{recent_goals_str}"
+                        f"{events_display}\n\n"
+                        f"*{status_footer}*"
+                    )
 
-                async def safe_update_ui(content=None, embed=None, view=None):
-                    try:
-                        await interaction.edit_original_response(content=content, embed=embed, view=view)
-                        return True
-                    except Exception as e_resp:
-                        if message:
-                            try:
-                                await message.edit(content=content, embed=embed, view=view)
-                                return True
-                            except Exception:
-                                pass
-                        return False
-
-                if current_minute < 90:
                     await safe_update_ui(content=msg_content, view=None)
-                    await asyncio.sleep(4.2)
+                    last_edit_time = asyncio.get_event_loop().time()
+
+                # Sleep 1 second per minute (with slightly longer pause for HT break: 2-3s)
+                if is_ht_break:
+                    await asyncio.sleep(2.5)
+                else:
+                    await asyncio.sleep(1.0)
 
             # Match winner resolution
             if current_score_a > current_score_b:
