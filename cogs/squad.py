@@ -551,12 +551,13 @@ class SquadCog(commands.Cog):
         main_p, alt_ps = get_player_official_positions(player_row)
         clean_target = ''.join([c for c in str(target_pos) if not c.isdigit()]).strip().upper()
         
-        pos_warning = ""
         if not is_eligible:
             alt_str = ", ".join(alt_ps) if alt_ps else "None"
-            pos_warning = (
-                f"\n⚠️ **Out of Position!** **{new_name}**'s main position is `{main_p}` "
-                f"(Alts: `{alt_str}`). They will suffer an OVR and stat penalty at `{clean_target}`."
+            return await interaction.followup.send(
+                f"❌ **Position Incompatible!** **{new_name}** cannot play as a **{clean_target}**.\n"
+                f"• Main Position: `{main_p}`\n"
+                f"• Eligible Positions: `{', '.join([main_p] + alt_ps)}`",
+                ephemeral=True
             )
 
         # If card was equipped in another slot, automatically unequip from that slot (move/swap)
@@ -578,7 +579,7 @@ class SquadCog(commands.Cog):
         
         alt_note = f" *(Official Alt Position: `{main_p}` ➔ `{clean_target}` • 100% OVR)*" if not is_primary and is_eligible else ""
         reposition_note = f" (Moved from **{repositioned_from}**)" if repositioned_from else ""
-        await interaction.followup.send(f"✅ Set **{new_name} ({new_ovr} OVR)** as your starting **{target_pos}**!{reposition_note}{alt_note}{pos_warning}")
+        await interaction.followup.send(f"✅ Set **{new_name} ({new_ovr} OVR)** as your starting **{target_pos}**!{reposition_note}{alt_note}")
 
     @squad_group.command(name="remove", description="Remove a player from a specific squad position")
     @app_commands.describe(position="Position slot to empty")

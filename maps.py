@@ -394,9 +394,9 @@ NATURAL_ALT_POSITIONS = {
     "CAM": ["CM", "CF", "LM", "RM"],
     "CM": ["CAM", "CDM"],
     "CDM": ["CM", "CB"],
-    "CB": ["CDM", "LB", "RB"],
-    "LB": ["LWB", "LM", "RB", "LW"],
-    "RB": ["RWB", "RM", "LB", "RW"],
+    "CB": ["CDM"],
+    "LB": ["LWB", "LM"],
+    "RB": ["RWB", "RM"],
     "LWB": ["LB", "LM"],
     "RWB": ["RB", "RM"],
     "GK": []

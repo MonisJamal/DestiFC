@@ -417,6 +417,11 @@ class MatchCog(commands.Cog):
                         goals_b += 1
 
             # Distribute goals across 90 minutes with positional roles (attackers, midfielders, defenders)
+            assists_pool_a = [p['name'] for p in starters_a if p['pos'] in ['CAM', 'CM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF']]
+            assists_pool_b = [p['name'] for p in starters_b if p['pos'] in ['CAM', 'CM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF']]
+            team_a_assists = {}
+            team_b_assists = {}
+
             all_goals = []
             for idx in range(goals_a):
                 r = random.random()
@@ -431,7 +436,16 @@ class MatchCog(commands.Cog):
                 scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
                 # If late drama, push the last goal to 88-90'
                 min_g = random.randint(87, 90) if (late_drama and idx == goals_a - 1) else random.randint(7, 86)
-                all_goals.append((player_a, min_g, scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype))
+                
+                # Assign assister (70% probability if candidates exist)
+                assister = None
+                if random.random() < 0.75:
+                    a_cands = [p for p in assists_pool_a if p != scorer_obj["name"]]
+                    if a_cands:
+                        assister = random.choice(a_cands)
+                        team_a_assists[assister] = team_a_assists.get(assister, 0) + 1
+
+                all_goals.append((player_a, min_g, scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype, assister))
 
             for idx in range(goals_b):
                 r = random.random()
@@ -445,7 +459,16 @@ class MatchCog(commands.Cog):
                     cands, ptype = starters_b, "atk"
                 scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
                 min_g = random.randint(87, 90) if (late_drama and idx == goals_b - 1) else random.randint(7, 86)
-                all_goals.append((player_b, min_g, scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype))
+                
+                # Assign assister (70% probability if candidates exist)
+                assister = None
+                if random.random() < 0.75:
+                    b_cands = [p for p in assists_pool_b if p != scorer_obj["name"]]
+                    if b_cands:
+                        assister = random.choice(b_cands)
+                        team_b_assists[assister] = team_b_assists.get(assister, 0) + 1
+
+                all_goals.append((player_b, min_g, scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype, assister))
 
             all_goals.sort(key=lambda x: x[1])
 
@@ -473,7 +496,7 @@ class MatchCog(commands.Cog):
                 if late_drama and i == len(all_goals) - 1:
                     # Score in 89-90 or extra time
                     stoppage_goal_min = 90 + random.randint(1, stoppage_ft) if random.random() < 0.4 else random.randint(88, 90)
-                    all_goals[i] = (g[0], stoppage_goal_min, g[2], g[3], g[4])
+                    all_goals[i] = (g[0], stoppage_goal_min, g[2], g[3], g[4], g[5] if len(g) > 5 else None)
 
             def render_clock_bar(min_val: int, is_extra: bool = False, extra_min: int = 0) -> str:
                 progress_capped = min(90, min_val)
@@ -538,6 +561,7 @@ class MatchCog(commands.Cog):
                 for g in matched_goals:
                     goal_happened = True
                     team_target, min_scored, scorer, pos, ptype = g[0], g[1], g[2], g[3], g[4]
+                    assister = g[5] if len(g) > 5 else None
                     player_scores[scorer] = player_scores.get(scorer, 0) + 1
 
                     if team_target == player_a:
@@ -547,18 +571,20 @@ class MatchCog(commands.Cog):
                         current_score_b += 1
                         team_name = player_b.display_name
 
+                    assist_comm = f" assisted by **{assister}**" if assister else ""
                     is_stoppage_goal = (is_et or min_scored >= 88)
                     if is_stoppage_goal:
-                        goal_commentary = f"🚨 **{time_label} GOAL! UNBELIEVABLE DRAMA!** Stoppage-time pandemonium as **{scorer}** (`{pos}`) nets a breathless stunner for **{team_name}**! ⚡🔥"
+                        goal_commentary = f"🚨 **{time_label} GOAL! UNBELIEVABLE DRAMA!** Stoppage-time pandemonium as **{scorer}** (`{pos}`){assist_comm} nets a breathless stunner for **{team_name}**! ⚡🔥"
                     elif ptype == "def":
-                        goal_commentary = f"⚽ **{time_label} GOAL!** BULLET HEADER! Defender **{scorer}** (`{pos}`) rises highest from the corner and thumps it home for **{team_name}**! 📐🔥"
+                        goal_commentary = f"⚽ **{time_label} GOAL!** BULLET HEADER! Defender **{scorer}** (`{pos}`){assist_comm} rises highest from the corner and thumps it home for **{team_name}**! 📐🔥"
                     elif ptype == "mid":
-                        goal_commentary = f"⚽ **{time_label} GOAL!** 30-YARD SCREAMER! **{scorer}** (`{pos}`) unleashes an unstoppable rocket into the top corner for **{team_name}**! ☄️"
+                        goal_commentary = f"⚽ **{time_label} GOAL!** 30-YARD SCREAMER! **{scorer}** (`{pos}`){assist_comm} unleashes an unstoppable rocket into the top corner for **{team_name}**! ☄️"
                     else:
-                        goal_commentary = f"⚽ **{time_label} GOAL!** PURE CLASS! **{scorer}** (`{pos}`) cuts past the keeper with silky footwork and finishes with ice in his veins for **{team_name}**! 🧊⚽"
+                        goal_commentary = f"⚽ **{time_label} GOAL!** PURE CLASS! **{scorer}** (`{pos}`){assist_comm} cuts past the keeper with silky footwork and finishes with ice in his veins for **{team_name}**! 🧊⚽"
 
                     latest_events_feed.insert(0, goal_commentary)
-                    scoresheet_events.append(f"⚽ **{time_label}** - **{scorer}** ({team_name})")
+                    assist_str = f" *(🅰️ {assister})*" if assister else ""
+                    scoresheet_events.append(f"⚽ **{time_label}** - **{scorer}**{assist_str} ({team_name})")
 
                 # Random key event commentary every ~10-15 minutes if no goal
                 if not matched_goals and (m_val % 8 == 0 or (is_et and et_val == 1)) and phase_label != "Half Time Break":
@@ -701,14 +727,14 @@ class MatchCog(commands.Cog):
             elif winner == player_a:
                 result_text = f"🏆 **{player_a.display_name} WINS!**\nFinal Score: `{current_score_a} - {current_score_b}`"
                 color = discord.Color.green()
-                fan_change_str = f"**{player_a.display_name}** gained **+10,000 Fans**\n**{player_b.display_name}** lost **-2,000 Fans**"
+                fan_change_str = f"**{player_a.display_name}** gained **+10,000 Fans**\n**{player_b.display_name}** lost **-8,000 Fans**"
                 coins_won_a = "💰 **+28,750,000 Coins** *(👑 +15% Stadium Bonus!)*" if s_a.get('theme') == 'gold' else "💰 **+25,000,000 Coins**"
                 bonus_a_str = f"{coins_won_a}\n🎫 **+1x Draft Voucher**"
                 bonus_b_str = ""
             else:
                 result_text = f"🏆 **{player_b.display_name} WINS!**\nFinal Score: `{current_score_a} - {current_score_b}`"
                 color = discord.Color.red()
-                fan_change_str = f"**{player_b.display_name}** gained **+10,000 Fans**\n**{player_a.display_name}** lost **-2,000 Fans**"
+                fan_change_str = f"**{player_b.display_name}** gained **+10,000 Fans**\n**{player_a.display_name}** lost **-8,000 Fans**"
                 coins_won_b = "💰 **+28,750,000 Coins** *(👑 +15% Stadium Bonus!)*" if s_b.get('theme') == 'gold' else "💰 **+25,000,000 Coins**"
                 bonus_a_str = ""
                 bonus_b_str = f"{coins_won_b}\n🎫 **+1x Draft Voucher**"
@@ -721,42 +747,49 @@ class MatchCog(commands.Cog):
                 sheet_text = sheet_text[:1020] + "..."
             embed.add_field(name="📋 Match Events", value=sheet_text, inline=False)
             
-            # 2. Detailed Real-Life Team Match Statistics
-            tactic_a_badge = f"{TACTICS.get(s_a['tactic'], {}).get('emoji', '🪄')} {s_a['tactic']}" + (" (🌟 Synergy)" if s_a['is_synergy'] else "")
-            tactic_b_badge = f"{TACTICS.get(s_b['tactic'], {}).get('emoji', '🪄')} {s_b['tactic']}" + (" (🌟 Synergy)" if s_b['is_synergy'] else "")
+            # 2. Detailed Real-Life Team Match Statistics (Mobile-friendly layout)
+            tactic_a_badge = f"{TACTICS.get(s_a['tactic'], {}).get('emoji', '🪄')} {s_a['tactic']}" + (" (🌟)" if s_a['is_synergy'] else "")
+            tactic_b_badge = f"{TACTICS.get(s_b['tactic'], {}).get('emoji', '🪄')} {s_b['tactic']}" + (" (🌟)" if s_b['is_synergy'] else "")
             
-            stats_table = (
-                f"```\n"
-                f"{player_a.display_name[:12]:<12}      STATISTIC      {player_b.display_name[:12]:>12}\n"
-                f"{str(possession_a) + '%':<12}     Possession     {str(possession_b) + '%':>12}\n"
-                f"{str(xg_a):<12}         xG          {str(xg_b):>12}\n"
-                f"{f'{shots_total_a} ({shots_on_target_a})':<12}   Shots (Target)   {f'{shots_total_b} ({shots_on_target_b})':>12}\n"
-                f"{str(saves_a):<12}       GK Saves       {str(saves_b):>12}\n"
-                f"{str(corners_a):<12}       Corners        {str(corners_b):>12}\n"
-                f"{f'{fouls_a} ({yellows_a}🟨)':<12}     Fouls (Cards)    {f'{fouls_b} ({yellows_b}🟨)':>12}\n"
-                f"{str(pass_acc_a) + '%':<12}    Pass Accuracy   {str(pass_acc_b) + '%':>12}\n"
-                f"```\n"
-                f"🧠 **Tactics:** {player_a.display_name}: `{tactic_a_badge}` ⬝ {player_b.display_name}: `{tactic_b_badge}`"
+            name_a_trunc = player_a.display_name[:14]
+            name_b_trunc = player_b.display_name[:14]
+            stats_content = (
+                f"**{name_a_trunc}** 🆚 **{name_b_trunc}**\n"
+                f"📊 **Possession:** `{possession_a}%` ⬝ `{possession_b}%`\n"
+                f"🎯 **xG:** `{xg_a}` ⬝ `{xg_b}`\n"
+                f"🥅 **Shots (Target):** `{shots_total_a} ({shots_on_target_a})` ⬝ `{shots_total_b} ({shots_on_target_b})`\n"
+                f"🧤 **GK Saves:** `{saves_a}` ⬝ `{saves_b}`\n"
+                f"📐 **Corners:** `{corners_a}` ⬝ `{corners_b}`\n"
+                f"🟨 **Fouls (Cards):** `{fouls_a} ({yellows_a}🟨)` ⬝ `{fouls_b} ({yellows_b}🟨)`\n"
+                f"🎯 **Pass Accuracy:** `{pass_acc_a}%` ⬝ `{pass_acc_b}%`\n"
+                f"🧠 **Tactics:** `{tactic_a_badge}` ⬝ `{tactic_b_badge}`"
             )
-            embed.add_field(name="📊 Match Statistics", value=stats_table, inline=False)
+            embed.add_field(name="📊 Match Statistics", value=stats_content, inline=False)
 
             # 3. Man of the Match
             embed.add_field(name="🎖️ Man of the Match", value=motm_str, inline=False)
 
-            # 4. Full Squad Player Ratings (All 11 Starters for both teams)
-            def format_full_ratings(r_list):
+            # 4. Full Squad Player Ratings (All 11 Starters for both teams with goals & assists)
+            def format_full_ratings(r_list, assists_dict):
                 lines = []
                 for r in r_list:
                     icon = "🧤" if r.get("pos") == "GK" else ("🛡️" if r.get("pos") in ['CB', 'LB', 'RB', 'LWB', 'RWB'] else ("⚡" if r.get("pos") in ['CAM', 'CM', 'CDM', 'LM', 'RM'] else "🔥"))
                     star = " ⭐" if r.get("name") == motm_entry.get("name") else ""
                     goals_cnt = r.get('goals', 0)
-                    goal_badge = f" {'⚽' * goals_cnt}" if goals_cnt > 0 else ""
-                    lines.append(f"{icon} `[{r.get('pos', 'SUB'):<3}]` **{r.get('name', 'Player')[:14]}** `{r.get('rating', 6.0)}`{star}{goal_badge}")
+                    assists_cnt = assists_dict.get(r.get('name', ''), 0)
+                    
+                    stats_badge = ""
+                    if goals_cnt > 0:
+                        stats_badge += f" {'⚽' * goals_cnt}"
+                    if assists_cnt > 0:
+                        stats_badge += f" {'🅰️' * assists_cnt}"
+                        
+                    lines.append(f"{icon} `[{r.get('pos', 'SUB'):<3}]` **{r.get('name', 'Player')[:13]}** `{r.get('rating', 6.0)}`{star}{stats_badge}")
                 txt = "\n".join(lines) if lines else "*No rating data*"
                 return txt[:1024]
 
-            embed.add_field(name=f"👥 {player_a.display_name} XI", value=format_full_ratings(ratings_a), inline=True)
-            embed.add_field(name=f"👥 {player_b.display_name} XI", value=format_full_ratings(ratings_b), inline=True)
+            embed.add_field(name=f"👥 {player_a.display_name} XI", value=format_full_ratings(ratings_a, team_a_assists), inline=True)
+            embed.add_field(name=f"👥 {player_b.display_name} XI", value=format_full_ratings(ratings_b, team_b_assists), inline=True)
 
             # 5. Fans & Rewards
             embed.add_field(
@@ -793,7 +826,7 @@ class MatchCog(commands.Cog):
                     loss_coins = int(gp_cfg.get('match_loss_coins', 5_000_000))
                     win_fans = int(gp_cfg.get('match_win_fans', 10_000))
                     draw_fans = int(gp_cfg.get('match_draw_fans', 2_000))
-                    loss_fans = int(gp_cfg.get('match_loss_fans', -2_000))
+                    loss_fans = int(gp_cfg.get('match_loss_fans', -8_000))
                     win_xp = int(gp_cfg.get('match_win_xp', 75))
 
                     win_coins_a = int(win_coins * 1.15) if s_a.get('theme') == 'gold' else win_coins
@@ -831,16 +864,7 @@ class MatchCog(commands.Cog):
                             await add_season_xp(player_b.id, win_xp)
                         except Exception: pass
 
-                    # Team A Assists & Stats
-                    assists_pool_a = [p['name'] for p in starters_a if p['pos'] in ['CAM', 'CM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF']]
-                    team_a_assists = {}
-                    for g in all_goals:
-                        if g[0] == player_a:
-                            candidates = [p for p in assists_pool_a if p != g[2]]
-                            if candidates:
-                                assister = random.choice(candidates)
-                                team_a_assists[assister] = team_a_assists.get(assister, 0) + 1
-
+                    # Team A Stats (using pre-computed team_a_assists)
                     stats_list_a = []
                     for r in ratings_a:
                         p_name = r['name']
@@ -862,16 +886,7 @@ class MatchCog(commands.Cog):
                         })
                     await database.record_player_match_stats(player_a.id, stats_list_a)
 
-                    # Team B Assists & Stats
-                    assists_pool_b = [p['name'] for p in starters_b if p['pos'] in ['CAM', 'CM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF']]
-                    team_b_assists = {}
-                    for g in all_goals:
-                        if g[0] == player_b:
-                            candidates = [p for p in assists_pool_b if p != g[2]]
-                            if candidates:
-                                assister = random.choice(candidates)
-                                team_b_assists[assister] = team_b_assists.get(assister, 0) + 1
-
+                    # Team B Stats (using pre-computed team_b_assists)
                     stats_list_b = []
                     for r in ratings_b:
                         p_name = r['name']
