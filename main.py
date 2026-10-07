@@ -217,9 +217,9 @@ class DestiFC(commands.Bot):
     async def before_heartbeat_loop(self):
         await self.wait_until_ready()
 
-    @tasks.loop(seconds=60)
+    @tasks.loop(seconds=5)
     async def remote_signal_listener_loop(self):
-        """Listens for remote process control commands (restart, reload cogs, shutdown) from Admin Panel."""
+        """Listens for remote process control commands (restart, reload cogs, shutdown, market triggers) from Admin Panel."""
         try:
             jobs = await database.fetch_all(
                 """
@@ -322,10 +322,18 @@ class DestiFC(commands.Bot):
                 elif job_type == 'open_special_market':
                     print("[Remote Control] Received open_special_market signal from Admin Panel! Triggering VIP market...")
                     try:
+                        import json
+                        p_data = {}
+                        if job.get('payload'):
+                            try:
+                                p_data = json.loads(job['payload']) if isinstance(job['payload'], str) else job['payload']
+                            except Exception:
+                                pass
+                        dur = p_data.get('duration_minutes')
                         bm_cog = self.get_cog('BlackMarketCog')
                         if bm_cog:
-                            await bm_cog.trigger_special_market_opening()
-                            print("[Remote Control] VIP Special Market successfully opened and announced via remote signal!")
+                            await bm_cog.trigger_special_market_opening(duration_minutes=dur)
+                            print(f"[Remote Control] VIP Special Market successfully opened (duration: {dur or 'default'}m) and announced via remote signal!")
                         else:
                             print("[Remote Control] BlackMarketCog not loaded!")
                     except Exception as bm_err:

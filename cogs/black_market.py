@@ -509,14 +509,24 @@ class BlackMarketCog(commands.Cog):
         channels = []
         raw_channels = cfg.get("channels") or []
         if isinstance(raw_channels, str):
-            raw_channels = [c.strip() for c in raw_channels.replace(',', ' ').split() if c.strip()]
+            try:
+                raw_channels = json.loads(raw_channels)
+            except Exception:
+                raw_channels = [c.strip() for c in raw_channels.replace(',', ' ').split() if c.strip()]
 
-        for raw_id in raw_channels:
+        for raw_id in (raw_channels if isinstance(raw_channels, list) else [raw_channels]):
             try:
                 cid = int(str(raw_id).strip())
-                ch = self.bot.get_channel(cid) or await self.bot.fetch_channel(cid)
-                if ch: channels.append(ch)
-            except Exception: pass
+                ch = self.bot.get_channel(cid)
+                if not ch:
+                    try:
+                        ch = await self.bot.fetch_channel(cid)
+                    except Exception as fe:
+                        print(f"[SpecialMarket] Could not fetch configured channel {cid}: {fe}")
+                if ch:
+                    channels.append(ch)
+            except Exception as ex_parse:
+                print(f"[SpecialMarket] Channel ID parse error ({raw_id}): {ex_parse}")
 
         if not channels:
             # Fallback to standard black market channels
@@ -524,9 +534,38 @@ class BlackMarketCog(commands.Cog):
             for raw_id in (bm_cfg.get("channels") or []):
                 try:
                     cid = int(str(raw_id).strip())
-                    ch = self.bot.get_channel(cid) or await self.bot.fetch_channel(cid)
+                    ch = self.bot.get_channel(cid)
+                    if not ch:
+                        try:
+                            ch = await self.bot.fetch_channel(cid)
+                        except Exception:
+                            pass
                     if ch: channels.append(ch)
                 except Exception: pass
+
+        if not channels:
+            # Fallback to system drops channel
+            drops_cfg = await database.get_db()
+            r = await drops_cfg.fetchrow("SELECT value FROM system_settings WHERE key = 'drops_config'")
+            ch_id = None
+            if r and r['value']:
+                try:
+                    dc = json.loads(r['value']) if isinstance(r['value'], str) else r['value']
+                    ch_id = dc.get("channel_id")
+                except Exception: pass
+            if ch_id:
+                try:
+                    fb = self.bot.get_channel(int(ch_id)) or await self.bot.fetch_channel(int(ch_id))
+                    if fb: channels.append(fb)
+                except Exception: pass
+
+        if not channels:
+            # Last resort fallback: first writable channel in connected guilds
+            for g in self.bot.guilds:
+                for c in g.text_channels:
+                    if c.permissions_for(g.me).send_messages:
+                        channels.append(c)
+                        break
 
         ping_type = str(cfg.get("ping_type") or "none").lower()
         role_id = str(cfg.get("role_id") or "").strip()
@@ -550,13 +589,20 @@ class BlackMarketCog(commands.Cog):
         else:
             dur_str = f"{mins} MINUTES"
 
+        # Build itemized deal preview in embed
+        deals_preview = []
+        for r in rewards:
+            cost = int(r.get("cost_coins", 0))
+            deals_preview.append(f"• **{r.get('title', 'VIP Deal')}**: `🪙 {cost:,} Coins`")
+
         embed = discord.Embed(
             title=f"👑 {title} HAS SURFACED! 👑",
             description=(
                 f"🚨 **EXCLUSIVE HIGH-ROLLER MARKET UNLOCKED!** 🚨\n\n"
-                f"An exclusive VIP bazaar curated by the Owner is open for **{dur_str}**!\n"
-                f"Featuring rare custom rewards, mega voucher packs, and hand-selected superstar cards.\n\n"
-                f"⏳ **CLOSES AT:** <t:{int(closes_at.timestamp())}:R> (<t:{int(closes_at.timestamp())}:t>)\n\n"
+                f"An exclusive VIP bazaar curated by the Owner is open for **{dur_str}**!\n\n"
+                f"🔥 **FEATURED VIP DEALS:**\n" +
+                ("\n".join(deals_preview) if deals_preview else "*Check `/specialmarket` for active deals!*") +
+                f"\n\n⏳ **CLOSES AT:** <t:{int(closes_at.timestamp())}:R> (<t:{int(closes_at.timestamp())}:t>)\n\n"
                 f"👉 Use `/specialmarket` or tap below to purchase your exclusive items!"
             ),
             color=discord.Color.from_rgb(255, 215, 0)
