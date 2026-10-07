@@ -859,7 +859,7 @@ async def get_formation_layouts() -> dict:
             except Exception:
                 pass
         _LAYOUTS_CACHE = layouts
-        _LAYOUTS_CACHE_EXP = now + 60.0  # 60s cache
+        _LAYOUTS_CACHE_EXP = now + 5.0  # 5s cache for near-instant panel sync
         return layouts
     except Exception:
         return {}

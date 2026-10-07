@@ -302,15 +302,17 @@ class SquadCog(commands.Cog):
         import hashlib
         
         try:
-            cache_key = hashlib.md5(f"{target.id}_{formation}_{json.dumps(players, sort_keys=True)}_{squad.get('theme', 'default')}".encode()).hexdigest()
+            if layouts:
+                set_cached_layouts(layouts)
+            
+            layout_repr = json.dumps(layouts.get(formation, {}), sort_keys=True) if layouts else ""
+            cache_key = hashlib.md5(f"{target.id}_{formation}_{json.dumps(players, sort_keys=True)}_{squad.get('theme', 'default')}_{layout_repr}".encode()).hexdigest()
             
             if not hasattr(self, '_render_cache'):
                 self._render_cache = {}
 
             png_bytes = self._render_cache.get(cache_key)
             if not png_bytes:
-                if layouts:
-                    set_cached_layouts(layouts)
                 
                 # Fetch all-time stats for the players to display on the 3D cards
                 p_stats_rows = await database.get_user_player_stats(target.id)
