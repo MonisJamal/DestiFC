@@ -14,23 +14,39 @@ W, H = 1600, 900
 _PITCH_CACHE = {}
 
 THEMES = {
-    "default":   "assets/pitch_bg.jpg",
-    "snow":      "assets/pitch_snow.jpg",
-    "lava":      "assets/pitch_lava.jpg",
-    "cyberpunk": "assets/pitch_cyber.jpg",
-    "galaxy":    "assets/pitch_galaxy.jpg",
-    "gold":      "assets/pitch_gold.jpg",
-    "desert":    "assets/pitch_desert.jpg",
+    "default":     "assets/pitch_bg.jpg",
+    "snow":        "assets/pitch_snow.jpg",
+    "lava":        "assets/pitch_lava.jpg",
+    "cyberpunk":   "assets/pitch_cyber.jpg",
+    "galaxy":      "assets/pitch_galaxy.jpg",
+    "gold":        "assets/pitch_gold.jpg",
+    "desert":      "assets/pitch_desert.jpg",
+    "bernabeu":    "assets/pitch_bernabeu.jpg",
+    "campnou":     "assets/pitch_campnou.jpg",
+    "oldtrafford": "assets/pitch_oldtrafford.jpg",
+    "anfield":     "assets/pitch_anfield.jpg",
+    "sansiro":     "assets/pitch_sansiro.jpg",
+    "allianz":     "assets/pitch_allianz.jpg",
+    "maracana":    "assets/pitch_maracana.jpg",
+    "wembley":     "assets/pitch_wembley.jpg",
 }
 
 THEME_GLOW = {
-    "default":   (0, 240, 255),    # Neon Cyan
-    "snow":      (160, 235, 255),  # Ice Cyan
-    "lava":      (255, 90, 10),    # Fiery Orange
-    "cyberpunk": (255, 0, 180),    # Neon Magenta
-    "galaxy":    (190, 100, 255),  # Cosmic Purple
-    "gold":      (255, 215, 0),    # Royal Gold
-    "desert":    (255, 175, 45),   # Golden Sand
+    "default":     (0, 240, 255),    # Neon Cyan
+    "snow":        (160, 235, 255),  # Ice Cyan
+    "lava":        (255, 90, 10),    # Fiery Orange
+    "cyberpunk":   (255, 0, 180),    # Neon Magenta
+    "galaxy":      (190, 100, 255),  # Cosmic Purple
+    "gold":        (255, 215, 0),    # Royal Gold
+    "desert":      (255, 175, 45),   # Golden Sand
+    "bernabeu":    (255, 255, 255),  # Pure Madrid White & Gold
+    "campnou":     (0, 77, 152),     # Deep Blaugrana Blue
+    "oldtrafford": (218, 41, 28),    # Red Devil Crimson
+    "anfield":     (200, 16, 46),    # Liverpool Red
+    "sansiro":     (255, 30, 30),    # Milan Rossoneri / Nerazzurri
+    "allianz":     (220, 5, 45),     # Glowing Bayern Red
+    "maracana":    (0, 156, 59),     # Verde e Amarela Emerald
+    "wembley":     (200, 225, 255),  # Wembley Arch Platinum
 }
 
 # Portal edits are intentionally read from the same SQLite database as the bot.

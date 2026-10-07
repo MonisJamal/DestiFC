@@ -318,6 +318,38 @@ class MatchCog(commands.Cog):
                     def_p += 3.0
                     gk_p += 3.0
                     stadium_name = "👑 Champions Royal Colosseum"
+                elif theme == "bernabeu":
+                    atk_p += 3.0
+                    mid_p += 2.0
+                    stadium_name = "⚪ Santiago Bernabéu"
+                elif theme == "campnou":
+                    mid_p += 3.5
+                    stadium_name = "🔵🔴 Spotify Camp Nou"
+                elif theme == "oldtrafford":
+                    atk_p += 3.0
+                    def_p += 1.5
+                    stadium_name = "🔴 Old Trafford"
+                elif theme == "anfield":
+                    atk_p += 3.0
+                    def_p += 2.5
+                    stadium_name = "🔥 Anfield"
+                elif theme == "sansiro":
+                    def_p += 3.5
+                    gk_p += 2.0
+                    stadium_name = "⚔️ San Siro"
+                elif theme == "allianz":
+                    atk_p += 3.0
+                    mid_p += 2.0
+                    stadium_name = "🔴 Allianz Arena"
+                elif theme == "maracana":
+                    atk_p += 3.5
+                    mid_p += 2.0
+                    stadium_name = "🇧🇷 Maracanã Stadium"
+                elif theme == "wembley":
+                    atk_p += 2.0
+                    mid_p += 2.0
+                    def_p += 2.0
+                    stadium_name = "🦁 Wembley Stadium"
 
                 return {
                     "atk": atk, "mid": mid, "defn": defn, "gk": gk, "starters": starters,

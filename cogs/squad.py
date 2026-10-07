@@ -740,7 +740,39 @@ class SquadCog(commands.Cog):
         await interaction.followup.send(embed=embed, view=view)
 
 
-    @squad_group.command(name="theme", description="Equip a pitch theme you have unlocked")
+    async def theme_autocomplete(self, interaction: discord.Interaction, current: str):
+        try:
+            squad = await database.get_squad(interaction.user.id)
+            unlocked = squad.get("unlocked_themes", ["default"])
+            THEME_NAMES = {
+                "default": "⚡ Neon Stadium (Default)",
+                "snow": "❄️ Frostbite Ice Arena",
+                "lava": "🌋 Volcanic Caldera",
+                "cyberpunk": "🤖 Neo-Tokyo Cyber City",
+                "desert": "🌙 Arabian Oasis Coliseum",
+                "galaxy": "🌌 Celestial Orbit Stadium",
+                "gold": "👑 Champions Royal Colosseum",
+                "bernabeu": "⚪ Santiago Bernabéu (Real Madrid)",
+                "campnou": "🔵🔴 Spotify Camp Nou (FC Barcelona)",
+                "oldtrafford": "🔴 Old Trafford (Man United)",
+                "anfield": "🔥 Anfield (Liverpool)",
+                "sansiro": "⚔️ San Siro (Milan / Inter)",
+                "allianz": "🔴 Allianz Arena (Bayern Munich)",
+                "maracana": "🇧🇷 Maracanã (Brazil)",
+                "wembley": "🦁 Wembley Stadium (England)",
+            }
+            choices = []
+            for t in unlocked:
+                label = THEME_NAMES.get(t, t.capitalize())
+                if current.lower() in label.lower() or current.lower() in t.lower():
+                    choices.append(app_commands.Choice(name=label, value=t))
+            return choices[:25]
+        except Exception:
+            return [app_commands.Choice(name="Default", value="default")]
+
+    @squad_group.command(name="theme", description="Equip a pitch theme or real-world stadium you have unlocked")
+    @app_commands.describe(theme_id="Select a stadium/theme to equip")
+    @app_commands.autocomplete(theme_id=theme_autocomplete)
     async def set_theme(self, interaction: discord.Interaction, theme_id: str):
         await interaction.response.defer()
         user_id = interaction.user.id
@@ -750,11 +782,11 @@ class SquadCog(commands.Cog):
         theme_id = theme_id.lower()
         
         if theme_id not in unlocked:
-            return await interaction.followup.send(f"❌ You haven't unlocked the `{theme_id}` theme yet! Buy it in `/store themes`.")
+            return await interaction.followup.send(f"❌ You haven't unlocked the `{theme_id}` stadium yet! Check available stadiums in `/store themes`.")
             
         squad["theme"] = theme_id
         await database.update_squad(user_id, squad)
-        await interaction.followup.send(f"✅ Successfully equipped the **{theme_id}** pitch theme! Check it out in `/squad view`.")
+        await interaction.followup.send(f"✅ Successfully equipped **{theme_id.upper()}** as your home stadium! Check it out in `/squad view`.")
 
 
     @squad_group.command(name="lock", description="Lock a player in your inventory (protects from exchange/SBC/quicksell)")
