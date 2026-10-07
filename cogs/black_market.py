@@ -705,11 +705,12 @@ class SpecialMarketView(discord.ui.View):
         self.rewards = rewards
 
         options = []
-        for r in rewards[:25]:
+        for idx, r in enumerate(rewards[:25]):
             cost = int(r.get("cost_coins", 0))
+            r_id = str(r.get('id') or idx)
             options.append(discord.SelectOption(
                 label=f"👑 {r.get('title', 'Deal')[:60]}",
-                value=f"vip_{r.get('id', '1')}",
+                value=f"deal_{idx}_{r_id}",
                 description=f"Cost: {cost:,} coins • {r.get('description', '')[:50]}"
             ))
 
@@ -741,14 +742,43 @@ class SpecialMarketView(discord.ui.View):
         if is_closed:
             return await interaction.followup.send("🔒 **THE VIP SPECIAL MARKET HAS CLOSED!** This deal is no longer active.", ephemeral=True)
 
-        deal_id = deal_key.replace("vip_", "")
+        # Parse deal identifier
+        # Try finding in live cfg first, fallback to self.rewards
+        live_rewards = cfg.get("custom_rewards") or self.rewards
+        
+        deal = None
+        deal_id = ""
+        # Check by structured format deal_{idx}_{r_id} or legacy vip_{r_id}
+        if deal_key.startswith("deal_"):
+            parts = deal_key.split("_", 2)
+            idx_str = parts[1] if len(parts) > 1 else "-1"
+            extracted_id = parts[2] if len(parts) > 2 else ""
+            try:
+                idx = int(idx_str)
+                if 0 <= idx < len(live_rewards):
+                    deal = live_rewards[idx]
+                    deal_id = str(deal.get('id', idx))
+            except Exception:
+                pass
+            if not deal:
+                deal = next((r for r in live_rewards if str(r.get('id')) == extracted_id or str(r.get('id')) == f"vip_{extracted_id}"), None)
+                if deal:
+                    deal_id = str(deal.get('id'))
+        else:
+            raw_target = deal_key.replace("vip_", "")
+            deal = next((r for r in live_rewards if str(r.get('id')) == raw_target or str(r.get('id')) == deal_key), None)
+            if not deal:
+                # Fallback to self.rewards
+                deal = next((r for r in self.rewards if str(r.get('id')) == raw_target or str(r.get('id')) == deal_key), None)
+            if deal:
+                deal_id = str(deal.get('id', raw_target))
+
+        if not deal:
+            return await interaction.followup.send("❌ Deal no longer available.", ephemeral=True)
+
         already_bought = await database.has_purchased_special_market_deal(user_id, self.session_id, deal_id)
         if already_bought:
             return await interaction.followup.send("❌ You already claimed this VIP deal during this session!", ephemeral=True)
-
-        deal = next((r for r in self.rewards if str(r.get('id')) == deal_id), None)
-        if not deal:
-            return await interaction.followup.send("❌ Deal no longer available.", ephemeral=True)
 
         cost = int(deal.get("cost_coins", 0))
         user = await database.get_user(user_id)
