@@ -207,6 +207,24 @@ class MatchCog(commands.Cog):
             for c in (inv_a + inv_b):
                 inv_map[str(c.get('id', ''))] = c
 
+            # Preload live custom cards catalog for real-time fallback and perk sync
+            catalog_map = {}
+            try:
+                catalog_rows = await database.fetch_all("SELECT card_name, ovr, player_data FROM custom_cards_catalog")
+                for cr in (catalog_rows or []):
+                    c_name = (cr.get('card_name') or '').strip().lower()
+                    if c_name:
+                        c_pdata = cr.get('player_data')
+                        if isinstance(c_pdata, str):
+                            try: c_pdata = json.loads(c_pdata)
+                            except Exception: c_pdata = {}
+                        catalog_map[c_name] = {
+                            "ovr": cr.get('ovr'),
+                            "player_data": c_pdata or {}
+                        }
+            except Exception as cat_err:
+                catalog_map = {}
+
             gp_cfg = await database.get_gameplay_config()
             default_custom_boost = float(gp_cfg.get('custom_card_match_boost', 1.15))
 
@@ -218,9 +236,6 @@ class MatchCog(commands.Cog):
                     name = p.get('name') or p.get('player_name', 'Player')
                     pos = ''.join([c for c in pos_raw if not c.isdigit()]).strip().upper()
                     name_lower = (name or '').lower()
-                    is_yashin = 'yashin' in name_lower
-                    is_lewa = 'lewandowski' in name_lower or 'lewa' in name_lower
-                    is_akari = 'akari' in name_lower or 'watanabe' in name_lower
                     
                     p_ovr = p.get('ovr', 100)
                     inv_id_str = str(p.get('inv_id', ''))
@@ -253,36 +268,46 @@ class MatchCog(commands.Cog):
                             pid_str.startswith('sig_') or pid_str.startswith('custom_') or
                             inv_id_str.startswith('custom_') or inv_id_str.startswith('sig_')
                         )
+
+                    # Real-time sync fallback to live custom catalog if not marked or if catalog has newer data
+                    cat_match = catalog_map.get(name_lower)
+                    if cat_match:
+                        is_custom = True
+                        cat_pd = cat_match.get('player_data', {})
+                        if cat_pd:
+                            # Inherit buffed_ovr and perks from live catalog if missing or updated
+                            if not pd.get('buffed_ovr') and cat_pd.get('buffed_ovr'):
+                                pd['buffed_ovr'] = cat_pd.get('buffed_ovr')
+                            if cat_pd.get('perks'):
+                                pd['perks'] = cat_pd.get('perks')
+
                     base_ovr = int(p.get('ovr', 100))
                     effective_ovr = base_ovr
 
-                    # Check for custom card / buffed parameters
+                    # Match performance OVR directly from panel (buffed_ovr / performance_ovr)
+                    card_perks = {}
                     if is_custom:
                         card_buffed_ovr = (
                             (pd.get('buffed_ovr') or pd.get('performance_ovr')) if isinstance(pd, dict) else None
-                        ) or full_p.get('buffed_ovr') if 'full_p' in locals() and isinstance(full_p, dict) else None
+                        ) or (full_p.get('buffed_ovr') if 'full_p' in locals() and isinstance(full_p, dict) else None)
+                        
                         if card_buffed_ovr:
                             try:
                                 effective_ovr = int(card_buffed_ovr)
                             except Exception:
                                 effective_ovr = base_ovr
                         else:
-                            if pos == 'GK' or is_yashin:
-                                effective_ovr = int(base_ovr * min(1.10, boost_val))
-                            else:
-                                effective_ovr = int(base_ovr * boost_val)
+                            effective_ovr = base_ovr
 
-                    # Exact custom specifications:
-                    # Lewa: like 135 OVR | Yashin: 130 OVR | Akari: 200 OVR
-                    if is_akari:
-                        is_custom = True
-                        effective_ovr = max(effective_ovr, 200)
-                    elif is_lewa:
-                        is_custom = True
-                        effective_ovr = max(effective_ovr, 135)
-                    elif is_yashin:
-                        is_custom = True
-                        effective_ovr = max(effective_ovr, 130)
+                        # Parse custom perks
+                        raw_perks = pd.get('perks') if isinstance(pd, dict) else (full_p.get('perks') if 'full_p' in locals() and isinstance(full_p, dict) else None)
+                        if isinstance(raw_perks, str):
+                            try:
+                                card_perks = json.loads(raw_perks)
+                            except Exception:
+                                card_perks = {}
+                        elif isinstance(raw_perks, dict):
+                            card_perks = raw_perks
 
                     # Store clean base_ovr for stats, records, and displays;
                     # use effective_ovr strictly for match engine physics calculations
@@ -293,7 +318,8 @@ class MatchCog(commands.Cog):
                         "ovr": base_ovr,
                         "effective_ovr": effective_ovr,
                         "is_custom": is_custom,
-                        "boost_val": boost_val
+                        "boost_val": boost_val,
+                        "perks": card_perks
                     }
                     starters.append(entry)
                     if pos in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF']:
@@ -312,15 +338,49 @@ class MatchCog(commands.Cog):
                 mid_p = sum(p.get('effective_ovr', p['ovr']) for p in mid) / len(mid) if mid else team_avg_ovr
                 def_p = sum(p.get('effective_ovr', p['ovr']) for p in defn) / len(defn) if defn else team_avg_ovr
                 
-                # Goalkeeper power directly from keeper (with Yashin at 130 OVR wall)
+                # Goalkeeper power directly from keeper
                 gk_p = gk[0].get('effective_ovr', gk[0]['ovr']) if gk else team_avg_ovr
 
-                # Elite Attacking Customs Buff: Lewa & Akari dominate their zones
-                if any('lewandowski' in p['name'].lower() for p in starters):
-                    atk_p += 8.0  # Polish Sniper Lethality Surge
-                if any('akari' in p['name'].lower() or 'watanabe' in p['name'].lower() for p in starters):
-                    mid_p += 7.0  # Akari Maestro Playmaker dominance
-                    atk_p += 4.0  # Akari Clinical Threat
+                # Dynamic Custom Perks applied in real time from panel configuration
+                for p_entry in starters:
+                    p_perks = p_entry.get('perks', {})
+                    if not p_perks or not p_perks.get('enabled'):
+                        continue
+
+                    p_pos = p_entry.get('pos', '')
+                    # 1. Custom Sector Surge (+1 to +10)
+                    surge = float(p_perks.get('sector_surge') or 0)
+                    if surge > 0:
+                        if p_pos in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF']:
+                            atk_p += surge
+                        elif p_pos in ['CAM', 'CM', 'CDM', 'LM', 'RM']:
+                            mid_p += surge
+                        elif p_pos in ['CB', 'LB', 'RB', 'LWB', 'RWB']:
+                            def_p += surge
+                        elif p_pos == 'GK':
+                            gk_p += surge
+
+                    # 2. Speed Demon (+3 Attack Power)
+                    if p_perks.get('speed_demon'):
+                        atk_p += 3.0
+
+                    # 3. Maestro Playmaker (+3 Midfield Power)
+                    if p_perks.get('playmaker'):
+                        mid_p += 3.0
+
+                    # 4. Iron Fortress (+3 Defense Power)
+                    if p_perks.get('iron_fortress'):
+                        def_p += 3.0
+
+                    # 5. The Wall (+5 Goalkeeping Power)
+                    if p_perks.get('the_wall') and p_pos == 'GK':
+                        gk_p += 5.0
+
+                    # 6. Aura Dominance (+2 to all sectors)
+                    if p_perks.get('aura_dominance'):
+                        atk_p += 2.0
+                        mid_p += 2.0
+                        def_p += 2.0
 
                 tactic = squad.get('tactic', 'Tiki-Taka')
                 formation = squad.get('formation', '4-3-3 Flat')
@@ -529,6 +589,15 @@ class MatchCog(commands.Cog):
             # Distribute goals across 90 minutes with positional roles (attackers, midfielders, defenders)
             assists_pool_a = [p['name'] for p in starters_a if p['pos'] in ['CAM', 'CM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF']]
             assists_pool_b = [p['name'] for p in starters_b if p['pos'] in ['CAM', 'CM', 'LM', 'RM', 'LW', 'RW', 'ST', 'CF']]
+            
+            # Boost playmakers in the assists pool
+            for p in starters_a:
+                if p.get('perks', {}).get('enabled') and p.get('perks', {}).get('playmaker'):
+                    assists_pool_a.extend([p['name'], p['name']])
+            for p in starters_b:
+                if p.get('perks', {}).get('enabled') and p.get('perks', {}).get('playmaker'):
+                    assists_pool_b.extend([p['name'], p['name']])
+
             team_a_assists = {}
             team_b_assists = {}
 
@@ -536,17 +605,24 @@ class MatchCog(commands.Cog):
             outfield_a = [p for p in starters_a if p.get('pos') != 'GK']
             outfield_b = [p for p in starters_b if p.get('pos') != 'GK']
 
-            # Prioritize Lewandowski and Akari Watanabe as lethal primary goalscorers (outfield only)
-            lewa_akari_a = [p for p in outfield_a if 'lewandowski' in p['name'].lower() or 'akari' in p['name'].lower() or 'watanabe' in p['name'].lower()]
-            custom_scorers_a = [p for p in outfield_a if p.get('is_custom')]
+            # Dynamic Custom Perks for goal conversion (only when perks are enabled on the card)
+            clinical_finishers_a = [
+                p for p in outfield_a 
+                if p.get('perks', {}).get('enabled') and p.get('perks', {}).get('clinical_finisher')
+            ]
+            clutch_players_a = [
+                p for p in outfield_a 
+                if p.get('perks', {}).get('enabled') and p.get('perks', {}).get('clutch_performer')
+            ]
 
             all_goals = []
             for idx in range(goals_a):
-                if lewa_akari_a and random.random() < 0.65:
-                    scorer_obj = random.choice(lewa_akari_a)
+                is_late = (late_drama and idx == goals_a - 1)
+                if is_late and clutch_players_a and random.random() < 0.50:
+                    scorer_obj = random.choice(clutch_players_a)
                     ptype = "atk" if scorer_obj.get("pos") in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF'] else "mid"
-                elif custom_scorers_a and random.random() < 0.50:
-                    scorer_obj = random.choice(custom_scorers_a)
+                elif clinical_finishers_a and random.random() < 0.35:
+                    scorer_obj = random.choice(clinical_finishers_a)
                     ptype = "atk" if scorer_obj.get("pos") in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF'] else "mid"
                 else:
                     r = random.random()
@@ -578,15 +654,22 @@ class MatchCog(commands.Cog):
 
                 all_goals.append((player_a, min_g, scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype, assister))
 
-            lewa_akari_b = [p for p in outfield_b if 'lewandowski' in p['name'].lower() or 'akari' in p['name'].lower() or 'watanabe' in p['name'].lower()]
-            custom_scorers_b = [p for p in outfield_b if p.get('is_custom')]
+            clinical_finishers_b = [
+                p for p in outfield_b 
+                if p.get('perks', {}).get('enabled') and p.get('perks', {}).get('clinical_finisher')
+            ]
+            clutch_players_b = [
+                p for p in outfield_b 
+                if p.get('perks', {}).get('enabled') and p.get('perks', {}).get('clutch_performer')
+            ]
 
             for idx in range(goals_b):
-                if lewa_akari_b and random.random() < 0.65:
-                    scorer_obj = random.choice(lewa_akari_b)
+                is_late = (late_drama and idx == goals_b - 1)
+                if is_late and clutch_players_b and random.random() < 0.50:
+                    scorer_obj = random.choice(clutch_players_b)
                     ptype = "atk" if scorer_obj.get("pos") in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF'] else "mid"
-                elif custom_scorers_b and random.random() < 0.50:
-                    scorer_obj = random.choice(custom_scorers_b)
+                elif clinical_finishers_b and random.random() < 0.35:
+                    scorer_obj = random.choice(clinical_finishers_b)
                     ptype = "atk" if scorer_obj.get("pos") in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF'] else "mid"
                 else:
                     r = random.random()
