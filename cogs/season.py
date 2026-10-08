@@ -6,33 +6,33 @@ import json
 import time
 import random
 
-# Season Pass Rewards (Expanded 25 Tiers)
+# Season Pass Rewards (Advanced Integration)
 SEASON_REWARDS = {
-    1:  {"coins": 12_000_000,  "vouchers": 0,  "desc": "🪙 12,000,000 Coins"},
-    2:  {"coins": 0,           "vouchers": 5,  "desc": "🎟️ 5 Draft Vouchers"},
-    3:  {"coins": 15_000_000,  "vouchers": 0,  "desc": "🪙 15,000,000 Coins"},
-    4:  {"coins": 0,           "vouchers": 8,  "desc": "🎟️ 8 Draft Vouchers"},
-    5:  {"coins": 20_000_000,  "vouchers": 0,  "desc": "🃏 Guaranteed 110+ Player + 🪙 20M Coins", "card_reward": 110},
-    6:  {"coins": 30_000_000,  "vouchers": 0,  "desc": "🪙 30,000,000 Coins"},
-    7:  {"coins": 0,           "vouchers": 10, "desc": "🎟️ 10 Draft Vouchers"},
-    8:  {"coins": 40_000_000,  "vouchers": 0,  "desc": "🪙 40,000,000 Coins"},
-    9:  {"coins": 0,           "vouchers": 12, "desc": "🎟️ 12 Draft Vouchers"},
-    10: {"coins": 50_000_000,  "vouchers": 0,  "desc": "🃏 Guaranteed 114+ Player + 🪙 50M Coins", "card_reward": 114},
-    11: {"coins": 60_000_000,  "vouchers": 0,  "desc": "🪙 60,000,000 Coins"},
-    12: {"coins": 0,           "vouchers": 15, "desc": "🎟️ 15 Draft Vouchers + Badge: ⭐ Season Grinder", "badge": "season_grinder"},
-    13: {"coins": 70_000_000,  "vouchers": 0,  "desc": "🪙 70,000,000 Coins"},
-    14: {"coins": 0,           "vouchers": 20, "desc": "🎟️ 20 Draft Vouchers"},
-    15: {"coins": 80_000_000,  "vouchers": 0,  "desc": "🃏 Guaranteed 116+ Player + 🪙 80M Coins", "card_reward": 116},
-    16: {"coins": 90_000_000,  "vouchers": 0,  "desc": "🪙 90,000,000 Coins"},
-    17: {"coins": 0,           "vouchers": 25, "desc": "🎟️ 25 Draft Vouchers"},
-    18: {"coins": 100_000_000, "vouchers": 0,  "desc": "🪙 100,000,000 Coins"},
-    19: {"coins": 0,           "vouchers": 30, "desc": "🎟️ 30 Draft Vouchers"},
-    20: {"coins": 120_000_000, "vouchers": 0,  "desc": "🃏 Guaranteed 118+ Player + 🪙 120M Coins + Badge: 🏅 Season Veteran", "badge": "season_veteran", "card_reward": 118},
-    21: {"coins": 150_000_000, "vouchers": 0,  "desc": "🪙 150,000,000 Coins"},
-    22: {"coins": 0,           "vouchers": 35, "desc": "🎟️ 35 Draft Vouchers"},
-    23: {"coins": 200_000_000, "vouchers": 0,  "desc": "🪙 200,000,000 Coins"},
-    24: {"coins": 0,           "vouchers": 50, "desc": "🎟️ 50 Draft Vouchers"},
-    25: {"coins": 250_000_000, "vouchers": 0,  "desc": "🃏 Guaranteed 120 Walkout + 🪙 250M Coins + Badge: 👑 Season Champion", "badge": "season_champion", "card_reward": 120},
+    1:  {"coins": 12_000_000,  "vouchers": 0,  "fans": 0,      "desc": "🪙 12,000,000 Coins"},
+    2:  {"coins": 0,           "vouchers": 5,  "fans": 5000,   "desc": "🎟️ 5 Draft Vouchers + 🏆 5,000 Fans (Rivals Points)"},
+    3:  {"coins": 15_000_000,  "vouchers": 0,  "fans": 0,      "desc": "🪙 15,000,000 Coins"},
+    4:  {"coins": 0,           "vouchers": 8,  "fans": 10000,  "desc": "🎟️ 8 Draft Vouchers + 🏆 10,000 Fans"},
+    5:  {"coins": 20_000_000,  "vouchers": 0,  "fans": 0,      "desc": "🃏 Guaranteed 110+ Player + 🪙 20M Coins", "card_reward": 110},
+    6:  {"coins": 30_000_000,  "vouchers": 0,  "fans": 0,      "desc": "🪙 30,000,000 Coins"},
+    7:  {"coins": 0,           "vouchers": 10, "fans": 15000,  "desc": "🎟️ 10 Draft Vouchers + 🏆 15,000 Fans"},
+    8:  {"coins": 40_000_000,  "vouchers": 0,  "fans": 0,      "desc": "🪙 40,000,000 Coins"},
+    9:  {"coins": 0,           "vouchers": 12, "fans": 20000,  "desc": "🎟️ 12 Draft Vouchers + 🏆 20,000 Fans"},
+    10: {"coins": 50_000_000,  "vouchers": 0,  "fans": 0,      "desc": "🃏 Guaranteed 114+ Player + 🪙 50M Coins", "card_reward": 114},
+    11: {"coins": 60_000_000,  "vouchers": 0,  "fans": 0,      "desc": "🪙 60,000,000 Coins"},
+    12: {"coins": 0,           "vouchers": 15, "fans": 30000,  "desc": "🎟️ 15 Draft Vouchers + 🏆 30,000 Fans + Badge: ⭐ Season Grinder", "badge": "season_grinder"},
+    13: {"coins": 70_000_000,  "vouchers": 0,  "fans": 0,      "desc": "🪙 70,000,000 Coins"},
+    14: {"coins": 0,           "vouchers": 20, "fans": 40000,  "desc": "🎟️ 20 Draft Vouchers + 🏆 40,000 Fans"},
+    15: {"coins": 80_000_000,  "vouchers": 0,  "fans": 0,      "desc": "✨ RARE CUSTOM DRAFT CARD + 🪙 80M Coins", "custom_card": True},
+    16: {"coins": 90_000_000,  "vouchers": 0,  "fans": 0,      "desc": "🪙 90,000,000 Coins"},
+    17: {"coins": 0,           "vouchers": 25, "fans": 50000,  "desc": "🎟️ 25 Draft Vouchers + 🏆 50,000 Fans"},
+    18: {"coins": 100_000_000, "vouchers": 0,  "fans": 0,      "desc": "🪙 100,000,000 Coins"},
+    19: {"coins": 0,           "vouchers": 30, "fans": 60000,  "desc": "🎟️ 30 Draft Vouchers + 🏆 60,000 Fans"},
+    20: {"coins": 120_000_000, "vouchers": 0,  "fans": 0,      "desc": "🃏 Guaranteed 118+ Player + 🪙 120M Coins + Badge: 🏅 Season Veteran", "badge": "season_veteran", "card_reward": 118},
+    21: {"coins": 150_000_000, "vouchers": 0,  "fans": 80000,  "desc": "🪙 150,000,000 Coins + 🏆 80,000 Fans"},
+    22: {"coins": 0,           "vouchers": 35, "fans": 100000, "desc": "🎟️ 35 Draft Vouchers + 🏆 100,000 Fans (Guaranteed Rank Up)"},
+    23: {"coins": 200_000_000, "vouchers": 0,  "fans": 0,      "desc": "🪙 200,000,000 Coins"},
+    24: {"coins": 0,           "vouchers": 50, "fans": 150000, "desc": "🎟️ 50 Draft Vouchers + 🏆 150,000 Fans"},
+    25: {"coins": 250_000_000, "vouchers": 0,  "fans": 200000, "desc": "✨ RARE CUSTOM DRAFT CARD + 🪙 250M Coins + 🏆 200K Fans + 👑 Season Champion", "badge": "season_champion", "custom_card": True},
 }
 
 async def fetch_season_config():
@@ -209,15 +209,34 @@ class SeasonCog(commands.Cog):
                 ACHIEVEMENTS[reward["badge"]] = season_badges.get(reward["badge"], {})
             await try_award(user_id, reward["badge"])
 
-        # Give specific player OVR for card rewards
-        if reward.get("card_reward"):
+        # Fans
+        if reward.get("fans", 0) > 0:
+            await database.add_fans(user_id, reward["fans"])
+
+        card_name = None
+        card_ovr = None
+        custom_flag = False
+
+        # Custom Card Reward
+        if reward.get("custom_card"):
+            custom_cards = await database.get_all_custom_draft_cards()
+            if custom_cards:
+                c_card = random.choice(custom_cards)
+                await database.add_player_to_inventory(user_id, c_card)
+                card_name = c_card.get('cardName') or c_card.get('player_name') or 'Unknown Custom Card'
+                card_ovr = c_card.get('rating') or c_card.get('ovr') or 120
+                custom_flag = True
+
+        # Give specific player OVR for card rewards (if not a custom card, or custom card fallback failed)
+        if reward.get("card_reward") or (reward.get("custom_card") and not custom_flag):
             from renderz_api import query_players_by_program
-            ovr_req = reward["card_reward"]
+            ovr_req = reward.get("card_reward", 120)
             players = query_players_by_program("", min_rating=ovr_req, max_rating=120, size=50)
             if players:
                 card = random.choice(players)
                 await database.add_player_to_inventory(user_id, card)
                 card_name = card.get('cardName', 'Unknown')
+                card_ovr = card.get('rating', ovr_req)
 
         # Mark claimed
         claimed.append(tier)
@@ -225,8 +244,11 @@ class SeasonCog(commands.Cog):
         await p.execute('UPDATE season_pass SET claimed_tiers = $1 WHERE user_id = $2', json.dumps(claimed), user_id)
 
         desc = f"**Tier {tier} Claimed!**\n{reward['desc']}"
-        if reward.get("card_reward") and players:
-            desc += f"\n\n🃏 You received **{card_name} ({card.get('rating', ovr_req)})**!"
+        if card_name:
+            if custom_flag:
+                desc += f"\n\n✨ You unlocked a rare **CUSTOM CARD**: **{card_name} ({card_ovr})**!"
+            else:
+                desc += f"\n\n🃏 You received **{card_name} ({card_ovr})**!"
 
         embed = discord.Embed(title="🎫 Season Reward Claimed!", description=desc, color=discord.Color.green())
         await interaction.followup.send(embed=embed)
