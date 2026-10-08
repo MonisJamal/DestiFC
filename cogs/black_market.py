@@ -67,9 +67,9 @@ class BlackMarketView(discord.ui.View):
                 ephemeral=True
             )
 
-        # Check if already purchased
-        already_bought = await database.has_purchased_black_market_deal(user_id, self.session_id, deal_key)
-        if already_bought:
+        # Atomically claim slot in database before charging or granting rewards
+        claimed = await database.claim_black_market_purchase(user_id, self.session_id, deal_key)
+        if not claimed:
             return await interaction.followup.send("❌ You have already claimed this limited Black Market deal during this session!", ephemeral=True)
 
         user = await database.get_user(user_id)
@@ -80,15 +80,16 @@ class BlackMarketView(discord.ui.View):
             deal_id = deal_key.replace("voucher_", "")
             deal = next((d for d in self.voucher_deals if str(d['id']) == deal_id), None)
             if not deal:
+                await database.cancel_black_market_purchase(user_id, self.session_id, deal_key)
                 return await interaction.followup.send("❌ Deal no longer available.", ephemeral=True)
 
             cost = int(deal['discount_price'])
             if balance < cost:
+                await database.cancel_black_market_purchase(user_id, self.session_id, deal_key)
                 return await interaction.followup.send(f"❌ Insufficient coins! You need **{cost:,} Coins**, but you only have **{balance:,}**.", ephemeral=True)
 
             await database.add_coins(user_id, -cost)
             await database.add_vouchers(user_id, int(deal['vouchers']))
-            await database.record_black_market_purchase(user_id, self.session_id, deal_key)
 
             return await interaction.followup.send(
                 f"🎉 **BLACK MARKET DEAL PURCHASED!**\n"
@@ -102,19 +103,21 @@ class BlackMarketView(discord.ui.View):
             deal_id = deal_key.replace("player_", "")
             deal = next((d for d in self.player_deals if str(d['id']) == deal_id), None)
             if not deal:
+                await database.cancel_black_market_purchase(user_id, self.session_id, deal_key)
                 return await interaction.followup.send("❌ Deal no longer available.", ephemeral=True)
 
             cost = int(deal['discount_price'])
             if balance < cost:
+                await database.cancel_black_market_purchase(user_id, self.session_id, deal_key)
                 return await interaction.followup.send(f"❌ Insufficient coins! You need **{cost:,} Coins**, but you only have **{balance:,}**.", ephemeral=True)
 
             player_data = deal.get("player_data")
             if not player_data:
+                await database.cancel_black_market_purchase(user_id, self.session_id, deal_key)
                 return await interaction.followup.send("❌ Card data unavailable.", ephemeral=True)
 
             await database.add_coins(user_id, -cost)
             await database.add_player_to_inventory(user_id, player_data)
-            await database.record_black_market_purchase(user_id, self.session_id, deal_key)
 
             pos = player_data.get('position', 'ST')
             return await interaction.followup.send(
@@ -726,14 +729,16 @@ class SpecialMarketView(discord.ui.View):
         if not deal:
             return await interaction.followup.send("❌ Deal no longer available.", ephemeral=True)
 
-        already_bought = await database.has_purchased_special_market_deal(user_id, self.session_id, deal_id)
-        if already_bought:
+        # Atomically claim VIP deal slot before charging or granting rewards
+        claimed = await database.claim_special_market_purchase(user_id, self.session_id, deal_id)
+        if not claimed:
             return await interaction.followup.send("❌ You already claimed this VIP deal during this session!", ephemeral=True)
 
         cost = int(deal.get("cost_coins", 0))
         user = await database.get_user(user_id)
         balance = user.get("coins", 0)
         if balance < cost:
+            await database.cancel_special_market_purchase(user_id, self.session_id, deal_id)
             return await interaction.followup.send(f"❌ Insufficient coins! You need **{cost:,} Coins**, but have **{balance:,}**.", ephemeral=True)
 
         # Process payment
@@ -752,8 +757,6 @@ class SpecialMarketView(discord.ui.View):
             pname = player_data.get('cardName') or player_data.get('lastName', 'Card')
             povr = player_data.get('rating', 0)
             granted_msgs.append(f"⚽ **{povr} OVR {pname}**")
-
-        await database.record_special_market_purchase(user_id, self.session_id, deal_id)
         
         details = " & ".join(granted_msgs) if granted_msgs else "VIP rewards"
         await interaction.followup.send(

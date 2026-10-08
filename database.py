@@ -1870,6 +1870,28 @@ async def has_purchased_black_market_deal(user_id: int, market_session_id: str, 
     )
     return bool(row)
 
+async def claim_black_market_purchase(user_id: int, market_session_id: str, deal_id: str) -> bool:
+    """Atomically reserves a purchase slot using Postgres UNIQUE constraint. Returns True if claimed, False if already bought."""
+    p = await get_db()
+    res = await p.fetchrow(
+        """
+        INSERT INTO user_black_market_purchases (user_id, market_session_id, deal_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, market_session_id, deal_id) DO NOTHING
+        RETURNING id
+        """,
+        user_id, market_session_id, deal_id
+    )
+    return bool(res)
+
+async def cancel_black_market_purchase(user_id: int, market_session_id: str, deal_id: str):
+    """Releases claimed slot if purchase failed (e.g. insufficient funds)."""
+    p = await get_db()
+    await p.execute(
+        "DELETE FROM user_black_market_purchases WHERE user_id = $1 AND market_session_id = $2 AND deal_id = $3",
+        user_id, market_session_id, deal_id
+    )
+
 async def record_black_market_purchase(user_id: int, market_session_id: str, deal_id: str):
     p = await get_db()
     await p.execute(
@@ -1959,6 +1981,28 @@ async def has_purchased_special_market_deal(user_id: int, market_session_id: str
         user_id, f"special_{market_session_id}", deal_id
     )
     return bool(row)
+
+async def claim_special_market_purchase(user_id: int, market_session_id: str, deal_id: str) -> bool:
+    """Atomically reserves a VIP deal slot using Postgres UNIQUE constraint. Returns True if claimed, False if already bought."""
+    p = await get_db()
+    res = await p.fetchrow(
+        """
+        INSERT INTO user_black_market_purchases (user_id, market_session_id, deal_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, market_session_id, deal_id) DO NOTHING
+        RETURNING id
+        """,
+        user_id, f"special_{market_session_id}", deal_id
+    )
+    return bool(res)
+
+async def cancel_special_market_purchase(user_id: int, market_session_id: str, deal_id: str):
+    """Releases claimed VIP slot if purchase failed (e.g. insufficient funds)."""
+    p = await get_db()
+    await p.execute(
+        "DELETE FROM user_black_market_purchases WHERE user_id = $1 AND market_session_id = $2 AND deal_id = $3",
+        user_id, f"special_{market_session_id}", deal_id
+    )
 
 async def record_special_market_purchase(user_id: int, market_session_id: str, deal_id: str):
     p = await get_db()
