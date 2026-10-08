@@ -304,9 +304,7 @@ class MatchCog(commands.Cog):
 
 
     async def run_series(self, interaction, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b, message, lobby):
-        # Prevent another series from starting
-        ACTIVE_LOBBIES.pop(player_a.id, None)
-        ACTIVE_LOBBIES.pop(player_b.id, None)
+
         
         format_num = lobby.format
         target_wins = (format_num // 2) + 1
@@ -328,20 +326,26 @@ class MatchCog(commands.Cog):
             
             
             class DummyInteraction:
-                def __init__(self, channel, user):
+                def __init__(self, channel, user, msg):
                     self.channel = channel
                     self.user = user
                     self.response = None
+                    self.msg = msg
                 async def edit_original_response(self, *args, **kwargs):
+                    if self.msg:
+                        # Convert edit_original_response kwargs to msg.edit kwargs
+                        return await self.msg.edit(**kwargs)
                     raise Exception("Dummy interaction")
                 @property
                 def followup(self):
                     class Followup:
+                        def __init__(self, msg):
+                            self.msg = msg
                         async def send(self, *args, **kwargs):
                             pass
-                    return Followup()
+                    return Followup(self.msg)
             
-            dummy_interaction = DummyInteraction(interaction.channel, player_a)
+            dummy_interaction = DummyInteraction(interaction.channel, player_a, msg)
             score_a, score_b = await self.simulate_live_match(
                 dummy_interaction, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b, message=msg
             )
