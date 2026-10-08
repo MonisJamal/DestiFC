@@ -183,6 +183,24 @@ class DestiFC(commands.Bot):
         self.sync_presence_loop.start()
         self.bot_heartbeat_loop.start()
         self.remote_signal_listener_loop.start()
+        self.memory_hygiene_loop.start()
+
+    @tasks.loop(minutes=5)
+    async def memory_hygiene_loop(self):
+        """Periodically cleans up memory caches and triggers garbage collection to keep container RAM minimal."""
+        try:
+            import gc, card_generator
+            card_generator._MEMORY_IMAGE_CACHE.clear()
+            card_generator._MEMORY_CARD_CACHE.clear()
+            card_generator._MEMORY_CARD_BYTES_CACHE.clear()
+            database.flush_all_caches()
+            gc.collect()
+        except Exception as e:
+            print(f"[Memory Hygiene Error] {e}")
+
+    @memory_hygiene_loop.before_loop
+    async def before_memory_hygiene_loop(self):
+        await self.wait_until_ready()
 
     @tasks.loop(seconds=10)
     async def bot_heartbeat_loop(self):
@@ -191,6 +209,15 @@ class DestiFC(commands.Bot):
             import datetime
             import json
             import os
+            import sys
+            import resource
+
+            # Calculate process RSS memory in MB
+            try:
+                raw_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                rss_mb = round(raw_rss / (1024 * 1024 if sys.platform == 'darwin' else 1024), 1)
+            except Exception:
+                rss_mb = 0
 
             heartbeat_data = {
                 "last_ping": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -199,6 +226,7 @@ class DestiFC(commands.Bot):
                 "guilds_count": len(self.guilds),
                 "users_count": len(self.users),
                 "pid": os.getpid(),
+                "ram_mb": rss_mb,
                 "bot_user": str(self.user) if self.user else "DestiFC",
                 "is_ready": self.is_ready()
             }
@@ -292,8 +320,17 @@ class DestiFC(commands.Bot):
                                 await self.reload_extension(f'cogs.{filename[:-3]}')
                             except Exception as re_err:
                                 await self.load_extension(f'cogs.{filename[:-3]}')
-                    await self.tree.sync()
-                    print("[Remote Control] All caches flushed, cogs reloaded, and slash commands synced!")
+                    sync_needed = False
+                    if job.get('payload'):
+                        try:
+                            p_data = json.loads(job['payload']) if isinstance(job['payload'], str) else job['payload']
+                            sync_needed = bool(p_data.get('sync_tree'))
+                        except Exception:
+                            pass
+                    if sync_needed:
+                        await self.tree.sync()
+                        print("[Remote Control] Slash command tree synced!")
+                    print("[Remote Control] All caches flushed and cogs reloaded successfully!")
 
                 elif job_type == 'SIGNAL_RESTART':
                     print("[Remote Control] Received restart signal from Admin Panel. Gracefully rebooting...")

@@ -20,10 +20,18 @@ os.makedirs(CARD_CACHE_DIR, exist_ok=True)
 
 # High-performance persistent HTTP session with connection pooling
 
-# In-memory fast image cache
+# In-memory fast image cache (bounded to prevent container OOM)
 _MEMORY_IMAGE_CACHE = {}
 _MEMORY_CARD_CACHE = {}
 _MEMORY_CARD_BYTES_CACHE = {}
+
+def _put_memory_cache(cache_dict, key, val, max_items=25):
+    if len(cache_dict) >= max_items:
+        try:
+            cache_dict.pop(next(iter(cache_dict)), None)
+        except Exception:
+            pass
+    cache_dict[key] = val
 
 @lru_cache(maxsize=64)
 def get_font(name: str, size: int):
@@ -105,8 +113,7 @@ def get_image_from_url(url: str, size=None) -> Image.Image:
     if size and img.size != size:
         img = img.resize(size, Image.Resampling.LANCZOS)
 
-    if len(_MEMORY_IMAGE_CACHE) < 500:
-        _MEMORY_IMAGE_CACHE[cache_key] = img.copy()
+    _put_memory_cache(_MEMORY_IMAGE_CACHE, cache_key, img.copy(), max_items=25)
         
     return img
 
@@ -131,8 +138,7 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
     if not animated and os.path.exists(disk_card_file):
         try:
             img = Image.open(disk_card_file).convert("RGBA")
-            if len(_MEMORY_CARD_CACHE) < 500:
-                _MEMORY_CARD_CACHE[card_cache_key] = img.copy()
+            _put_memory_cache(_MEMORY_CARD_CACHE, card_cache_key, img.copy(), max_items=25)
             return img
         except Exception:
             pass
@@ -319,8 +325,7 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                     frames.append(final_frame.convert("RGB"))
                     
                 if frames:
-                    if len(_MEMORY_CARD_CACHE) < 500:
-                        _MEMORY_CARD_CACHE[card_cache_key] = frames
+                    _put_memory_cache(_MEMORY_CARD_CACHE, card_cache_key, frames, max_items=5)
                     return frames
         except Exception as e:
             print(f"Error generating animated frames: {e}")
@@ -334,8 +339,7 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
             card.save(disk_card_file, "PNG")
         except Exception:
             pass
-    if len(_MEMORY_CARD_CACHE) < 500:
-        _MEMORY_CARD_CACHE[card_cache_key] = card.copy()
+    _put_memory_cache(_MEMORY_CARD_CACHE, card_cache_key, card.copy(), max_items=25)
     return card
 
 def save_card_to_bytes(card_result):

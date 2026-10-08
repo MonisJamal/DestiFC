@@ -289,6 +289,14 @@ async def add_players_to_inventory_batch(user_id: int, player_list: list):
         print(f"[Inventory] Error enforcing limit for {user_id}: {e}")
 
 
+def _cache_inventory(user_id: int, inv: list, now: float):
+    if len(_USER_INVENTORY_CACHE) >= 50:
+        try:
+            _USER_INVENTORY_CACHE.pop(next(iter(_USER_INVENTORY_CACHE)), None)
+        except Exception:
+            pass
+    _USER_INVENTORY_CACHE[user_id] = {"data": inv, "exp": now}
+
 async def get_inventory_light(user_id: int) -> list:
     """Ultra fast inventory query without transferring heavy player_data JSON."""
     now = time.time()
@@ -302,7 +310,7 @@ async def get_inventory_light(user_id: int) -> list:
         user_id
     )
     inv = [dict(r) for r in rows]
-    _USER_INVENTORY_CACHE[user_id] = {"data": inv, "exp": now}
+    _cache_inventory(user_id, inv, now)
     return inv
 
 async def get_inventory(user_id: int, full: bool = True) -> list:
@@ -317,7 +325,7 @@ async def get_inventory(user_id: int, full: bool = True) -> list:
         user_id
     )
     inv = [dict(r) for r in rows]
-    _USER_INVENTORY_CACHE[user_id] = {"data": inv, "exp": now}
+    _cache_inventory(user_id, inv, now)
     return inv
 
 async def get_inventory_autocomplete(user_id: int, search: str = "") -> list:
@@ -989,7 +997,7 @@ async def record_player_match_stats(user_id: int, stats_list: list[dict]):
             ON CONFLICT (user_id, player_name) DO UPDATE SET
                 player_id = COALESCE(NULLIF(EXCLUDED.player_id, ''), player_stats.player_id),
                 position = COALESCE(EXCLUDED.position, player_stats.position),
-                ovr = GREATEST(COALESCE(player_stats.ovr, 0), EXCLUDED.ovr),
+                ovr = CASE WHEN EXCLUDED.ovr > 0 THEN EXCLUDED.ovr ELSE player_stats.ovr END,
                 matches_played = player_stats.matches_played + 1,
                 goals = player_stats.goals + EXCLUDED.goals,
                 assists = player_stats.assists + EXCLUDED.assists,

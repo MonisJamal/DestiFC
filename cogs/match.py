@@ -246,36 +246,46 @@ class MatchCog(commands.Cog):
                             pid_str.startswith('sig_') or pid_str.startswith('custom_') or
                             inv_id_str.startswith('custom_') or inv_id_str.startswith('sig_')
                         )
-                        boost_val = float(pd.get('performance_boost') or full_p.get('performance_boost') or default_custom_boost)
-                    elif inv_id_str.startswith('custom_') or inv_id_str.startswith('sig_'):
-                        is_custom = True
-                        boost_val = default_custom_boost
-                        
-                    name_lower = name.lower()
-                    is_lewa = 'lewandowski' in name_lower
-                    is_akari = 'akari' in name_lower or 'watanabe' in name_lower
-                    is_yashin = 'yashin' in name_lower
+                    base_ovr = int(p.get('ovr', 100))
+                    effective_ovr = base_ovr
 
-                    # Exact custom multiplier specifications:
-                    # Akari: 1.5x | Lewa: 1.25x | Yashin: 1.1x
+                    # Check for custom card / buffed parameters
+                    if is_custom:
+                        card_buffed_ovr = pd.get('buffed_ovr') if isinstance(pd, dict) else None
+                        if card_buffed_ovr:
+                            try:
+                                effective_ovr = int(card_buffed_ovr)
+                            except Exception:
+                                effective_ovr = int(base_ovr * boost_val)
+                        else:
+                            if pos == 'GK' or is_yashin:
+                                effective_ovr = int(base_ovr * min(1.10, boost_val))
+                            else:
+                                effective_ovr = int(base_ovr * boost_val)
+
+                    # Exact custom specifications:
+                    # Lewa: like 135 OVR | Yashin: 130 OVR | Akari: 200 OVR
                     if is_akari:
                         is_custom = True
-                        boost_val = 1.50
+                        effective_ovr = max(effective_ovr, 200)
                     elif is_lewa:
                         is_custom = True
-                        boost_val = 1.25
+                        effective_ovr = max(effective_ovr, 135)
                     elif is_yashin:
                         is_custom = True
-                        boost_val = 1.10
+                        effective_ovr = max(effective_ovr, 130)
 
-                    if is_custom:
-                        if pos == 'GK' or is_yashin:
-                            # Yashin / Goalkeeper multiplier: 1.1x
-                            p_ovr = int(p_ovr * min(1.10, boost_val))
-                        else:
-                            p_ovr = int(p_ovr * boost_val)
-                    
-                    entry = {"name": name, "pos": pos, "raw_pos": pos_raw, "ovr": p_ovr, "is_custom": is_custom, "boost_val": boost_val}
+                    # Store clean base_ovr for stats, records, and displays;
+                    # use effective_ovr strictly for match engine physics calculations
+                    entry = {
+                        "name": name,
+                        "pos": pos,
+                        "raw_pos": pos_raw,
+                        "ovr": base_ovr,
+                        "effective_ovr": effective_ovr,
+                        "is_custom": is_custom,
+                        "boost_val": boost_val
+                    }
                     starters.append(entry)
                     if pos in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF']:
                         atk.append(entry)
@@ -288,13 +298,13 @@ class MatchCog(commands.Cog):
                     else:
                         mid.append(entry)
                 
-                # Sector powers calculated directly from individual players
-                atk_p = sum(p['ovr'] for p in atk) / len(atk) if atk else team_avg_ovr
-                mid_p = sum(p['ovr'] for p in mid) / len(mid) if mid else team_avg_ovr
-                def_p = sum(p['ovr'] for p in defn) / len(defn) if defn else team_avg_ovr
+                # Sector powers calculated directly from individual players using effective_ovr
+                atk_p = sum(p.get('effective_ovr', p['ovr']) for p in atk) / len(atk) if atk else team_avg_ovr
+                mid_p = sum(p.get('effective_ovr', p['ovr']) for p in mid) / len(mid) if mid else team_avg_ovr
+                def_p = sum(p.get('effective_ovr', p['ovr']) for p in defn) / len(defn) if defn else team_avg_ovr
                 
-                # Goalkeeper power directly from keeper (with Yashin capped at 1.1x boost)
-                gk_p = gk[0]['ovr'] if gk else team_avg_ovr
+                # Goalkeeper power directly from keeper (with Yashin at 130 OVR wall)
+                gk_p = gk[0].get('effective_ovr', gk[0]['ovr']) if gk else team_avg_ovr
 
                 # Elite Attacking Customs Buff: Lewa & Akari dominate their zones
                 if any('lewandowski' in p['name'].lower() for p in starters):
