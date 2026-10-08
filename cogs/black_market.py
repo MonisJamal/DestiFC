@@ -55,6 +55,8 @@ class BlackMarketView(discord.ui.View):
         if closes_at_str:
             try:
                 closes_dt = datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00"))
+                if closes_dt.tzinfo is None:
+                    closes_dt = closes_dt.replace(tzinfo=datetime.timezone.utc)
                 if now >= closes_dt:
                     is_closed = True
             except Exception:
@@ -350,6 +352,8 @@ class BlackMarketCog(commands.Cog):
                 if closes_at_str:
                     try:
                         closes_dt = datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00"))
+                        if closes_dt.tzinfo is None:
+                            closes_dt = closes_dt.replace(tzinfo=datetime.timezone.utc)
                         if now >= closes_dt:
                             # Close the market
                             await database.update_black_market_config(
@@ -689,6 +693,8 @@ class SpecialMarketView(discord.ui.View):
         if closes_at_str:
             try:
                 closes_dt = datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00"))
+                if closes_dt.tzinfo is None:
+                    closes_dt = closes_dt.replace(tzinfo=datetime.timezone.utc)
                 if now >= closes_dt: is_closed = True
             except Exception: pass
 
