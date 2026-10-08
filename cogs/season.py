@@ -6,33 +6,33 @@ import json
 import time
 import random
 
-# Season Pass Rewards (Massive Inflation Scale based on Player Wealth)
+# Season Pass Rewards (Balanced Inflation Scale)
 SEASON_REWARDS = {
-    1:  {"coins": 1_000_000_000,  "vouchers": 0,  "fans": 0, "desc": "🪙 1 Billion Coins"},
+    1:  {"coins": 500_000_000,    "vouchers": 0,  "fans": 0, "desc": "🪙 500 Million Coins"},
     2:  {"coins": 0,              "vouchers": 25, "fans": 0, "desc": "🎟️ 25 Draft Vouchers"},
-    3:  {"coins": 2_500_000_000,  "vouchers": 0,  "fans": 0, "desc": "🪙 2.5 Billion Coins"},
+    3:  {"coins": 1_250_000_000,  "vouchers": 0,  "fans": 0, "desc": "🪙 1.25 Billion Coins"},
     4:  {"coins": 0,              "vouchers": 50, "fans": 0, "desc": "🎟️ 50 Draft Vouchers"},
-    5:  {"coins": 5_000_000_000,  "vouchers": 0,  "fans": 0, "desc": "🃏 Guaranteed 115+ Player + 🪙 5 Billion Coins", "card_reward": 115},
-    6:  {"coins": 7_500_000_000,  "vouchers": 0,  "fans": 0, "desc": "🪙 7.5 Billion Coins"},
+    5:  {"coins": 2_500_000_000,  "vouchers": 0,  "fans": 0, "desc": "🃏 Guaranteed 115+ Player + 🪙 2.5 Billion Coins", "card_reward": 115},
+    6:  {"coins": 3_750_000_000,  "vouchers": 0,  "fans": 0, "desc": "🪙 3.75 Billion Coins"},
     7:  {"coins": 0,              "vouchers": 75, "fans": 0, "desc": "🎟️ 75 Draft Vouchers"},
-    8:  {"coins": 10_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 10 Billion Coins"},
+    8:  {"coins": 5_000_000_000,  "vouchers": 0,  "fans": 0, "desc": "🪙 5 Billion Coins"},
     9:  {"coins": 0,              "vouchers": 100,"fans": 0, "desc": "🎟️ 100 Draft Vouchers"},
-    10: {"coins": 15_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🃏 Guaranteed 118+ Player + 🪙 15 Billion Coins", "card_reward": 118},
-    11: {"coins": 20_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 20 Billion Coins"},
+    10: {"coins": 7_500_000_000,  "vouchers": 0,  "fans": 0, "desc": "🃏 Guaranteed 118+ Player + 🪙 7.5 Billion Coins", "card_reward": 118},
+    11: {"coins": 10_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 10 Billion Coins"},
     12: {"coins": 0,              "vouchers": 150,"fans": 0, "desc": "🎟️ 150 Draft Vouchers + Badge: ⭐ Season Grinder", "badge": "season_grinder"},
-    13: {"coins": 25_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 25 Billion Coins"},
+    13: {"coins": 12_500_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 12.5 Billion Coins"},
     14: {"coins": 0,              "vouchers": 200,"fans": 0, "desc": "🎟️ 200 Draft Vouchers"},
-    15: {"coins": 30_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🃏 Guaranteed 120+ Player + 🪙 30 Billion Coins", "card_reward": 120},
-    16: {"coins": 40_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 40 Billion Coins"},
+    15: {"coins": 15_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🃏 Guaranteed 120+ Player + 🪙 15 Billion Coins", "card_reward": 120},
+    16: {"coins": 20_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 20 Billion Coins"},
     17: {"coins": 0,              "vouchers": 250,"fans": 0, "desc": "🎟️ 250 Draft Vouchers"},
-    18: {"coins": 50_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 50 Billion Coins"},
+    18: {"coins": 25_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 25 Billion Coins"},
     19: {"coins": 0,              "vouchers": 300,"fans": 0, "desc": "🎟️ 300 Draft Vouchers"},
-    20: {"coins": 60_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🃏 Guaranteed 121+ Player + 🪙 60 Billion Coins + Badge: 🏅 Season Veteran", "badge": "season_veteran", "card_reward": 121},
-    21: {"coins": 75_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 75 Billion Coins"},
+    20: {"coins": 30_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🃏 Guaranteed 121+ Player + 🪙 30 Billion Coins + Badge: 🏅 Season Veteran", "badge": "season_veteran", "card_reward": 121},
+    21: {"coins": 37_500_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 37.5 Billion Coins"},
     22: {"coins": 0,              "vouchers": 400,"fans": 0, "desc": "🎟️ 400 Draft Vouchers"},
-    23: {"coins": 85_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 85 Billion Coins"},
+    23: {"coins": 42_500_000_000, "vouchers": 0,  "fans": 0, "desc": "🪙 42.5 Billion Coins"},
     24: {"coins": 0,              "vouchers": 500,"fans": 0, "desc": "🎟️ 500 Draft Vouchers"},
-    25: {"coins": 100_000_000_000,"vouchers": 0,  "fans": 0, "desc": "🃏 Guaranteed MAX 122+ Player + 🪙 100 Billion Coins + 👑 Season Champion", "badge": "season_champion", "card_reward": 122},
+    25: {"coins": 50_000_000_000, "vouchers": 0,  "fans": 0, "desc": "🃏 Guaranteed MAX 122+ Player + 🪙 50 Billion Coins + 👑 Season Champion", "badge": "season_champion", "card_reward": 122},
 }
 
 async def fetch_season_config():
