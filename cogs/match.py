@@ -258,12 +258,14 @@ class MatchCog(commands.Cog):
 
                     # Check for custom card / buffed parameters
                     if is_custom:
-                        card_buffed_ovr = pd.get('buffed_ovr') if isinstance(pd, dict) else None
+                        card_buffed_ovr = (
+                            (pd.get('buffed_ovr') or pd.get('performance_ovr')) if isinstance(pd, dict) else None
+                        ) or full_p.get('buffed_ovr') if 'full_p' in locals() and isinstance(full_p, dict) else None
                         if card_buffed_ovr:
                             try:
                                 effective_ovr = int(card_buffed_ovr)
                             except Exception:
-                                effective_ovr = int(base_ovr * boost_val)
+                                effective_ovr = base_ovr
                         else:
                             if pos == 'GK' or is_yashin:
                                 effective_ovr = int(base_ovr * min(1.10, boost_val))
