@@ -507,29 +507,38 @@ async def get_active_drafts():
         return None
     drafts = {}
     for r in rows:
-        drafts[r['draft_number']] = {
+        d_val = {
             "pool_a": json.loads(r['pool_a']) if r.get('pool_a') else [],
             "pool_b": json.loads(r['pool_b']) if r.get('pool_b') else [],
             "pool_c": json.loads(r['pool_c']) if r.get('pool_c') else [],
             "expires_at": _format_timestamp(r['expires_at'])
         }
+        drafts[int(r['draft_number'])] = d_val
+        drafts[str(r['draft_number'])] = d_val
     _DRAFTS_CACHE = drafts
     return drafts
 
 async def set_active_drafts(drafts_dict):
     global _DRAFTS_CACHE
-    _DRAFTS_CACHE = drafts_dict
     p = await get_db()
-    await p.execute("DELETE FROM global_drafts")
-    for d_num, data in drafts_dict.items():
-        exp = _parse_timestamp(data.get("expires_at"))
-        pool_a_json = json.dumps(data.get("pool_a", []))
-        pool_b_json = json.dumps(data.get("pool_b", []))
-        pool_c_json = json.dumps(data.get("pool_c", []))
-        await p.execute(
-            "INSERT INTO global_drafts (draft_number, draft_data, pool_a, pool_b, pool_c, expires_at) VALUES ($1, $2, $3, $4, $5, $6)",
-            int(d_num), json.dumps(data), pool_a_json, pool_b_json, pool_c_json, exp
-        )
+    async with p.acquire() as conn:
+        async with conn.transaction():
+            for d_num, data in drafts_dict.items():
+                exp = _parse_timestamp(data.get("expires_at"))
+                pool_a_json = json.dumps(data.get("pool_a", []))
+                pool_b_json = json.dumps(data.get("pool_b", []))
+                pool_c_json = json.dumps(data.get("pool_c", []))
+                await conn.execute("""
+                    INSERT INTO global_drafts (draft_number, draft_data, pool_a, pool_b, pool_c, expires_at)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (draft_number) DO UPDATE SET
+                        draft_data = EXCLUDED.draft_data,
+                        pool_a = EXCLUDED.pool_a,
+                        pool_b = EXCLUDED.pool_b,
+                        pool_c = EXCLUDED.pool_c,
+                        expires_at = EXCLUDED.expires_at
+                """, int(d_num), json.dumps(data), pool_a_json, pool_b_json, pool_c_json, exp)
+    _DRAFTS_CACHE = drafts_dict
 
 async def get_store_player_shop():
     p = await get_db()

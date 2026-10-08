@@ -217,6 +217,10 @@ class MatchCog(commands.Cog):
                     if not p: continue
                     name = p.get('name') or p.get('player_name', 'Player')
                     pos = ''.join([c for c in pos_raw if not c.isdigit()]).strip().upper()
+                    name_lower = (name or '').lower()
+                    is_yashin = 'yashin' in name_lower
+                    is_lewa = 'lewandowski' in name_lower or 'lewa' in name_lower
+                    is_akari = 'akari' in name_lower or 'watanabe' in name_lower
                     
                     p_ovr = p.get('ovr', 100)
                     inv_id_str = str(p.get('inv_id', ''))
@@ -224,17 +228,20 @@ class MatchCog(commands.Cog):
                     # Apply custom card / signature card buffs directly to the player's OVR for the match engine
                     is_custom = False
                     boost_val = default_custom_boost
+                    pd = {}
                     if inv_id_str in inv_map:
                         full_p = inv_map[inv_id_str]
                         # Parse inner player_data JSON if string
-                        pd = full_p.get('player_data')
-                        if isinstance(pd, str):
+                        pd_raw = full_p.get('player_data')
+                        if isinstance(pd_raw, str):
                             try:
-                                pd = json.loads(pd)
+                                pd = json.loads(pd_raw)
                             except Exception:
                                 pd = {}
-                        elif not isinstance(pd, dict):
-                            pd = {}
+                        elif isinstance(pd_raw, dict):
+                            pd = pd_raw
+
+                        boost_val = float(pd.get('performance_boost') or full_p.get('performance_boost') or default_custom_boost)
 
                         pid_str = str(full_p.get('player_id', '') or pd.get('id', '')).lower()
                         src_str = (str(full_p.get('source', '') or pd.get('source', ''))).upper()
@@ -1069,7 +1076,16 @@ class MatchCog(commands.Cog):
             asyncio.create_task(_bg_save_and_ai())
 
         except Exception as e:
+            import traceback
             print(f"Error in simulate_live_match: {e}")
+            traceback.print_exc()
+            try:
+                if message:
+                    await message.edit(content=f"⚠️ **Match simulation error:** `{e}`. Match cancelled and slots cleared.", view=None)
+                elif interaction:
+                    await interaction.followup.send(f"⚠️ **Match simulation error:** `{e}`. Match cancelled and slots cleared.")
+            except Exception:
+                pass
         finally:
             ACTIVE_MATCH_USERS.discard(player_a.id)
             ACTIVE_MATCH_USERS.discard(player_b.id)
