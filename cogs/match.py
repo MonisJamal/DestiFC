@@ -251,8 +251,21 @@ class MatchCog(commands.Cog):
                         is_custom = True
                         boost_val = default_custom_boost
                         
+                    name_lower = name.lower()
+                    is_lewa = 'lewandowski' in name_lower
+                    is_akari = 'akari' in name_lower or 'watanabe' in name_lower
+
+                    # Guarantee high lethal boost for signature attackers Lewa & Akari
+                    if is_lewa or is_akari:
+                        is_custom = True
+                        boost_val = max(boost_val, 1.35)
+
                     if is_custom:
-                        p_ovr = int(p_ovr * boost_val)
+                        if pos == 'GK':
+                            # Nerf GK custom multiplier: GK must not inflate into an impenetrable wall (cap boost at 1.05x)
+                            p_ovr = int(p_ovr * min(1.05, boost_val))
+                        else:
+                            p_ovr = int(p_ovr * boost_val)
                     
                     entry = {"name": name, "pos": pos, "raw_pos": pos_raw, "ovr": p_ovr, "is_custom": is_custom, "boost_val": boost_val}
                     starters.append(entry)
@@ -271,8 +284,22 @@ class MatchCog(commands.Cog):
                 atk_p = sum(p['ovr'] for p in atk) / len(atk) if atk else team_avg_ovr
                 mid_p = sum(p['ovr'] for p in mid) / len(mid) if mid else team_avg_ovr
                 def_p = sum(p['ovr'] for p in defn) / len(defn) if defn else team_avg_ovr
-                gk_p = gk[0]['ovr'] if gk else team_avg_ovr
                 
+                # NERF GOALKEEPERS: Scale effective GK power down from impenetrable 125-155 OVR wall
+                # so attacking firepower breaks through and yields high-octane scorelines
+                if gk:
+                    raw_gk = gk[0]['ovr']
+                    gk_p = min(116.0, (raw_gk * 0.70) + 26.0)
+                else:
+                    gk_p = min(114.0, (team_avg_ovr * 0.70) + 26.0)
+
+                # Elite Attacking Customs Buff: Lewa & Akari dominate their zones
+                if any('lewandowski' in p['name'].lower() for p in starters):
+                    atk_p += 8.0  # Polish Sniper Lethality Surge
+                if any('akari' in p['name'].lower() or 'watanabe' in p['name'].lower() for p in starters):
+                    mid_p += 7.0  # Akari Maestro Playmaker dominance
+                    atk_p += 4.0  # Akari Clinical Threat
+
                 tactic = squad.get('tactic', 'Tiki-Taka')
                 formation = squad.get('formation', '4-3-3 Flat')
                 theme = squad.get('theme', 'default')
@@ -317,61 +344,63 @@ class MatchCog(commands.Cog):
                 # Apply Stadium Turf Perks (Home Venue Advantage)
                 stadium_name = "⚡ Neon Stadium"
                 if theme == "snow":
-                    def_p += 1.5
+                    def_p += 2.0
                     stadium_name = "❄️ Frostbite Arena"
                 elif theme == "lava":
-                    atk_p += 2.5
+                    atk_p += 3.5
                     stadium_name = "🌋 Volcanic Caldera"
                 elif theme == "cyberpunk":
-                    mid_p += 2.0
+                    mid_p += 3.0
                     stadium_name = "🤖 Neo-Tokyo Cyber City"
                 elif theme == "desert":
-                    def_p += 3.0
-                    gk_p += 1.5
+                    def_p += 4.0
+                    gk_p += 2.0
                     stadium_name = "🌙 Arabian Oasis Coliseum"
                 elif theme == "galaxy":
-                    atk_p += 2.0
-                    mid_p += 2.0
-                    def_p += 2.0
-                    gk_p += 2.0
-                    stadium_name = "🌌 Celestial Orbit Stadium"
-                elif theme == "gold":
                     atk_p += 3.0
                     mid_p += 3.0
                     def_p += 3.0
-                    gk_p += 3.0
+                    gk_p += 1.5
+                    stadium_name = "🌌 Celestial Orbit Stadium"
+                elif theme == "gold":
+                    atk_p += 6.0
+                    mid_p += 6.0
+                    def_p += 6.0
+                    gk_p += 2.5
                     stadium_name = "👑 Champions Royal Colosseum"
                 elif theme == "bernabeu":
-                    atk_p += 3.0
-                    mid_p += 2.0
+                    atk_p += 7.0
+                    mid_p += 5.0
                     stadium_name = "⚪ Santiago Bernabéu"
                 elif theme == "campnou":
-                    mid_p += 3.5
+                    mid_p += 8.0
+                    atk_p += 5.0
                     stadium_name = "🔵🔴 Spotify Camp Nou"
                 elif theme == "oldtrafford":
-                    atk_p += 3.0
-                    def_p += 1.5
+                    atk_p += 7.0
+                    def_p += 5.0
                     stadium_name = "🔴 Old Trafford"
                 elif theme == "anfield":
-                    atk_p += 3.0
-                    def_p += 2.5
+                    atk_p += 7.5
+                    def_p += 5.5
                     stadium_name = "🔥 Anfield"
                 elif theme == "sansiro":
-                    def_p += 3.5
-                    gk_p += 2.0
+                    def_p += 8.0
+                    mid_p += 4.0
+                    gk_p += 2.5
                     stadium_name = "⚔️ San Siro"
                 elif theme == "allianz":
-                    atk_p += 3.0
-                    mid_p += 2.0
+                    atk_p += 7.5
+                    mid_p += 5.0
                     stadium_name = "🔴 Allianz Arena"
                 elif theme == "maracana":
-                    atk_p += 3.5
-                    mid_p += 2.0
+                    atk_p += 8.0
+                    mid_p += 5.0
                     stadium_name = "🇧🇷 Maracanã Stadium"
                 elif theme == "wembley":
-                    atk_p += 2.0
-                    mid_p += 2.0
-                    def_p += 2.0
+                    atk_p += 6.0
+                    mid_p += 6.0
+                    def_p += 6.0
                     stadium_name = "🦁 Wembley Stadium"
 
                 return {
@@ -396,10 +425,14 @@ class MatchCog(commands.Cog):
             def_b = [p['name'] for p in s_b["defn"]] or [p['name'] for p in starters_b]
             gk_b = [p['name'] for p in s_b["gk"]] or ["Goalkeeper"]
 
-            # Midfield Battle
+            # Midfield Battle & Stadium Possession Perks
             mid_diff = s_a["mid_p"] - s_b["mid_p"]
-            possession_a = int(50 + (mid_diff * 1.8) + random.randint(-3, 3))
-            possession_a = max(35, min(65, possession_a))
+            possession_a = int(50 + (mid_diff * 1.8) + random.randint(-2, 2))
+            if s_a.get('theme') == 'campnou':
+                possession_a += 6
+            if s_b.get('theme') == 'campnou':
+                possession_a -= 6
+            possession_a = max(30, min(70, possession_a))
             possession_b = 100 - possession_a
 
             def calc_full_team_ratings(starters, is_winning_team, is_draw_match, goals_conceded, goals_scored, team_goals, team_assists, team_saves):
@@ -435,27 +468,27 @@ class MatchCog(commands.Cog):
             threat_a = (s_a["atk_p"] * 0.65 + s_a["mid_p"] * 0.35) - (s_b["def_p"] * 0.65 + s_b["gk_p"] * 0.35)
             threat_b = (s_b["atk_p"] * 0.65 + s_b["mid_p"] * 0.35) - (s_a["def_p"] * 0.65 + s_a["gk_p"] * 0.35)
 
-            # High-intensity chances (5 to 8 chances per team for high excitement & realistic end-to-end action)
-            chances_a = max(3, int(5 + (threat_a * 0.30) + random.randint(0, 2)))
-            chances_b = max(3, int(5 + (threat_b * 0.30) + random.randint(0, 2)))
+            # High-octane chances (8 to 14 chances per team for crazy end-to-end scorelines)
+            chances_a = max(6, int(8 + (threat_a * 0.35) + random.randint(1, 4)))
+            chances_b = max(6, int(8 + (threat_b * 0.35) + random.randint(1, 4)))
 
             goals_a = 0
             for _ in range(chances_a):
-                p_score = 0.38 + (threat_a * 0.03) + random.uniform(-0.05, 0.08)
-                if random.random() < max(0.12, min(0.68, p_score)):
+                p_score = 0.52 + (threat_a * 0.035) + random.uniform(-0.04, 0.08)
+                if random.random() < max(0.25, min(0.85, p_score)):
                     goals_a += 1
 
             goals_b = 0
             for _ in range(chances_b):
-                p_score = 0.38 + (threat_b * 0.03) + random.uniform(-0.05, 0.08)
-                if random.random() < max(0.12, min(0.68, p_score)):
+                p_score = 0.52 + (threat_b * 0.035) + random.uniform(-0.04, 0.08)
+                if random.random() < max(0.25, min(0.85, p_score)):
                     goals_b += 1
 
-            # Cap goals realistically at 6
-            goals_a = min(6, goals_a)
-            goals_b = min(6, goals_b)
+            # High-scoring thriller cap: min 2 goals, up to 10 goals per team!
+            goals_a = min(10, max(2, goals_a))
+            goals_b = min(10, max(2, goals_b))
 
-            # Late Drama Roll: 30% chance for an 88'-90' thriller goal if match is tied or 1-goal gap
+            # Late Drama Roll: 35% chance for an 88'-90' thriller goal if match is tied or 1-goal gap
             late_drama = random.random() < 0.35
             if late_drama:
                 if goals_a == goals_b and random.random() < 0.60:
@@ -477,18 +510,29 @@ class MatchCog(commands.Cog):
             team_a_assists = {}
             team_b_assists = {}
 
+            # Prioritize Lewandowski and Akari Watanabe as lethal primary goalscorers
+            lewa_akari_a = [p for p in starters_a if 'lewandowski' in p['name'].lower() or 'akari' in p['name'].lower() or 'watanabe' in p['name'].lower()]
+            custom_scorers_a = [p for p in starters_a if p.get('is_custom')]
+
             all_goals = []
             for idx in range(goals_a):
-                r = random.random()
-                if r < 0.65 and s_a["atk"]:
-                    cands, ptype = s_a["atk"], "atk"
-                elif r < 0.90 and s_a["mid"]:
-                    cands, ptype = s_a["mid"], "mid"
-                elif s_a["defn"]:
-                    cands, ptype = s_a["defn"], "def"
+                if lewa_akari_a and random.random() < 0.65:
+                    scorer_obj = random.choice(lewa_akari_a)
+                    ptype = "atk" if scorer_obj.get("pos") in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF'] else "mid"
+                elif custom_scorers_a and random.random() < 0.50:
+                    scorer_obj = random.choice(custom_scorers_a)
+                    ptype = "atk" if scorer_obj.get("pos") in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF'] else "mid"
                 else:
-                    cands, ptype = starters_a, "atk"
-                scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
+                    r = random.random()
+                    if r < 0.65 and s_a["atk"]:
+                        cands, ptype = s_a["atk"], "atk"
+                    elif r < 0.90 and s_a["mid"]:
+                        cands, ptype = s_a["mid"], "mid"
+                    elif s_a["defn"]:
+                        cands, ptype = s_a["defn"], "def"
+                    else:
+                        cands, ptype = starters_a, "atk"
+                    scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
                 # If late drama, push the last goal to 88-90'
                 min_g = random.randint(87, 90) if (late_drama and idx == goals_a - 1) else random.randint(7, 86)
                 
@@ -502,17 +546,27 @@ class MatchCog(commands.Cog):
 
                 all_goals.append((player_a, min_g, scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype, assister))
 
+            lewa_akari_b = [p for p in starters_b if 'lewandowski' in p['name'].lower() or 'akari' in p['name'].lower() or 'watanabe' in p['name'].lower()]
+            custom_scorers_b = [p for p in starters_b if p.get('is_custom')]
+
             for idx in range(goals_b):
-                r = random.random()
-                if r < 0.65 and s_b["atk"]:
-                    cands, ptype = s_b["atk"], "atk"
-                elif r < 0.90 and s_b["mid"]:
-                    cands, ptype = s_b["mid"], "mid"
-                elif s_b["defn"]:
-                    cands, ptype = s_b["defn"], "def"
+                if lewa_akari_b and random.random() < 0.65:
+                    scorer_obj = random.choice(lewa_akari_b)
+                    ptype = "atk" if scorer_obj.get("pos") in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF'] else "mid"
+                elif custom_scorers_b and random.random() < 0.50:
+                    scorer_obj = random.choice(custom_scorers_b)
+                    ptype = "atk" if scorer_obj.get("pos") in ['ST', 'LW', 'RW', 'CF', 'LF', 'RF'] else "mid"
                 else:
-                    cands, ptype = starters_b, "atk"
-                scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
+                    r = random.random()
+                    if r < 0.65 and s_b["atk"]:
+                        cands, ptype = s_b["atk"], "atk"
+                    elif r < 0.90 and s_b["mid"]:
+                        cands, ptype = s_b["mid"], "mid"
+                    elif s_b["defn"]:
+                        cands, ptype = s_b["defn"], "def"
+                    else:
+                        cands, ptype = starters_b, "atk"
+                    scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
                 min_g = random.randint(87, 90) if (late_drama and idx == goals_b - 1) else random.randint(7, 86)
                 
                 # Assign assister (70% probability if candidates exist)
@@ -629,7 +683,12 @@ class MatchCog(commands.Cog):
 
                     assist_comm = f" assisted by **{assister}**" if assister else ""
                     is_stoppage_goal = (is_et or min_scored >= 88)
-                    if is_stoppage_goal:
+                    s_lower = scorer.lower()
+                    if 'lewandowski' in s_lower:
+                        goal_commentary = f"⚽ **{time_label} GOAL! PURE LETHALITY!** Robert **Lewandowski** (`{pos}`){assist_comm} clinically hammers a thunderbolt into the bottom corner for **{team_name}**! 🎯🇵🇱"
+                    elif 'akari' in s_lower or 'watanabe' in s_lower:
+                        goal_commentary = f"✨ **{time_label} GOAL! MAGICAL MAESTRO!** Akari **Watanabe** (`{pos}`){assist_comm} dances through the backline and chips the keeper with sublime flair for **{team_name}**! 🌸⚡"
+                    elif is_stoppage_goal:
                         goal_commentary = f"🚨 **{time_label} GOAL! UNBELIEVABLE DRAMA!** Stoppage-time pandemonium as **{scorer}** (`{pos}`){assist_comm} nets a breathless stunner for **{team_name}**! ⚡🔥"
                     elif ptype == "def":
                         goal_commentary = f"⚽ **{time_label} GOAL!** BULLET HEADER! Defender **{scorer}** (`{pos}`){assist_comm} rises highest from the corner and thumps it home for **{team_name}**! 📐🔥"
@@ -678,12 +737,12 @@ class MatchCog(commands.Cog):
                 events_display = "\n".join(latest_events_feed[:3]) if latest_events_feed else "🏁 *Intense battle for possession in midfield...*"
 
                 # Determine if we should update Discord UI on this second
-                # Always update if goal happened, or at half-time, or if >= 3 seconds elapsed
+                # Always update if goal happened, or at half-time, or if >= 2.0 seconds elapsed
                 time_since_edit = time_now - last_edit_time
                 is_ht_break = (phase_label == "Half Time Break")
                 is_last_step = (seq_idx == len(minute_sequence) - 1)
 
-                should_update_ui = goal_happened or is_ht_break or (time_since_edit >= 2.8) or is_last_step
+                should_update_ui = goal_happened or is_ht_break or (time_since_edit >= 2.0) or is_last_step
 
                 if should_update_ui:
                     scoreboard = f"**{player_a.display_name}** `[ {current_score_a} - {current_score_b} ]` **{player_b.display_name}**"
@@ -719,11 +778,11 @@ class MatchCog(commands.Cog):
                     await safe_update_ui(content=msg_content, view=None)
                     last_edit_time = asyncio.get_event_loop().time()
 
-                # Sleep 1 second per minute (with slightly longer pause for HT break: 2-3s)
+                # Sleep 0.58 seconds per minute (1.5s for HT) for ~60 seconds total match length
                 if is_ht_break:
-                    await asyncio.sleep(2.5)
+                    await asyncio.sleep(1.5)
                 else:
-                    await asyncio.sleep(1.0)
+                    await asyncio.sleep(0.58)
 
             # Match winner resolution
             if current_score_a > current_score_b:
@@ -784,14 +843,14 @@ class MatchCog(commands.Cog):
                 result_text = f"🏆 **{player_a.display_name} WINS!**\nFinal Score: `{current_score_a} - {current_score_b}`"
                 color = discord.Color.green()
                 fan_change_str = f"**{player_a.display_name}** gained **+10,000 Fans**\n**{player_b.display_name}** lost **-8,000 Fans**"
-                coins_won_a = "💰 **+28,750,000 Coins** *(👑 +15% Stadium Bonus!)*" if s_a.get('theme') == 'gold' else "💰 **+25,000,000 Coins**"
+                coins_won_a = "💰 **+31,250,000 Coins** *(👑 +25% Stadium Bonus!)*" if s_a.get('theme') == 'gold' else "💰 **+25,000,000 Coins**"
                 bonus_a_str = f"{coins_won_a}\n🎫 **+1x Draft Voucher**"
                 bonus_b_str = ""
             else:
                 result_text = f"🏆 **{player_b.display_name} WINS!**\nFinal Score: `{current_score_a} - {current_score_b}`"
                 color = discord.Color.red()
                 fan_change_str = f"**{player_b.display_name}** gained **+10,000 Fans**\n**{player_a.display_name}** lost **-8,000 Fans**"
-                coins_won_b = "💰 **+28,750,000 Coins** *(👑 +15% Stadium Bonus!)*" if s_b.get('theme') == 'gold' else "💰 **+25,000,000 Coins**"
+                coins_won_b = "💰 **+31,250,000 Coins** *(👑 +25% Stadium Bonus!)*" if s_b.get('theme') == 'gold' else "💰 **+25,000,000 Coins**"
                 bonus_a_str = ""
                 bonus_b_str = f"{coins_won_b}\n🎫 **+1x Draft Voucher**"
 
@@ -888,8 +947,8 @@ class MatchCog(commands.Cog):
                     loss_fans = int(gp_cfg.get('match_loss_fans', -8_000))
                     win_xp = int(gp_cfg.get('match_win_xp', 75))
 
-                    win_coins_a = int(win_coins * 1.15) if s_a.get('theme') == 'gold' else win_coins
-                    win_coins_b = int(win_coins * 1.15) if s_b.get('theme') == 'gold' else win_coins
+                    win_coins_a = int(win_coins * 1.25) if s_a.get('theme') == 'gold' else win_coins
+                    win_coins_b = int(win_coins * 1.25) if s_b.get('theme') == 'gold' else win_coins
 
                     if winner is None:
                         await database.add_fans(player_a.id, draw_fans)

@@ -56,64 +56,64 @@ THEMES = {
         "name": "👑 Champions Royal Colosseum",
         "price": 1_500_000_000,
         "file": "pitch_gold.jpg",
-        "perk": "✨ **Champions Prestige:** +3.0 to ALL Sectors + +15% Match Win Coins bonus (💰 +3.75M Extra Coins per Win!)",
-        "buff": {"all_boost": 3.0, "coin_multiplier": 0.15}
+        "perk": "✨ **Royal Prestige:** +6.0 to ALL Sectors + +25% Match Win Coins bonus (💰 +6.25M Extra Coins per Win!)",
+        "buff": {"all_boost": 6.0, "coin_multiplier": 0.25}
     },
     "bernabeu": {
         "name": "⚪ Santiago Bernabéu (Real Madrid)",
         "price": 3_000_000_000,
         "file": "pitch_bernabeu.jpg",
-        "perk": "👑 **Remontada DNA:** +3.0 ATK in final 15 minutes of H2H & +2.0 MID Power",
-        "buff": {"atk_boost": 3.0, "mid_boost": 2.0}
+        "perk": "👑 **Remontada DNA:** +7.0 ATK & +5.0 MID Power (Unstoppable European pedigree in clutch moments)",
+        "buff": {"atk_boost": 7.0, "mid_boost": 5.0}
     },
     "campnou": {
         "name": "🔵🔴 Spotify Camp Nou (FC Barcelona)",
         "price": 3_000_000_000,
         "file": "pitch_campnou.jpg",
-        "perk": "🪄 **Tiki-Taka Mastery:** +3.5 MID Power & +3% higher match possession",
-        "buff": {"mid_boost": 3.5}
+        "perk": "🪄 **Tiki-Taka Dominance:** +8.0 MID & +5.0 ATK Power, plus +6% match possession dominance",
+        "buff": {"mid_boost": 8.0, "atk_boost": 5.0, "possession_boost": 6}
     },
     "oldtrafford": {
         "name": "🔴 Old Trafford (Manchester United)",
         "price": 3_000_000_000,
         "file": "pitch_oldtrafford.jpg",
-        "perk": "⚡ **Fergie Time:** +3.0 ATK during extra stoppage time & +1.5 DEF Power",
-        "buff": {"atk_boost": 3.0, "def_boost": 1.5}
+        "perk": "⚡ **Fergie Time Thunder:** +7.0 ATK & +5.0 DEF Power (Relentless attacking pressure & fortress defense)",
+        "buff": {"atk_boost": 7.0, "def_boost": 5.0}
     },
     "anfield": {
         "name": "🔥 Anfield (Liverpool FC)",
         "price": 3_000_000_000,
         "file": "pitch_anfield.jpg",
-        "perk": "🔊 **Kop Roar:** +3.0 Gegenpressing ATK Power & +2.5 DEF Power",
-        "buff": {"atk_boost": 3.0, "def_boost": 2.5}
+        "perk": "🔊 **Kop Roar Heavy Metal:** +7.5 ATK & +5.5 DEF Power (Suffocating high-press intensity)",
+        "buff": {"atk_boost": 7.5, "def_boost": 5.5}
     },
     "sansiro": {
         "name": "⚔️ San Siro (Milan / Inter)",
         "price": 3_000_000_000,
         "file": "pitch_sansiro.jpg",
-        "perk": "🛡️ **Catenaccio Wall:** +3.5 DEF Power & +2.0 GK Reflexes",
-        "buff": {"def_boost": 3.5, "gk_boost": 2.0}
+        "perk": "🛡️ **Iron Catenaccio:** +8.0 DEF, +4.0 MID & +3.5 GK Power (Impenetrable Italian tactical fortress)",
+        "buff": {"def_boost": 8.0, "mid_boost": 4.0, "gk_boost": 3.5}
     },
     "allianz": {
         "name": "🔴 Allianz Arena (Bayern Munich)",
         "price": 3_000_000_000,
         "file": "pitch_allianz.jpg",
-        "perk": "🚜 **Bavarian Blitz:** +3.0 ATK Power & +2.0 MID Power",
-        "buff": {"atk_boost": 3.0, "mid_boost": 2.0}
+        "perk": "🚜 **Bavarian Blitzkrieg:** +7.5 ATK & +5.0 MID Power (Dominant clinical German powerhouse)",
+        "buff": {"atk_boost": 7.5, "mid_boost": 5.0}
     },
     "maracana": {
         "name": "🇧🇷 Maracanã (Brazil)",
         "price": 3_000_000_000,
         "file": "pitch_maracana.jpg",
-        "perk": "✨ **Joga Bonito:** +3.5 Dribbling/Attacking flair & +2.0 MID Power",
-        "buff": {"atk_boost": 3.5, "mid_boost": 2.0}
+        "perk": "✨ **Samba Joga Bonito:** +8.0 ATK & +5.0 MID Power (Sublime Brazilian flair & lethal chance creation)",
+        "buff": {"atk_boost": 8.0, "mid_boost": 5.0}
     },
     "wembley": {
         "name": "🦁 Wembley Stadium (England)",
         "price": 3_000_000_000,
         "file": "pitch_wembley.jpg",
-        "perk": "🏆 **National Stage:** +2.0 to ALL Squad Sectors (ATK/MID/DEF)",
-        "buff": {"all_boost": 2.0}
+        "perk": "🏆 **Hallowed Ground:** +6.0 to ALL Squad Sectors (ATK/MID/DEF) (The undisputed cathedral of football)",
+        "buff": {"all_boost": 6.0}
     },
 }
 
