@@ -518,9 +518,13 @@ class MatchCog(commands.Cog):
             team_a_assists = {}
             team_b_assists = {}
 
-            # Prioritize Lewandowski and Akari Watanabe as lethal primary goalscorers
-            lewa_akari_a = [p for p in starters_a if 'lewandowski' in p['name'].lower() or 'akari' in p['name'].lower() or 'watanabe' in p['name'].lower()]
-            custom_scorers_a = [p for p in starters_a if p.get('is_custom')]
+            # Outfield players only (GOALKEEPERS NEVER SCORE GOALS)
+            outfield_a = [p for p in starters_a if p.get('pos') != 'GK']
+            outfield_b = [p for p in starters_b if p.get('pos') != 'GK']
+
+            # Prioritize Lewandowski and Akari Watanabe as lethal primary goalscorers (outfield only)
+            lewa_akari_a = [p for p in outfield_a if 'lewandowski' in p['name'].lower() or 'akari' in p['name'].lower() or 'watanabe' in p['name'].lower()]
+            custom_scorers_a = [p for p in outfield_a if p.get('is_custom')]
 
             all_goals = []
             for idx in range(goals_a):
@@ -539,8 +543,14 @@ class MatchCog(commands.Cog):
                     elif s_a["defn"]:
                         cands, ptype = s_a["defn"], "def"
                     else:
-                        cands, ptype = starters_a, "atk"
+                        cands, ptype = (s_a["atk"] or outfield_a), "atk"
+                    cands = [p for p in cands if p.get('pos') != 'GK'] or outfield_a
                     scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
+                
+                # Strict absolute guard: GKs never score
+                if scorer_obj.get("pos") == "GK":
+                    scorer_obj = random.choice(outfield_a)
+
                 # If late drama, push the last goal to 88-90'
                 min_g = random.randint(87, 90) if (late_drama and idx == goals_a - 1) else random.randint(7, 86)
                 
@@ -554,8 +564,8 @@ class MatchCog(commands.Cog):
 
                 all_goals.append((player_a, min_g, scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype, assister))
 
-            lewa_akari_b = [p for p in starters_b if 'lewandowski' in p['name'].lower() or 'akari' in p['name'].lower() or 'watanabe' in p['name'].lower()]
-            custom_scorers_b = [p for p in starters_b if p.get('is_custom')]
+            lewa_akari_b = [p for p in outfield_b if 'lewandowski' in p['name'].lower() or 'akari' in p['name'].lower() or 'watanabe' in p['name'].lower()]
+            custom_scorers_b = [p for p in outfield_b if p.get('is_custom')]
 
             for idx in range(goals_b):
                 if lewa_akari_b and random.random() < 0.65:
@@ -573,8 +583,14 @@ class MatchCog(commands.Cog):
                     elif s_b["defn"]:
                         cands, ptype = s_b["defn"], "def"
                     else:
-                        cands, ptype = starters_b, "atk"
+                        cands, ptype = (s_b["atk"] or outfield_b), "atk"
+                    cands = [p for p in cands if p.get('pos') != 'GK'] or outfield_b
                     scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
+                
+                # Strict absolute guard: GKs never score
+                if scorer_obj.get("pos") == "GK":
+                    scorer_obj = random.choice(outfield_b)
+
                 min_g = random.randint(87, 90) if (late_drama and idx == goals_b - 1) else random.randint(7, 86)
                 
                 # Assign assister (70% probability if candidates exist)

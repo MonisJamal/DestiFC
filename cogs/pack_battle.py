@@ -152,12 +152,11 @@ class PackBattleCog(commands.Cog):
         name_b = user_b.display_name if hasattr(user_b, 'display_name') else "DestiFC AI 🤖"
         mention_b = user_b.mention if hasattr(user_b, 'mention') else "**DestiFC AI 🤖**"
 
-        # Winner takes all cards + pot vouchers! Loser loses their cards!
+        # Winner takes all cards! Loser loses their cards! (Vouchers are spent to open the packs)
         if winner == 'a':
             tiebreak_reason = f"👑 Decided on **#{deciding_rank} highest card**: ({deciding_ovr_a} vs {deciding_ovr_b} OVR)" if deciding_rank > 1 else f"⭐ Won with highest card: **{deciding_ovr_a} OVR**"
-            winner_text = f"🏆 **{user_a.display_name} WINS THE PACK BATTLE!**\n{tiebreak_reason}\n🎉 Won the pot of **+{total_pot} Draft Vouchers** & claimed all **{len(cards_a) + (len(cards_b) if not is_solo else len(cards_a))} player cards**!"
-            await database.add_vouchers(user_a.id, total_pot)
-            # Winner keeps their cards + steals opponent's cards (or all pulled cards)
+            winner_text = f"🏆 **{user_a.display_name} WINS THE PACK BATTLE!**\n{tiebreak_reason}\n🎉 Claimed **ALL {len(cards_a) + (len(cards_b) if not is_solo else len(cards_a))} player cards** opened in this duel! {mention_b} walks away empty-handed!"
+            # Winner keeps their cards + steals opponent's cards
             all_won_cards = cards_a + (cards_b if not is_solo else [])
             await database.add_players_to_inventory_batch(user_a.id, all_won_cards)
             color = discord.Color.green()
@@ -165,19 +164,16 @@ class PackBattleCog(commands.Cog):
         elif winner == 'b':
             tiebreak_reason = f"👑 Decided on **#{deciding_rank} highest card**: ({deciding_ovr_b} vs {deciding_ovr_a} OVR)" if deciding_rank > 1 else f"⭐ Won with highest card: **{deciding_ovr_b} OVR**"
             if not is_solo:
-                winner_text = f"🏆 **{name_b} WINS THE PACK BATTLE!**\n{tiebreak_reason}\n🎉 Won the pot of **+{total_pot} Draft Vouchers** & claimed all **{len(cards_a) + len(cards_b)} player cards**!"
-                await database.add_vouchers(user_b.id, total_pot)
+                winner_text = f"🏆 **{name_b} WINS THE PACK BATTLE!**\n{tiebreak_reason}\n🎉 Claimed **ALL {len(cards_a) + len(cards_b)} player cards** opened in this duel! {user_a.mention} walks away empty-handed!"
                 await database.add_players_to_inventory_batch(user_b.id, cards_a + cards_b)
             else:
-                winner_text = f"🤖 **DestiFC AI WINS THE PACK BATTLE!**\n{tiebreak_reason}\nYour wagered vouchers and opened cards were forfeited to the AI!"
+                winner_text = f"🤖 **DestiFC AI WINS THE PACK BATTLE!**\n{tiebreak_reason}\nAll your opened cards were forfeited to the AI!"
             color = discord.Color.red()
             winning_card = sorted_b[0]
         else:
-            winner_text = f"🤝 **PERFECT DRAW!** All cards matched ratings exactly!\nVouchers refunded ({vouchers} each) and each player keeps their own cards."
-            await database.add_vouchers(user_a.id, vouchers)
+            winner_text = f"🤝 **PERFECT DRAW!** All cards matched ratings exactly!\nBoth players keep only their own packed cards."
             await database.add_players_to_inventory_batch(user_a.id, cards_a)
             if not is_solo:
-                await database.add_vouchers(user_b.id, vouchers)
                 await database.add_players_to_inventory_batch(user_b.id, cards_b)
             color = discord.Color.gold()
             winning_card = sorted_a[0]
@@ -212,7 +208,7 @@ class PackBattleCog(commands.Cog):
             title="⚔️ PACK BATTLE DUEL RESULTS!",
             description=(
                 f"**{user_a.mention}** VS {mention_b}\n"
-                f"🎟️ **Wager:** `{vouchers} Vouchers each` | **Pot:** `{total_pot} Vouchers`\n"
+                f"🎟️ **Entry:** `{vouchers} Draft Vouchers each`\n"
                 f"📦 **Pack Opened:** Draft Pack {pack_num} ({vouchers} Packs each)\n\n"
                 f"---\n{winner_text}\n---"
             ),
@@ -221,7 +217,7 @@ class PackBattleCog(commands.Cog):
 
         embed.add_field(name=f"🔵 {user_a.display_name}'s Pulls (Highest to Lowest)", value=text_a, inline=False)
         embed.add_field(name=f"🔴 {name_b}'s Pulls (Highest to Lowest)", value=text_b, inline=False)
-        embed.set_footer(text=f"Opened {vouchers * 2} total packs • Winner takes all cards & vouchers!")
+        embed.set_footer(text=f"Opened {vouchers * (1 if is_solo else 2)} total packs • Winner takes all cards!")
 
         # Render winning card
         file = None
@@ -277,9 +273,9 @@ class PackBattleCog(commands.Cog):
                 title="⚔️ PACK BATTLE CHALLENGE!",
                 description=(
                     f"{user.mention}, you have been challenged by **{interaction.user.mention}** to a **Pack Battle**!\n\n"
-                    f"🎟️ **Wager:** `{vouchers} Draft Vouchers` each\n"
+                    f"🎟️ **Entry Cost:** `{vouchers} Draft Vouchers` each\n"
                     f"📦 **Pack:** Draft Pack {pack}\n"
-                    f"🏆 **Winner takes all:** `{vouchers * 2} Draft Vouchers` & all pulled cards!\n\n"
+                    f"🏆 **Winner takes:** ALL `{vouchers * 2}` opened cards! Loser forfeits all pulls!\n\n"
                     f"*Click Accept below within 60 seconds to open packs!*"
                 ),
                 color=discord.Color.gold()
