@@ -253,7 +253,7 @@ class DestiFC(commands.Bot):
                 """
                 SELECT id, job_type, payload
                 FROM portal_jobs
-                WHERE status = 'pending' AND job_type IN ('mass_dm', 'SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES', 'open_black_market', 'open_special_market')
+                WHERE status = 'pending' AND job_type IN ('mass_dm', 'SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES', 'open_black_market', 'open_special_market', 'ANNOUNCE_TOURNAMENT', 'TRIGGER_TOURNAMENT_MATCH')
                 ORDER BY created_at ASC
                 LIMIT 1
                 """
@@ -267,7 +267,15 @@ class DestiFC(commands.Bot):
                     job_id
                 )
 
-                if job_type == 'mass_dm':
+                if job_type == 'ANNOUNCE_TOURNAMENT':
+                    match_cog = bot.get_cog('MatchCog')
+                    if match_cog:
+                        asyncio.create_task(match_cog.announce_tournament(job['payload']))
+                elif job_type == 'TRIGGER_TOURNAMENT_MATCH':
+                    match_cog = bot.get_cog('MatchCog')
+                    if match_cog:
+                        asyncio.create_task(match_cog.trigger_tournament_match(job['payload']))
+                elif job_type == 'mass_dm':
                     import asyncio
                     import json
                     try:
