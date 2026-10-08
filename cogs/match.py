@@ -293,13 +293,8 @@ class MatchCog(commands.Cog):
                 mid_p = sum(p['ovr'] for p in mid) / len(mid) if mid else team_avg_ovr
                 def_p = sum(p['ovr'] for p in defn) / len(defn) if defn else team_avg_ovr
                 
-                # NERF GOALKEEPERS: Scale effective GK power down from impenetrable 125-155 OVR wall
-                # so attacking firepower breaks through and yields high-octane scorelines
-                if gk:
-                    raw_gk = gk[0]['ovr']
-                    gk_p = min(116.0, (raw_gk * 0.70) + 26.0)
-                else:
-                    gk_p = min(114.0, (team_avg_ovr * 0.70) + 26.0)
+                # Goalkeeper power directly from keeper (with Yashin capped at 1.1x boost)
+                gk_p = gk[0]['ovr'] if gk else team_avg_ovr
 
                 # Elite Attacking Customs Buff: Lewa & Akari dominate their zones
                 if any('lewandowski' in p['name'].lower() for p in starters):
@@ -473,28 +468,28 @@ class MatchCog(commands.Cog):
                 return ratings
 
             # Threat and goal probability calculations based on squad sectors & tactical synergy
-            threat_a = (s_a["atk_p"] * 0.65 + s_a["mid_p"] * 0.35) - (s_b["def_p"] * 0.65 + s_b["gk_p"] * 0.35)
-            threat_b = (s_b["atk_p"] * 0.65 + s_b["mid_p"] * 0.35) - (s_a["def_p"] * 0.65 + s_a["gk_p"] * 0.35)
+            threat_a = (s_a["atk_p"] * 0.60 + s_a["mid_p"] * 0.40) - (s_b["def_p"] * 0.60 + s_b["gk_p"] * 0.40)
+            threat_b = (s_b["atk_p"] * 0.60 + s_b["mid_p"] * 0.40) - (s_a["def_p"] * 0.60 + s_a["gk_p"] * 0.40)
 
-            # High-octane chances (8 to 14 chances per team for crazy end-to-end scorelines)
-            chances_a = max(6, int(8 + (threat_a * 0.35) + random.randint(1, 4)))
-            chances_b = max(6, int(8 + (threat_b * 0.35) + random.randint(1, 4)))
+            # Balanced exciting chances (5 to 8 chances per team)
+            chances_a = max(4, int(5 + (threat_a * 0.15) + random.randint(0, 2)))
+            chances_b = max(4, int(5 + (threat_b * 0.15) + random.randint(0, 2)))
 
             goals_a = 0
             for _ in range(chances_a):
-                p_score = 0.52 + (threat_a * 0.035) + random.uniform(-0.04, 0.08)
-                if random.random() < max(0.25, min(0.85, p_score)):
+                p_score = 0.38 + (threat_a * 0.015) + random.uniform(-0.04, 0.04)
+                if random.random() < max(0.18, min(0.58, p_score)):
                     goals_a += 1
 
             goals_b = 0
             for _ in range(chances_b):
-                p_score = 0.52 + (threat_b * 0.035) + random.uniform(-0.04, 0.08)
-                if random.random() < max(0.25, min(0.85, p_score)):
+                p_score = 0.38 + (threat_b * 0.015) + random.uniform(-0.04, 0.04)
+                if random.random() < max(0.18, min(0.58, p_score)):
                     goals_b += 1
 
-            # High-scoring thriller cap: min 2 goals, up to 10 goals per team!
-            goals_a = min(10, max(2, goals_a))
-            goals_b = min(10, max(2, goals_b))
+            # Realistic exciting scoreline cap: 5 goals max (allowing thrillers like 4-3, 5-4, 5-3, 3-2)
+            goals_a = min(5, goals_a)
+            goals_b = min(5, goals_b)
 
             # Late Drama Roll: 35% chance for an 88'-90' thriller goal if match is tied or 1-goal gap
             late_drama = random.random() < 0.35
