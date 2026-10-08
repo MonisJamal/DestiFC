@@ -6,19 +6,33 @@ import json
 import time
 import random
 
-# Season Pass Rewards (4x coins as requested)
+# Season Pass Rewards (Expanded 25 Tiers)
 SEASON_REWARDS = {
     1:  {"coins": 12_000_000,  "vouchers": 0,  "desc": "🪙 12,000,000 Coins"},
     2:  {"coins": 0,           "vouchers": 5,  "desc": "🎟️ 5 Draft Vouchers"},
-    3:  {"coins": 32_000_000,  "vouchers": 0,  "desc": "🪙 32,000,000 Coins"},
+    3:  {"coins": 15_000_000,  "vouchers": 0,  "desc": "🪙 15,000,000 Coins"},
     4:  {"coins": 0,           "vouchers": 8,  "desc": "🎟️ 8 Draft Vouchers"},
-    5:  {"coins": 60_000_000,  "vouchers": 0,  "desc": "🪙 60,000,000 Coins + Badge: ⭐ Season Grinder", "badge": "season_grinder"},
-    6:  {"coins": 0,           "vouchers": 12, "desc": "🎟️ 12 Draft Vouchers"},
-    7:  {"coins": 80_000_000,  "vouchers": 0,  "desc": "🪙 80,000,000 Coins"},
-    8:  {"coins": 40_000_000,  "vouchers": 15, "desc": "🎟️ 15 Draft Vouchers + 🪙 40,000,000 Coins"},
-    9:  {"coins": 120_000_000, "vouchers": 0,  "desc": "🪙 120,000,000 Coins + Badge: 🏅 Season Veteran", "badge": "season_veteran"},
-    10: {"coins": 80_000_000,  "vouchers": 0,  "desc": "🃏 Guaranteed 120 Walkout + 🪙 80,000,000 Coins + Badge: 👑 Season Champion",
-         "badge": "season_champion", "card_reward": True},
+    5:  {"coins": 20_000_000,  "vouchers": 0,  "desc": "🃏 Guaranteed 110+ Player + 🪙 20M Coins", "card_reward": 110},
+    6:  {"coins": 30_000_000,  "vouchers": 0,  "desc": "🪙 30,000,000 Coins"},
+    7:  {"coins": 0,           "vouchers": 10, "desc": "🎟️ 10 Draft Vouchers"},
+    8:  {"coins": 40_000_000,  "vouchers": 0,  "desc": "🪙 40,000,000 Coins"},
+    9:  {"coins": 0,           "vouchers": 12, "desc": "🎟️ 12 Draft Vouchers"},
+    10: {"coins": 50_000_000,  "vouchers": 0,  "desc": "🃏 Guaranteed 114+ Player + 🪙 50M Coins", "card_reward": 114},
+    11: {"coins": 60_000_000,  "vouchers": 0,  "desc": "🪙 60,000,000 Coins"},
+    12: {"coins": 0,           "vouchers": 15, "desc": "🎟️ 15 Draft Vouchers + Badge: ⭐ Season Grinder", "badge": "season_grinder"},
+    13: {"coins": 70_000_000,  "vouchers": 0,  "desc": "🪙 70,000,000 Coins"},
+    14: {"coins": 0,           "vouchers": 20, "desc": "🎟️ 20 Draft Vouchers"},
+    15: {"coins": 80_000_000,  "vouchers": 0,  "desc": "🃏 Guaranteed 116+ Player + 🪙 80M Coins", "card_reward": 116},
+    16: {"coins": 90_000_000,  "vouchers": 0,  "desc": "🪙 90,000,000 Coins"},
+    17: {"coins": 0,           "vouchers": 25, "desc": "🎟️ 25 Draft Vouchers"},
+    18: {"coins": 100_000_000, "vouchers": 0,  "desc": "🪙 100,000,000 Coins"},
+    19: {"coins": 0,           "vouchers": 30, "desc": "🎟️ 30 Draft Vouchers"},
+    20: {"coins": 120_000_000, "vouchers": 0,  "desc": "🃏 Guaranteed 118+ Player + 🪙 120M Coins + Badge: 🏅 Season Veteran", "badge": "season_veteran", "card_reward": 118},
+    21: {"coins": 150_000_000, "vouchers": 0,  "desc": "🪙 150,000,000 Coins"},
+    22: {"coins": 0,           "vouchers": 35, "desc": "🎟️ 35 Draft Vouchers"},
+    23: {"coins": 200_000_000, "vouchers": 0,  "desc": "🪙 200,000,000 Coins"},
+    24: {"coins": 0,           "vouchers": 50, "desc": "🎟️ 50 Draft Vouchers"},
+    25: {"coins": 250_000_000, "vouchers": 0,  "desc": "🃏 Guaranteed 120 Walkout + 🪙 250M Coins + Badge: 👑 Season Champion", "badge": "season_champion", "card_reward": 120},
 }
 
 async def fetch_season_config():
@@ -26,20 +40,13 @@ async def fetch_season_config():
     if not config:
         return {
             "season_number": 1,
-            "season_title": "Default Season Pass",
-            "xp_per_tier": 500,
-            "tiers_count": 10,
+            "season_title": "Star Pass",
+            "xp_per_tier": 1000,
+            "tiers_count": 25,
             "tiers": [
-                {"tier": 1, "reward_type": "coins", "reward_value": 12000000, "reward_name": "12,000,000 Coins"},
-                {"tier": 2, "reward_type": "vouchers", "reward_value": 5, "reward_name": "5 Draft Vouchers"},
-                {"tier": 3, "reward_type": "coins", "reward_value": 32000000, "reward_name": "32,000,000 Coins"},
-                {"tier": 4, "reward_type": "vouchers", "reward_value": 8, "reward_name": "8 Draft Vouchers"},
-                {"tier": 5, "reward_type": "coins", "reward_value": 60000000, "reward_name": "60,000,000 Coins"},
-                {"tier": 6, "reward_type": "vouchers", "reward_value": 12, "reward_name": "12 Draft Vouchers"},
-                {"tier": 7, "reward_type": "coins", "reward_value": 80000000, "reward_name": "80,000,000 Coins"},
-                {"tier": 8, "reward_type": "vouchers", "reward_value": 15, "reward_name": "15 Draft Vouchers"},
-                {"tier": 9, "reward_type": "coins", "reward_value": 120000000, "reward_name": "120,000,000 Coins"},
-                {"tier": 10, "reward_type": "card", "reward_value": 120, "reward_name": "120+ OVR Walkout"}
+                {"tier": k, "reward_type": "coins" if v["coins"] > 0 else "vouchers" if v["vouchers"] > 0 else "card", 
+                 "reward_value": v["coins"] or v["vouchers"] or 1, "reward_name": v["desc"]}
+                for k, v in SEASON_REWARDS.items()
             ]
         }
     return config
@@ -202,10 +209,11 @@ class SeasonCog(commands.Cog):
                 ACHIEVEMENTS[reward["badge"]] = season_badges.get(reward["badge"], {})
             await try_award(user_id, reward["badge"])
 
-        # Give card for tier 10
+        # Give specific player OVR for card rewards
         if reward.get("card_reward"):
             from renderz_api import query_players_by_program
-            players = query_players_by_program("", min_rating=120, max_rating=120, size=50)
+            ovr_req = reward["card_reward"]
+            players = query_players_by_program("", min_rating=ovr_req, max_rating=120, size=50)
             if players:
                 card = random.choice(players)
                 await database.add_player_to_inventory(user_id, card)
@@ -218,7 +226,7 @@ class SeasonCog(commands.Cog):
 
         desc = f"**Tier {tier} Claimed!**\n{reward['desc']}"
         if reward.get("card_reward") and players:
-            desc += f"\n\n🃏 You received **{card_name} (120)**!"
+            desc += f"\n\n🃏 You received **{card_name} ({card.get('rating', ovr_req)})**!"
 
         embed = discord.Embed(title="🎫 Season Reward Claimed!", description=desc, color=discord.Color.green())
         await interaction.followup.send(embed=embed)
