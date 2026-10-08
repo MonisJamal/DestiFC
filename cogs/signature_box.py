@@ -283,7 +283,7 @@ class SignatureBoxCog(commands.Cog):
             sig_card_awarded = box.get('signature_card_data', {})
             sig_card_awarded['is_signature_box'] = True
             sig_card_awarded['is_custom'] = True
-            sig_card_awarded['performance_boost'] = 1.25
+            sig_card_awarded['performance_boost'] = float(sig_card_awarded.get('performance_boost') or 1.50)
             sig_card_awarded['source'] = 'SIGNATURE_BOX'
             await database.add_player_to_inventory(user_id, sig_card_awarded)
 

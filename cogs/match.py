@@ -254,16 +254,24 @@ class MatchCog(commands.Cog):
                     name_lower = name.lower()
                     is_lewa = 'lewandowski' in name_lower
                     is_akari = 'akari' in name_lower or 'watanabe' in name_lower
+                    is_yashin = 'yashin' in name_lower
 
-                    # Guarantee high lethal boost for signature attackers Lewa & Akari
-                    if is_lewa or is_akari:
+                    # Exact custom multiplier specifications:
+                    # Akari: 1.5x | Lewa: 1.25x | Yashin: 1.1x
+                    if is_akari:
                         is_custom = True
-                        boost_val = max(boost_val, 1.35)
+                        boost_val = 1.50
+                    elif is_lewa:
+                        is_custom = True
+                        boost_val = 1.25
+                    elif is_yashin:
+                        is_custom = True
+                        boost_val = 1.10
 
                     if is_custom:
-                        if pos == 'GK':
-                            # Nerf GK custom multiplier: GK must not inflate into an impenetrable wall (cap boost at 1.05x)
-                            p_ovr = int(p_ovr * min(1.05, boost_val))
+                        if pos == 'GK' or is_yashin:
+                            # Yashin / Goalkeeper multiplier: 1.1x
+                            p_ovr = int(p_ovr * min(1.10, boost_val))
                         else:
                             p_ovr = int(p_ovr * boost_val)
                     

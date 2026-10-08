@@ -1119,7 +1119,7 @@ DEFAULT_SIGNATURE_BOX = {
         "source": "SIGNATURE_BOX",
         "is_signature_box": True,
         "is_custom": True,
-        "performance_boost": 1.25,
+        "performance_boost": 1.50,
         "custom_background_url": "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=800&q=80",
         "stats": {"PAC": 130, "SHO": 138, "PAS": 145, "DRI": 142, "DEF": 115, "PHY": 128}
     },
