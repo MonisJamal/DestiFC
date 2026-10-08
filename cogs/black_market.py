@@ -319,7 +319,7 @@ class BlackMarketCog(commands.Cog):
                 f"• 🎟️ **Draft Vouchers at 50% HALF PRICE!**\n"
                 f"• ⭐ **5 Rare 120+ Superstar Cards with 30%–45% DISCOUNTS!**\n\n"
                 f"⏳ **CLOSES AT:** <t:{int(closes_at.timestamp())}:R> (<t:{int(closes_at.timestamp())}:t>)\n\n"
-                f"👉 Use `/blackmarket` or select below to grab your contraband loot!"
+                f"👉 Select from the interactive menu below to grab your contraband loot!"
             ),
             color=discord.Color.dark_purple()
         )
@@ -450,60 +450,6 @@ class BlackMarketCog(commands.Cog):
     async def before_scheduler(self):
         await self.bot.wait_until_ready()
 
-    @app_commands.command(name="blackmarket", description="Browse and purchase secret contraband deals from the Black Market")
-    async def blackmarket(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=False)
-        cfg = await database.get_black_market_config()
-        now = datetime.datetime.now(datetime.timezone.utc)
-        closes_at_str = cfg.get("closes_at")
-        is_closed = not cfg.get("is_active", False)
-        if closes_at_str:
-            try:
-                closes_dt = datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00"))
-                if now >= closes_dt:
-                    is_closed = True
-                    # Auto mark inactive
-                    await database.update_black_market_config(
-                        is_active=False,
-                        opens_at=None,
-                        closes_at=None,
-                        voucher_packages=cfg.get("voucher_packages", []),
-                        player_deals=cfg.get("player_deals", [])
-                    )
-            except Exception:
-                pass
-
-        if is_closed:
-            return await interaction.followup.send(
-                "🔒 **THE BLACK MARKET IS CURRENTLY CLOSED!**\n"
-                "The Black Market opens at an unexpected random hour each day for strictly **1 hour**.\n"
-                "Keep your eyes on the announcements for when the smuggler arrives!",
-                ephemeral=True
-            )
-
-        closes_at_str = cfg.get("closes_at")
-        closes_ts = int(datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00")).timestamp()) if closes_at_str else int(time.time() + 3600)
-        session_id = cfg.get("opens_at", "active_session")
-
-        v_deals = cfg.get("voucher_packages", [])
-        p_deals = cfg.get("player_deals", [])
-
-        embed = discord.Embed(
-            title="🕵️‍♂️ DESTIFC SECRET BLACK MARKET",
-            description=(
-                f"Welcome, manager. You have found the secret contraband stall.\n"
-                f"Deals here are heavily discounted, but strictly limited to **1 purchase per item** per session!\n\n"
-                f"⏳ **Market Closing:** <t:{closes_ts}:R>\n\n"
-                f"**🎟️ 50% OFF VOUCHER CRATES:**\n" +
-                ("\n".join([f"• **{vd['title']}**: `🪙 {vd['discount_price']:,} Coins` *(Was: {vd['original_price']:,})*" for vd in v_deals]) if v_deals else "*No voucher deals.*") +
-                f"\n\n**⭐ 30%+ DISCOUNTED 120+ SUPERSTARS:**\n" +
-                ("\n".join([f"• **{pd['name']} ({pd['ovr']} OVR)**: `🪙 {pd['discount_price']:,} Coins` *(-{pd['discount_pct']}% OFF, Was: {pd['original_price']:,})*" for pd in p_deals]) if p_deals else "*No player deals.*")
-            ),
-            color=discord.Color.dark_purple()
-        )
-        embed.set_footer(text="DestiFC Black Market • Use dropdown menu below to buy")
-        view = BlackMarketView(self.bot, session_id, v_deals, p_deals)
-        await interaction.followup.send(embed=embed, view=view)
 
     @app_commands.command(name="admin_blackmarket_open", description="Admin: Manually open the Black Market for 1 hour right now")
     async def admin_open(self, interaction: discord.Interaction):
@@ -656,9 +602,9 @@ class BlackMarketCog(commands.Cog):
                 f"🚨 **EXCLUSIVE HIGH-ROLLER MARKET UNLOCKED!** 🚨\n\n"
                 f"An exclusive VIP bazaar curated by the Owner is open for **{dur_str}**!\n\n"
                 f"🔥 **FEATURED VIP DEALS:**\n" +
-                ("\n".join(deals_preview) if deals_preview else "*Check `/specialmarket` for active deals!*") +
+                ("\n".join(deals_preview) if deals_preview else "*Select items below to purchase!*") +
                 f"\n\n⏳ **CLOSES AT:** <t:{int(closes_at.timestamp())}:R> (<t:{int(closes_at.timestamp())}:t>)\n\n"
-                f"👉 Use `/specialmarket` or tap below to purchase your exclusive items!"
+                f"👉 Tap the menu below to purchase your exclusive items!"
             ),
             color=discord.Color.from_rgb(255, 215, 0)
         )
@@ -673,57 +619,6 @@ class BlackMarketCog(commands.Cog):
             except Exception as e:
                 print(f"[SpecialMarket] Failed to send broadcast to #{ch.name}: {e}")
 
-    @app_commands.command(name="specialmarket", description="Browse and purchase items from the active VIP Special Market")
-    async def specialmarket(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=False)
-        cfg = await database.get_special_market_config()
-        now = datetime.datetime.now(datetime.timezone.utc)
-        closes_at_str = cfg.get("closes_at")
-        is_closed = not cfg.get("is_active", False)
-        if closes_at_str:
-            try:
-                closes_dt = datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00"))
-                if now >= closes_dt:
-                    is_closed = True
-                    await database.update_special_market_config(
-                        is_active=False,
-                        opens_at=None,
-                        closes_at=None,
-                        title=cfg.get("title", ""),
-                        custom_rewards=cfg.get("custom_rewards", []),
-                        duration_minutes=cfg.get("duration_minutes", 60)
-                    )
-            except Exception: pass
-
-        if is_closed:
-            return await interaction.followup.send(
-                "🔒 **THE VIP SPECIAL MARKET IS CURRENTLY CLOSED!**\n"
-                "This exclusive market is summoned strictly by the Owner during special events.",
-                ephemeral=True
-            )
-
-        closes_ts = int(datetime.datetime.fromisoformat(str(closes_at_str).replace("Z", "+00:00")).timestamp()) if closes_at_str else int(time.time() + 3600)
-        session_id = cfg.get("opens_at", "active_special_session")
-        rewards = cfg.get("custom_rewards", [])
-
-        desc_lines = []
-        for r in rewards:
-            cost = int(r.get("cost_coins", 0))
-            desc_lines.append(f"• **{r.get('title', 'VIP Deal')}**: `🪙 {cost:,} Coins` ({r.get('description', '')})")
-
-        embed = discord.Embed(
-            title=cfg.get("title", "👑 OWNER VIP SPECIAL MARKET 👑"),
-            description=(
-                f"Welcome to the VIP Special Bazaar.\n"
-                f"Every deal is strictly limited to **1 purchase per manager**!\n\n"
-                f"⏳ **Market Closing:** <t:{closes_ts}:R>\n\n"
-                + ("\n".join(desc_lines) if desc_lines else "*No active items configured.*")
-            ),
-            color=discord.Color.from_rgb(255, 215, 0)
-        )
-        embed.set_footer(text="DestiFC VIP Special Market • Use dropdown menu below to buy")
-        view = SpecialMarketView(self.bot, session_id, rewards)
-        await interaction.followup.send(embed=embed, view=view)
 
     @app_commands.command(name="admin_special_market_open", description="Admin: Manually open the VIP Special Market")
     @app_commands.describe(duration_minutes="Duration in minutes (e.g. 30, 60, 120, 1440)")
