@@ -95,9 +95,14 @@ class DropClaimView(discord.ui.View):
             rewards_text.append(f"🪙 **+{self.coins:,} Coins**")
 
         details = " & ".join(rewards_text) if rewards_text else "rewards"
+        # Send ephemeral to the user
         await interaction.followup.send(
             f"{banner} You received {details}!",
             ephemeral=True
+        )
+        # Send public announcement
+        await interaction.channel.send(
+            f"🎉 {interaction.user.mention} just looted the drop and received {details}!"
         )
 
 class AdminPlayerDropSelect(discord.ui.Select):
