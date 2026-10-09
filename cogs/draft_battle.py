@@ -771,7 +771,7 @@ class DraftBattleCog(commands.Cog):
 
     @app_commands.command(name="draft_challenge", description="Challenge another user or AI to a live Draft Battle with 110+ OVR cards")
     @app_commands.describe(user="Opponent to challenge (leave empty to play Solo vs AI)", wager="Optional coin wager for PvP (winner takes all)")
-    async def draft_challenge(self, interaction: discord.Interaction, user: discord.Member = None, wager: str = 0):
+    async def draft_challenge(self, interaction: discord.Interaction, user: discord.Member = None, wager: str = "0"):
         if isinstance(wager, str): wager = parse_number(wager)
         if user is None or user.id == interaction.user.id or user.bot:
             # Solo Draft Challenge vs AI
@@ -817,7 +817,7 @@ class DraftBattleCog(commands.Cog):
 
     @draftbattle_group.command(name="challenge", description="Challenge another user to a live 1v1 Draft Battle with 110+ OVR cards")
     @app_commands.describe(user="Opponent to challenge", wager="Optional coin wager (winner takes all)")
-    async def challenge(self, interaction: discord.Interaction, user: discord.Member, wager: str = 0):
+    async def challenge(self, interaction: discord.Interaction, user: discord.Member, wager: str = "0"):
         if isinstance(wager, str): wager = parse_number(wager)
         await self.draft_challenge.callback(self, interaction, user=user, wager=wager)
 

@@ -127,7 +127,7 @@ class ShootoutCog(commands.Cog):
         user="Opponent to challenge (leave empty to play Solo vs AI)",
         wager="Coins to wager (winner takes all, optional)"
     )
-    async def shootout(self, interaction: discord.Interaction, user: discord.Member = None, wager: str = 0):
+    async def shootout(self, interaction: discord.Interaction, user: discord.Member = None, wager: str = "0"):
         if isinstance(wager, str): wager = parse_number(wager)
         if wager < 0:
             return await interaction.response.send_message("❌ Wager cannot be negative.", ephemeral=True)
