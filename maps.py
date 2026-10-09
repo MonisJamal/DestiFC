@@ -385,20 +385,20 @@ def extract_pos(item) -> str:
 # Players play with 100% full OVR at their primary position, official potentialPositions, or natural alternate positions
 
 NATURAL_ALT_POSITIONS = {
-    "CF": ["ST", "CAM"],
     "ST": ["CF"],
-    "LW": ["LM", "LF", "RW"],
-    "RW": ["RM", "RF", "LW"],
-    "LM": ["LW", "RM"],
-    "RM": ["RW", "LM"],
-    "CAM": ["CM", "CF", "LM", "RM"],
-    "CM": ["CAM", "CDM"],
-    "CDM": ["CM", "CB"],
-    "CB": ["CDM"],
-    "LB": ["LWB", "LM"],
-    "RB": ["RWB", "RM"],
-    "LWB": ["LB", "LM"],
-    "RWB": ["RB", "RM"],
+    "LW": ["LM"],
+    "RW": ["RM"],
+    "LM": ["LW"],
+    "RM": ["RW"],
+    "LB": ["LWB"],
+    "RB": ["RWB"],
+    "CF": [],
+    "CAM": [],
+    "CM": [],
+    "CDM": [],
+    "CB": [],
+    "LWB": [],
+    "RWB": [],
     "GK": []
 }
 
