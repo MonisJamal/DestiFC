@@ -1,3 +1,4 @@
+from utils import parse_number
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -143,7 +144,8 @@ class CustomPriceModal(discord.ui.Modal, title="Custom Market Listing Price"):
         await execute_market_list(interaction, self.user_id, self.card, price, self.pos)
 
 
-async def execute_market_list(interaction: discord.Interaction, user_id: int, card: dict, price: int, pos: str):
+async def execute_market_list(interaction: discord.Interaction, user_id: int, card: dict, price: str, pos: str):
+    if isinstance(price, str): price = parse_number(price)
     inventory_id = card['id']
     p = await database.get_db()
     row = await p.fetchrow('SELECT id FROM inventory WHERE id = $1 AND user_id = $2', inventory_id, user_id)
@@ -409,7 +411,8 @@ class MarketCog(commands.Cog):
         price="Price in coins (optional if using dropdown menu)"
     )
     @app_commands.autocomplete(inventory_id=sellable_inventory_autocomplete)
-    async def sell(self, interaction: discord.Interaction, inventory_id: int = None, price: int = None):
+    async def sell(self, interaction: discord.Interaction, inventory_id: int = None, price: str = None):
+        if isinstance(price, str): price = parse_number(price)
         user_id = interaction.user.id
 
         # If user did not provide inventory_id or price, open interactive dropdown menu

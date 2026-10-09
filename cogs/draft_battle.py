@@ -1,3 +1,4 @@
+from utils import parse_number
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -266,7 +267,8 @@ class FormationSelectView(discord.ui.View):
 
 
 class DraftBattleRoomView(discord.ui.View):
-    def __init__(self, challenger: discord.Member, opponent: discord.Member, wager: int, bot, message: discord.Message = None, channel_id: int = None, is_solo: bool = False):
+    def __init__(self, challenger: discord.Member, opponent: discord.Member, wager: str, bot, message: discord.Message = None, channel_id: int = None, is_solo: bool = False):
+        if isinstance(wager, str): wager = parse_number(wager)
         super().__init__(timeout=600)
         self.challenger = challenger
         self.opponent = opponent
@@ -690,7 +692,8 @@ class DraftBattleRoomView(discord.ui.View):
 
 
 class DraftBattleChallengeView(discord.ui.View):
-    def __init__(self, challenger: discord.Member, opponent: discord.Member, wager: int, bot, channel_id: int = None):
+    def __init__(self, challenger: discord.Member, opponent: discord.Member, wager: str, bot, channel_id: int = None):
+        if isinstance(wager, str): wager = parse_number(wager)
         super().__init__(timeout=60)
         self.challenger = challenger
         self.opponent = opponent
@@ -768,7 +771,8 @@ class DraftBattleCog(commands.Cog):
 
     @app_commands.command(name="draft_challenge", description="Challenge another user or AI to a live Draft Battle with 110+ OVR cards")
     @app_commands.describe(user="Opponent to challenge (leave empty to play Solo vs AI)", wager="Optional coin wager for PvP (winner takes all)")
-    async def draft_challenge(self, interaction: discord.Interaction, user: discord.Member = None, wager: int = 0):
+    async def draft_challenge(self, interaction: discord.Interaction, user: discord.Member = None, wager: str = 0):
+        if isinstance(wager, str): wager = parse_number(wager)
         if user is None or user.id == interaction.user.id or user.bot:
             # Solo Draft Challenge vs AI
             ai_user = AIDraftUser()
@@ -813,7 +817,8 @@ class DraftBattleCog(commands.Cog):
 
     @draftbattle_group.command(name="challenge", description="Challenge another user to a live 1v1 Draft Battle with 110+ OVR cards")
     @app_commands.describe(user="Opponent to challenge", wager="Optional coin wager (winner takes all)")
-    async def challenge(self, interaction: discord.Interaction, user: discord.Member, wager: int = 0):
+    async def challenge(self, interaction: discord.Interaction, user: discord.Member, wager: str = 0):
+        if isinstance(wager, str): wager = parse_number(wager)
         await self.draft_challenge.callback(self, interaction, user=user, wager=wager)
 
     @draftbattle_group.command(name="leaderboard", description="View the Top 10 Draft Battle Champions ranked by ELO Rating")

@@ -1,3 +1,4 @@
+from utils import parse_number
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -755,7 +756,8 @@ class EconomyCog(commands.Cog):
         app_commands.Choice(name="Coins", value="coins"),
         app_commands.Choice(name="Draft Vouchers", value="vouchers")
     ])
-    async def give(self, interaction: discord.Interaction, item: str, amount: int, member: discord.Member = None):
+    async def give(self, interaction: discord.Interaction, item: str, amount: str, member: discord.Member = None):
+        if isinstance(amount, str): amount = parse_number(amount)
         await interaction.response.defer(ephemeral=True)
         if not await is_team_admin_or_owner(self.bot, interaction.user):
             await interaction.followup.send("❌ **Access Denied:** This command is strictly restricted to members of the Discord Developer Team.", ephemeral=True)

@@ -1,3 +1,4 @@
+from utils import parse_number
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
@@ -302,7 +303,8 @@ class DraftCog(commands.Cog):
         app_commands.Choice(name="Draft Pack 2", value=2),
         app_commands.Choice(name="Draft Pack 3", value=3)
     ])
-    async def draft(self, interaction: discord.Interaction, pack: int, amount: int = 1):
+    async def draft(self, interaction: discord.Interaction, pack: int, amount: str = 1):
+        if isinstance(amount, str): amount = parse_number(amount)
         await interaction.response.defer()
         if amount < 1 or amount > 10:
             return await interaction.followup.send("❌ You can only open between 1 and 10 packs at a time.", ephemeral=True)

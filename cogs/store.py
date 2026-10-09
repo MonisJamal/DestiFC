@@ -1,3 +1,4 @@
+from utils import parse_number
 import discord
 import asyncio
 from discord.ext import commands, tasks
@@ -528,15 +529,18 @@ class StoreCog(commands.Cog):
 
     @store_group.command(name="buy_vouchers", description="Buy Draft Vouchers with Coins (30M each, 10 for 250M | Max 70/day)")
     @app_commands.describe(amount="Number of Draft Vouchers to purchase")
-    async def buy_vouchers_subcmd(self, interaction: discord.Interaction, amount: int):
+    async def buy_vouchers_subcmd(self, interaction: discord.Interaction, amount: str):
+        if isinstance(amount, str): amount = parse_number(amount)
         await self._process_buy_vouchers(interaction, amount)
 
     @app_commands.command(name="buy_vouchers", description="Buy Draft Vouchers with Coins (30M each, 10 for 250M | Max 70/day)")
     @app_commands.describe(amount="Number of Draft Vouchers to purchase")
-    async def buy_vouchers_rootcmd(self, interaction: discord.Interaction, amount: int):
+    async def buy_vouchers_rootcmd(self, interaction: discord.Interaction, amount: str):
+        if isinstance(amount, str): amount = parse_number(amount)
         await self._process_buy_vouchers(interaction, amount)
 
-    async def _process_buy_vouchers(self, interaction: discord.Interaction, amount: int):
+    async def _process_buy_vouchers(self, interaction: discord.Interaction, amount: str):
+        if isinstance(amount, str): amount = parse_number(amount)
         await interaction.response.defer()
         if amount <= 0:
             return await interaction.followup.send("❌ Please enter a positive number of vouchers.", ephemeral=True)
@@ -604,7 +608,8 @@ class VoucherShopView(discord.ui.View):
         self.bundle_price = bundle_price
         self.daily_limit = daily_limit
 
-    async def execute_purchase(self, interaction: discord.Interaction, amount: int, cost: int):
+    async def execute_purchase(self, interaction: discord.Interaction, amount: str, cost: int):
+        if isinstance(amount, str): amount = parse_number(amount)
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("❌ This is not your shop menu. Use `/store vouchers` to open your own.", ephemeral=True)
 

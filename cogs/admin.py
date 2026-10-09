@@ -1,3 +1,4 @@
+from utils import parse_number
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -221,7 +222,8 @@ class AdminCog(commands.Cog):
 
     @admin_group.command(name="give_coins", description="Admin: Grant coins to a user")
     @app_commands.describe(user="Target user", amount="Amount of coins to give")
-    async def give_coins(self, interaction: discord.Interaction, user: discord.Member, amount: int):
+    async def give_coins(self, interaction: discord.Interaction, user: discord.Member, amount: str):
+        if isinstance(amount, str): amount = parse_number(amount)
         await interaction.response.defer(ephemeral=True)
         if amount <= 0:
             return await interaction.followup.send("❌ Amount must be greater than 0.", ephemeral=True)
@@ -235,7 +237,8 @@ class AdminCog(commands.Cog):
 
     @admin_group.command(name="give_vouchers", description="Admin: Grant draft vouchers to a user")
     @app_commands.describe(user="Target user", amount="Amount of vouchers to give")
-    async def give_vouchers(self, interaction: discord.Interaction, user: discord.Member, amount: int):
+    async def give_vouchers(self, interaction: discord.Interaction, user: discord.Member, amount: str):
+        if isinstance(amount, str): amount = parse_number(amount)
         await interaction.response.defer(ephemeral=True)
         if amount <= 0:
             return await interaction.followup.send("❌ Amount must be greater than 0.", ephemeral=True)
@@ -250,7 +253,8 @@ class AdminCog(commands.Cog):
 
     @admin_group.command(name="set_coins", description="Admin: Set a user's exact coin balance")
     @app_commands.describe(user="Target user", amount="Exact amount of coins they should have")
-    async def set_coins(self, interaction: discord.Interaction, user: discord.Member, amount: int):
+    async def set_coins(self, interaction: discord.Interaction, user: discord.Member, amount: str):
+        if isinstance(amount, str): amount = parse_number(amount)
         await interaction.response.defer(ephemeral=True)
         if amount < 0:
             return await interaction.followup.send("❌ Amount cannot be negative.", ephemeral=True)
@@ -267,7 +271,8 @@ class AdminCog(commands.Cog):
 
     @admin_group.command(name="set_vouchers", description="Admin: Set a user's exact voucher balance")
     @app_commands.describe(user="Target user", amount="Exact amount of vouchers they should have")
-    async def set_vouchers(self, interaction: discord.Interaction, user: discord.Member, amount: int):
+    async def set_vouchers(self, interaction: discord.Interaction, user: discord.Member, amount: str):
+        if isinstance(amount, str): amount = parse_number(amount)
         await interaction.response.defer(ephemeral=True)
         if amount < 0:
             return await interaction.followup.send("❌ Amount cannot be negative.", ephemeral=True)
@@ -401,7 +406,8 @@ class AdminCog(commands.Cog):
 
     @admin_group.command(name="set_price", description="Admin: Set minimum price floor, max ceiling, and quicksell for an OVR")
     @app_commands.describe(ovr="Card OVR rating (e.g. 120)", min_price="Min Price in Coins", max_price="Max Price in Coins (optional, defaults to 2x min)", quicksell="QuickSell Coins (optional, defaults to 70% min)")
-    async def set_ovr_price(self, interaction: discord.Interaction, ovr: int, min_price: int, max_price: int = None, quicksell: int = None):
+    async def set_ovr_price(self, interaction: discord.Interaction, ovr: int, min_price: str, max_price: str = None, quicksell: str = None):
+        if isinstance(min_price, str): min_price = parse_number(min_price)
         if not await is_team_admin_or_owner(self.bot, interaction.user):
             return await interaction.response.send_message("❌ **Access Denied:** Administrator command only.", ephemeral=True)
         await interaction.response.defer(ephemeral=True)
@@ -495,14 +501,16 @@ class AdminCog(commands.Cog):
 
     @app_commands.command(name="give_coins", description="Admin: Grant coins to a user")
     @app_commands.describe(user="Target user", amount="Amount of coins to give")
-    async def top_give_coins(self, interaction: discord.Interaction, user: discord.Member, amount: int):
+    async def top_give_coins(self, interaction: discord.Interaction, user: discord.Member, amount: str):
+        if isinstance(amount, str): amount = parse_number(amount)
         if not await is_team_admin_or_owner(self.bot, interaction.user):
             return await interaction.response.send_message("❌ **Access Denied:** Administrator command only.", ephemeral=True)
         await self.give_coins.callback(self, interaction, user, amount)
 
     @app_commands.command(name="give_vouchers", description="Admin: Grant draft vouchers to a user")
     @app_commands.describe(user="Target user", amount="Amount of vouchers to give")
-    async def top_give_vouchers(self, interaction: discord.Interaction, user: discord.Member, amount: int):
+    async def top_give_vouchers(self, interaction: discord.Interaction, user: discord.Member, amount: str):
+        if isinstance(amount, str): amount = parse_number(amount)
         if not await is_team_admin_or_owner(self.bot, interaction.user):
             return await interaction.response.send_message("❌ **Access Denied:** Administrator command only.", ephemeral=True)
         await self.give_vouchers.callback(self, interaction, user, amount)
