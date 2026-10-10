@@ -300,7 +300,121 @@ class DraftCog(commands.Cog):
         await interaction.followup.send("✅ **Drafts Force-Refreshed!** All 3 draft packs have been refreshed with new card pools and a fresh 2-hour rotation timer.")
 
 
+
+    @app_commands.command(name="super_draft", description="Spend 25 vouchers for a GUARANTEED Elite (Pool B) or a 25% chance at a Walkout (Pool A)!")
+    @app_commands.choices(pack=[
+        app_commands.Choice(name="Draft Pack 1", value=1),
+        app_commands.Choice(name="Draft Pack 2", value=2),
+        app_commands.Choice(name="Draft Pack 3", value=3)
+    ])
+    async def super_draft(self, interaction: discord.Interaction, pack: int, amount: str = "1"):
+        from utils import parse_number
+        if isinstance(amount, str): amount = parse_number(amount)
+        await interaction.response.defer()
+        
+        if amount < 1 or amount > 20:
+            return await interaction.followup.send("❌ You can only open between 1 and 20 super drafts at a time.", ephemeral=True)
+
+        cost = amount * 25
+        user_id = interaction.user.id
+        
+        inv_size, user, drafts = await asyncio.gather(
+            database.get_inventory_size(user_id),
+            database.get_user(user_id),
+            database.get_active_drafts()
+        )
+
+        if inv_size + amount > 1000:
+            return await interaction.followup.send(f"❌ **Inventory Full!**\nYou currently have {inv_size}/1000 cards. Please `/market sell` or `/exchange` some players before opening more packs.", ephemeral=True)
+        
+        if user.get('vouchers', 0) < cost:
+            return await interaction.followup.send(f"❌ You need {cost} Draft Vouchers to open {amount} Super Drafts (25 each)!\nYou currently have {user.get('vouchers', 0)}.", ephemeral=True)
+
+        if not drafts or (str(pack) not in drafts and pack not in drafts):
+            return await interaction.followup.send("❌ Drafts are currently rotating. Please wait a minute.", ephemeral=True)
+            
+        d = drafts.get(pack) or drafts.get(str(pack))
+        
+        if not d.get('pool_a') or not d.get('pool_b'):
+            return await interaction.followup.send("❌ This draft pack has empty pools. The bot will refresh them shortly!", ephemeral=True)
+        
+        pulled_players = []
+        highest_player = None
+        highest_ovr = 0
+        is_walkout_pack = False
+        
+        # Hardcoded 25% Pool A, 75% Pool B, 0% Pool C
+        cutoff_a = 25.0
+        
+        # Helper to pick Pool A card with exact weightings (copied from draft)
+        share_122 = 6.0
+        share_121 = 35.0
+        
+        def pick_pool_a_weighted(pool_a_list):
+            import random
+            if not pool_a_list: return {}
+            cards_122 = [p for p in pool_a_list if (p.get('rating') or 0) >= 122]
+            cards_121 = [p for p in pool_a_list if (p.get('rating') or 0) == 121]
+            cards_120 = [p for p in pool_a_list if (p.get('rating') or 0) <= 120]
+            
+            tier_roll = random.uniform(0, 100)
+            if tier_roll < share_122 and cards_122: return random.choice(cards_122)
+            elif tier_roll < (share_122 + share_121) and cards_121: return random.choice(cards_121)
+            elif cards_120: return random.choice(cards_120)
+            elif cards_121: return random.choice(cards_121)
+            elif cards_122: return random.choice(cards_122)
+            return random.choice(pool_a_list)
+
+        import random
+        for _ in range(amount):
+            roll = random.uniform(0, 100)
+            
+            if roll <= cutoff_a:
+                is_walkout_pack = True
+                player_data = pick_pool_a_weighted(d['pool_a'])
+            else:
+                player_data = random.choice(d['pool_b']) if d.get('pool_b') else pick_pool_a_weighted(d['pool_a'])
+                
+            pulled_players.append(player_data)
+            p_ovr = player_data.get('rating', 0)
+            if p_ovr > highest_ovr:
+                highest_ovr = p_ovr
+                highest_player = player_data
+
+        is_anim = bool(is_walkout_pack or (isinstance(highest_ovr, int) and highest_ovr >= 120))
+        
+        db_task = asyncio.gather(
+            database.add_vouchers(user_id, -cost),
+            database.add_players_to_inventory_batch(user_id, pulled_players)
+        )
+        
+        from card_generator import get_or_create_card_bytes
+        card_gen_task = asyncio.to_thread(get_or_create_card_bytes, highest_player, 3, is_anim)
+
+        image_result, _ = await asyncio.gather(card_gen_task, db_task)
+        image_binary, filename = image_result
+        file = discord.File(fp=image_binary, filename=filename or 'card.png') if image_binary else None
+
+        desc = f"Spent {cost} Vouchers for {amount}x Super Drafts!\n"
+        if amount > 1:
+            best_desc = f"**Highest Pull:** {highest_ovr} {highest_player.get('lastName', '')}\n"
+            walkouts = len([p for p in pulled_players if (p.get('rating', 0) >= 120)])
+            if walkouts > 0:
+                best_desc += f"🌟 You packed {walkouts} Walkouts!"
+            desc += best_desc
+            
+        embed = discord.Embed(
+            title="💎 Super Draft Opened!",
+            description=desc,
+            color=0xffd700
+        )
+        if file:
+            embed.set_image(url=f"attachment://{filename or 'card.png'}")
+            
+        await interaction.followup.send(embed=embed, file=file)
+
     @app_commands.command(name="draft", description="Open a specific draft pack")
+
     @app_commands.choices(pack=[
         app_commands.Choice(name="Draft Pack 1", value=1),
         app_commands.Choice(name="Draft Pack 2", value=2),
