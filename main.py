@@ -27,6 +27,23 @@ class DestiFC(commands.Bot):
 
     async def setup_hook(self):
         await database.setup()
+        
+        async def on_tree_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
+            if isinstance(error, discord.app_commands.CommandOnCooldown):
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(f"⏳ **Cooldown active!** Please wait **{error.retry_after:.1f}s** before using this command again.", ephemeral=True)
+            elif isinstance(error, discord.app_commands.MissingPermissions):
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ You lack the permissions to use this command.", ephemeral=True)
+            else:
+                print(f"[Command Error] {error}")
+                if not interaction.response.is_done():
+                    try:
+                        await interaction.response.send_message("❌ An unexpected error occurred.", ephemeral=True)
+                    except Exception:
+                        pass
+        self.tree.on_error = on_tree_error
+
         # Load all cogs on startup
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py') and not filename.startswith('__'):

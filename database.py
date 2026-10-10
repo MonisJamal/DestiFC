@@ -21,6 +21,26 @@ _USER_INVENTORY_CACHE = {}  # {user_id: {"data": list, "exp": timestamp}}
 _USER_SQUAD_CACHE = {}      # {user_id: {"data": dict, "exp": timestamp}}
 _USER_CACHE = {}            # {user_id: {"data": dict, "exp": timestamp}}
 
+import asyncio
+
+# --- Cache Garbage Collection Task ---
+async def cache_eviction_loop():
+    while True:
+        await asyncio.sleep(600)  # Every 10 mins
+        now = time.time()
+        
+        # Evict expired users from cache to prevent Memory Leaks at scale
+        expired_users = [uid for uid, data in _USER_CACHE.items() if now - data['exp'] > 120]
+        for uid in expired_users: del _USER_CACHE[uid]
+            
+        expired_squads = [uid for uid, data in _USER_SQUAD_CACHE.items() if now - data['exp'] > 120]
+        for uid in expired_squads: del _USER_SQUAD_CACHE[uid]
+            
+        expired_inv = [uid for uid, data in _USER_INVENTORY_CACHE.items() if now - data['exp'] > 120]
+        for uid in expired_inv: del _USER_INVENTORY_CACHE[uid]
+        
+        print(f"[Memory] Garbage Collected Caches: Removed {len(expired_users)} users, {len(expired_squads)} squads, {len(expired_inv)} inventories.")
+
 def flush_all_caches():
     """Flush every in-memory cache. Call after SIGNAL_RELOAD_COGS or panel auto-fix."""
     global _DRAFTS_CACHE, _DRAFTS_CACHE_EXP, _LAYOUTS_CACHE, _LAYOUTS_CACHE_EXP

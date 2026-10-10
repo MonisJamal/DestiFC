@@ -302,6 +302,7 @@ class DraftCog(commands.Cog):
 
 
     @app_commands.command(name="super_draft", description="Spend 25 vouchers for a GUARANTEED Elite (Pool B) or a 25% chance at a Walkout (Pool A)!")
+    @app_commands.checks.cooldown(1, 4.0, key=lambda i: i.user.id)
     @app_commands.choices(pack=[
         app_commands.Choice(name="Draft Pack 1", value=1),
         app_commands.Choice(name="Draft Pack 2", value=2),
@@ -414,6 +415,7 @@ class DraftCog(commands.Cog):
         await interaction.followup.send(embed=embed, file=file)
 
     @app_commands.command(name="draft", description="Open a specific draft pack")
+    @app_commands.checks.cooldown(1, 4.0, key=lambda i: i.user.id)
 
     @app_commands.choices(pack=[
         app_commands.Choice(name="Draft Pack 1", value=1),
