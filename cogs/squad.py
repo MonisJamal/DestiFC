@@ -410,15 +410,12 @@ class SquadCog(commands.Cog):
                             kept_count += 1
                             break
             
-        new_squad = {
-            "formation": new_formation,
-            "tactic": squad.get("tactic", "Tiki-Taka"),
-            "theme": squad.get("theme", "default"),
-            "players": new_players
-        }
+        # Preserve all squad data (like unlocked_themes, tactic, theme) and only update formation/players
+        squad["formation"] = new_formation
+        squad["players"] = new_players
         
-        await database.update_squad(interaction.user.id, new_squad)
-        t_data = TACTICS.get(new_squad["tactic"], TACTICS["Tiki-Taka"])
+        await database.update_squad(interaction.user.id, squad)
+        t_data = TACTICS.get(squad.get("tactic", "Tiki-Taka"), TACTICS["Tiki-Taka"])
         is_syn = any(f.lower() in new_formation.lower() for f in t_data["best_formations"])
         syn_msg = f"\n🌟 **Tactical Chemistry Synergy is ACTIVE with your {t_data['emoji']} {t_data['name']} tactic!**" if is_syn else f"\n💡 *Tip: Best suitable tactic for {new_formation}: Check `/squad tactic`.*"
         
