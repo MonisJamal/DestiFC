@@ -1360,7 +1360,27 @@ async def save_luck_settings(settings: dict) -> bool:
         print(f"[Database] Error in save_luck_settings: {e}")
         return False
 
-# ================= OVR Price Limits & Economy Functions =================
+
+async def check_and_auto_adjust_prices_for_new_ovr(current_max_ovr: int):
+    p = await get_db()
+    row = await p.fetchrow("SELECT value FROM system_settings WHERE key = 'last_known_max_ovr'")
+    last_ovr = int(row['value']) if row and row['value'] else 122
+    
+    if current_max_ovr > last_ovr:
+        prices = await get_ovr_price_settings()
+        for k, data in prices.items():
+            ovr = int(k)
+            if ovr < current_max_ovr:
+                data['min_price'] = max(100, int(data.get('min_price', 0) * 0.65))
+                data['max_price'] = max(200, int(data.get('max_price', 0) * 0.65))
+                data['quicksell'] = max(50, int(data.get('quicksell', 0) * 0.65))
+                
+        await save_ovr_price_settings(prices)
+        await p.execute("INSERT INTO system_settings (key, value, updated_at) VALUES ('last_known_max_ovr', $1, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", str(current_max_ovr))
+        print(f"[Market] NEW OVR {current_max_ovr} DETECTED! Reduced all lower OVR prices by 35%.")
+
+# ================= OVR Price Limits
+ & Economy Functions =================
 
 DEFAULT_OVR_PRICES = {
     125: {"min_price": 16000000000, "max_price": 32000000000, "quicksell": 11200000000},

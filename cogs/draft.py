@@ -158,6 +158,9 @@ class DraftCog(commands.Cog):
             max_ovr = await database.get_max_official_ovr()
             if not max_ovr or max_ovr < 115:
                 max_ovr = 122
+            
+            # Auto-adjust market prices if a new Max OVR just dropped
+            await database.check_and_auto_adjust_prices_for_new_ovr(max_ovr)
 
             ovr_a1, ovr_a2, ovr_a3 = max_ovr, max_ovr - 1, max_ovr - 2
             min_b, max_b = max_ovr - 5, max_ovr - 3
