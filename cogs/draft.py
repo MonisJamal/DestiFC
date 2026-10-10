@@ -353,6 +353,12 @@ class DraftCog(commands.Cog):
         pity_a_thresh = int(luck.get("pity_pool_a_threshold", 70) or 70)
         pity_b_interv = int(luck.get("pity_pool_b_interval", 10) or 10)
         
+        # Bulk opening luck nerf (user requested to match 1-10 pulls)
+        if amount > 10:
+            bulk_penalty_multiplier = max(0.4, 1.0 - ((amount - 10) * 0.0125)) # up to 50% nerf for 50 packs
+            cutoff_a *= bulk_penalty_multiplier
+            cutoff_b *= bulk_penalty_multiplier
+        
         share_122 = float(luck.get("walkout_122_share", 6.0) or 6.0)
         share_121 = float(luck.get("walkout_121_share", 35.0) or 35.0)
 
