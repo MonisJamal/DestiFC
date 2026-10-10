@@ -1367,17 +1367,32 @@ async def check_and_auto_adjust_prices_for_new_ovr(current_max_ovr: int):
     last_ovr = int(row['value']) if row and row['value'] else 122
     
     if current_max_ovr > last_ovr:
+        ovr_diff = current_max_ovr - last_ovr
         prices = await get_ovr_price_settings()
+        
+        new_prices = {}
         for k, data in prices.items():
             ovr = int(k)
-            if ovr < current_max_ovr:
-                data['min_price'] = max(100, int(data.get('min_price', 0) * 0.65))
-                data['max_price'] = max(200, int(data.get('max_price', 0) * 0.65))
-                data['quicksell'] = max(50, int(data.get('quicksell', 0) * 0.65))
+            target_ovr = ovr - ovr_diff
+            
+            # Use the target OVR's price, or if it doesn't exist (too low), use OVR 100's price
+            if target_ovr in prices:
+                new_prices[ovr] = dict(prices[target_ovr])
+            else:
+                new_prices[ovr] = dict(prices.get(100, {"min_price": 50000, "max_price": 100000, "quicksell": 35000}))
                 
-        await save_ovr_price_settings(prices)
+        # Ensure all OVRs up to current_max_ovr exist
+        for o in range(100, current_max_ovr + 1):
+            if o not in new_prices:
+                target_o = o - ovr_diff
+                if target_o in prices:
+                    new_prices[o] = dict(prices[target_o])
+                else:
+                    new_prices[o] = dict(prices.get(100, {"min_price": 50000, "max_price": 100000, "quicksell": 35000}))
+                    
+        await save_ovr_price_settings(new_prices)
         await p.execute("INSERT INTO system_settings (key, value, updated_at) VALUES ('last_known_max_ovr', $1, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", str(current_max_ovr))
-        print(f"[Market] NEW OVR {current_max_ovr} DETECTED! Reduced all lower OVR prices by 35%.")
+        print(f"[Market] NEW OVR {current_max_ovr} DETECTED! Shifted all prices down by {ovr_diff} OVRs.")
 
 # ================= OVR Price Limits
 # & Economy Functions =================
