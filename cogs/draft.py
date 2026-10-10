@@ -306,8 +306,8 @@ class DraftCog(commands.Cog):
     async def draft(self, interaction: discord.Interaction, pack: int, amount: str = "1"):
         if isinstance(amount, str): amount = parse_number(amount)
         await interaction.response.defer()
-        if amount < 1 or amount > 10:
-            return await interaction.followup.send("❌ You can only open between 1 and 10 packs at a time.", ephemeral=True)
+        if amount < 1 or amount > 50:
+            return await interaction.followup.send("❌ You can only open between 1 and 50 packs at a time.", ephemeral=True)
 
         user_id = interaction.user.id
         inv_size, user, drafts = await asyncio.gather(
