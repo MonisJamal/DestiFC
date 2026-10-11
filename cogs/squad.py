@@ -975,7 +975,7 @@ class SquadCog(commands.Cog):
         elif 'lewandowski' in name_lower:
             ovr = min(ovr, 122)
         elif 'yashin' in name_lower:
-            ovr = min(ovr, 113)
+            ovr = min(ovr, 122)
         matches = stats.get("matches_played", 0)
         goals = stats.get("goals", 0)
         assists = stats.get("assists", 0)
