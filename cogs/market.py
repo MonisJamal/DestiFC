@@ -362,7 +362,7 @@ class QuickSellSelectView(discord.ui.View):
             description=f"Successfully quick sold **{len(sold_cards)} card(s)**:\n\n{names_summary}\n\n💰 **+{total_coins:,} Coins** added to your club balance!",
             color=discord.Color.gold()
         )
-        embed.set_footer(text=f"Valued at 75% of minimum market valuation. Remaining unlocked cards: {len(self.eligible_cards)}")
+        embed.set_footer(text=f"Valued at 70% of minimum market valuation. Remaining unlocked cards: {len(self.eligible_cards)}")
         
         if not self.eligible_cards:
             return await interaction.response.edit_message(embed=embed, view=None)
