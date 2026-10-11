@@ -37,6 +37,17 @@ class CompensationCog(commands.Cog):
             vouchers_reward = int(config.get('vouchers', 0))
             
             user_id = interaction.user.id
+            
+            # Exclusive Target Users Check (if configured)
+            eligible_users = config.get('eligible_users')
+            if eligible_users and isinstance(eligible_users, list):
+                str_eligible = [str(uid).strip() for uid in eligible_users]
+                if str(user_id) not in str_eligible:
+                    return await interaction.followup.send(
+                        "❌ You are not eligible for this compensation package. It is reserved exclusively for players affected by the recent Season Pass Tier balance update.",
+                        ephemeral=True
+                    )
+            
             await database.get_user(user_id) # Ensure user exists
             
             stat_row = await p.fetchrow("SELECT stats FROM user_stats WHERE user_id = $1", user_id)
