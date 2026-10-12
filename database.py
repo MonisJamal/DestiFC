@@ -1161,28 +1161,28 @@ DEFAULT_SIGNATURE_BOX = {
         "stats": {"PAC": 130, "SHO": 138, "PAS": 145, "DRI": 142, "DEF": 115, "PHY": 128}
     },
     "rewards_json": [
-        {"id": 1, "tier": "bad", "name": "50,000,000 Coins", "type": "coins", "amount": 50000000, "icon": "🪙", "base_weight": 22.0},
-        {"id": 2, "tier": "bad", "name": "5 Draft Vouchers", "type": "vouchers", "amount": 5, "icon": "🎟️", "base_weight": 22.0},
-        {"id": 3, "tier": "mid", "name": "250,000,000 Coins", "type": "coins", "amount": 250000000, "icon": "💰", "base_weight": 11.0},
-        {"id": 4, "tier": "mid", "name": "20 Draft Vouchers", "type": "vouchers", "amount": 20, "icon": "🎟️", "base_weight": 11.0},
-        {"id": 5, "tier": "mid", "name": "500 Gems", "type": "gems", "amount": 500, "icon": "💎", "base_weight": 11.0},
-        {"id": 6, "tier": "mid", "name": "100,000 Fans", "type": "fans", "amount": 100000, "icon": "👥", "base_weight": 11.0},
-        {"id": 7, "tier": "mid", "name": "1x 115-118 Elite Pack", "type": "pack", "amount": 1, "pack_rating_min": 115, "pack_rating_max": 118, "icon": "📦", "base_weight": 8.0},
-        {"id": 8, "tier": "good", "name": "2,500,000,000 Coins (2.5B)", "type": "coins", "amount": 2500000000, "icon": "👑", "base_weight": 2.0},
-        {"id": 9, "tier": "good", "name": "75 Draft Vouchers", "type": "vouchers", "amount": 75, "icon": "🎫", "base_weight": 2.0},
-        {"id": 10, "tier": "good", "name": "🌟 124 OVR Signature Zidane", "type": "signature_card", "amount": 1, "icon": "🌟", "base_weight": 1.0}
+        {"id": 1, "tier": "bad", "name": "100,000,000 Coins", "type": "coins", "amount": 100000000, "icon": "🪙", "base_weight": 46.7},
+        {"id": 2, "tier": "bad", "name": "50 Draft Vouchers", "type": "vouchers", "amount": 50, "icon": "🎟️", "base_weight": 28.0},
+        {"id": 3, "tier": "mid", "name": "350,000,000 Coins", "type": "coins", "amount": 350000000, "icon": "💰", "base_weight": 13.0},
+        {"id": 4, "tier": "mid", "name": "100 Draft Vouchers", "type": "vouchers", "amount": 100, "icon": "🎟️", "base_weight": 5.8},
+        {"id": 5, "tier": "mid", "name": "1,500,000,000 Coins", "type": "coins", "amount": 1500000000, "icon": "💎", "base_weight": 3.4},
+        {"id": 6, "tier": "mid", "name": "250 Draft Vouchers", "type": "vouchers", "amount": 250, "icon": "🎟️", "base_weight": 1.7},
+        {"id": 7, "tier": "mid", "name": "1x 117-121 Pack", "type": "pack", "amount": 1, "pack_rating_min": 117, "pack_rating_max": 121, "icon": "📦", "base_weight": 0.8},
+        {"id": 8, "tier": "good", "name": "4,000,000,000 Coins", "type": "coins", "amount": 4000000000, "icon": "👑", "base_weight": 0.4},
+        {"id": 9, "tier": "good", "name": "500 Draft Vouchers", "type": "vouchers", "amount": 500, "icon": "🎟️", "base_weight": 0.15},
+        {"id": 10, "tier": "good", "name": "🌟 122 OVR Signature Blank", "type": "signature_card", "amount": 1, "icon": "🌟", "base_weight": 0.05}
     ],
     "draw_costs_json": [
         {"draw": 1, "currency": "coins", "amount": 50000000},
-        {"draw": 2, "currency": "coins", "amount": 100000000},
-        {"draw": 3, "currency": "coins", "amount": 200000000},
-        {"draw": 4, "currency": "coins", "amount": 350000000},
-        {"draw": 5, "currency": "coins", "amount": 550000000},
-        {"draw": 6, "currency": "coins", "amount": 800000000},
-        {"draw": 7, "currency": "coins", "amount": 1100000000},
-        {"draw": 8, "currency": "coins", "amount": 1500000000},
-        {"draw": 9, "currency": "coins", "amount": 2000000000},
-        {"draw": 10, "currency": "coins", "amount": 2500000000}
+        {"draw": 2, "currency": "coins", "amount": 150000000},
+        {"draw": 3, "currency": "coins", "amount": 300000000},
+        {"draw": 4, "currency": "coins", "amount": 500000000},
+        {"draw": 5, "currency": "coins", "amount": 1000000000},
+        {"draw": 6, "currency": "coins", "amount": 3000000000},
+        {"draw": 7, "currency": "coins", "amount": 5000000000},
+        {"draw": 8, "currency": "coins", "amount": 10000000000},
+        {"draw": 9, "currency": "coins", "amount": 20000000000},
+        {"draw": 10, "currency": "coins", "amount": 35000000000}
     ]
 }
 
