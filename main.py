@@ -14,7 +14,7 @@ from auth import is_team_admin_or_owner
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
-class DestiFC(commands.Bot):
+class DestiFC(commands.AutoShardedBot):
     def __init__(self):
         super().__init__(
             command_prefix='!',
@@ -87,6 +87,20 @@ class DestiFC(commands.Bot):
                             ephemeral=True
                         )
                     return False
+
+                # Server-Specific Channel Restriction Check
+                if interaction.guild and interaction.channel:
+                    g_cfg = await database.get_guild_config(interaction.guild.id)
+                    bot_chan = g_cfg.get('bot_channel_id')
+                    if bot_chan and interaction.channel.id != bot_chan:
+                        is_mgr = interaction.user.guild_permissions.manage_guild or interaction.user.guild_permissions.administrator
+                        if not is_mgr and cmd_name not in ['setchannel', 'resetchannel', 'help', 'custom_order']:
+                            if not interaction.response.is_done():
+                                await interaction.response.send_message(
+                                    f"⚠️ **Channel Restricted:** In this server, DestiFC commands are restricted to <#{bot_chan}>! Please run your command there.",
+                                    ephemeral=True
+                                )
+                            return False
 
                 # Rate Limiting & Concurrency Guard for application commands (slash commands)
                 if interaction.type == discord.InteractionType.application_command:

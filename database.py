@@ -2186,3 +2186,65 @@ async def get_exchange_top_candidates(target_ovr: int = 122):
     # Fallback to non-exclusive if admin hasn't flagged any cards yet
     return await get_official_cards_by_rating(target_ovr, target_ovr, 100)
 
+# ================= Guild Configs & Custom Card Requests =================
+
+_GUILD_CONFIG_CACHE = {}  # guild_id -> {'data': dict, 'exp': float}
+
+async def get_guild_config(guild_id: int) -> dict:
+    global _GUILD_CONFIG_CACHE
+    now = time.time()
+    if guild_id in _GUILD_CONFIG_CACHE and now < _GUILD_CONFIG_CACHE[guild_id]['exp']:
+        return _GUILD_CONFIG_CACHE[guild_id]['data']
+    p = await get_db()
+    try:
+        row = await p.fetchrow('SELECT guild_id, bot_channel_id FROM guild_configs WHERE guild_id = $1', int(guild_id))
+        data = dict(row) if row else {'guild_id': int(guild_id), 'bot_channel_id': None}
+        _GUILD_CONFIG_CACHE[guild_id] = {'data': data, 'exp': now + 300.0}
+        return data
+    except Exception as e:
+        print(f"[Database] Error in get_guild_config: {e}")
+        return {'guild_id': int(guild_id), 'bot_channel_id': None}
+
+async def set_guild_bot_channel(guild_id: int, channel_id: int | None) -> bool:
+    global _GUILD_CONFIG_CACHE
+    p = await get_db()
+    try:
+        await p.execute('''
+            INSERT INTO guild_configs (guild_id, bot_channel_id, updated_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (guild_id) DO UPDATE SET
+                bot_channel_id = $2,
+                updated_at = NOW()
+        ''', int(guild_id), int(channel_id) if channel_id else None)
+        _GUILD_CONFIG_CACHE[guild_id] = {
+            'data': {'guild_id': int(guild_id), 'bot_channel_id': int(channel_id) if channel_id else None},
+            'exp': time.time() + 300.0
+        }
+        return True
+    except Exception as e:
+        print(f"[Database] Error in set_guild_bot_channel: {e}")
+        return False
+
+async def create_custom_card_request(user_id: int, guild_id: int | None, player_name: str, rating: int, position: str, club: str, nation: str, image_url: str, notes: str) -> int:
+    p = await get_db()
+    try:
+        row = await p.fetchrow('''
+            INSERT INTO custom_card_requests (user_id, guild_id, player_name, rating, position, club, nation, image_url, notes, status, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING', NOW())
+            RETURNING id
+        ''', int(user_id), int(guild_id) if guild_id else None, str(player_name), int(rating), str(position), str(club), str(nation), str(image_url), str(notes))
+        return row['id'] if row else 0
+    except Exception as e:
+        print(f"[Database] Error in create_custom_card_request: {e}")
+        return 0
+
+async def get_custom_card_requests(limit: int = 50) -> list:
+    p = await get_db()
+    try:
+        rows = await p.fetch('SELECT * FROM custom_card_requests ORDER BY created_at DESC LIMIT $1', limit)
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[Database] Error in get_custom_card_requests: {e}")
+        return []
+
+

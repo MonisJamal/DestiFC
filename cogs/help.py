@@ -67,12 +67,19 @@ class HelpCog(commands.Cog):
             "`> /privacy` — 🔒 Toggle private/public profile & squad visibility\n"
         ), inline=False)
         
-        embed.add_field(name="💬 Community & Support", value=(
-            "Join the official DestiFC Support Server for bot updates, announcements, giveaways, and help:\n"
-            "🔗 [Join DestiFC Support Server](https://discord.gg/wSMWDyscQY)\n"
+        embed.add_field(name="🎨 Custom Cards & Server Setup", value=(
+            "`> /custom_order` — 🎨 Order your own Custom Card with custom stats, perks & personal avatar (DM Monis)!\n"
+            "`> /setchannel <channel>` — 📌 (Admins) Bind DestiFC commands to a dedicated channel in your server\n"
+            "`> /resetchannel` — 🔓 (Admins) Remove channel restrictions and allow commands everywhere\n"
         ), inline=False)
         
-        embed.set_footer(text="DestiFC • Type /guide for the complete gameplay walkthrough!")
+        embed.add_field(name="💬 Official Communities & Support", value=(
+            "• 🦁 **[Join BeastlyFC (Main Server)](https://discord.gg/fVE7v6DNjt)** — Tournaments, leagues & active squad discussions!\n"
+            "• 🛠️ **[Join DestiFC Support Server](https://discord.gg/W6YcPSGDMA)** — Bot updates, announcements & bug reports!\n"
+            "• 📩 **Custom Card Orders:** Type `/custom_order` or DM <@1259402026782294051>\n"
+        ), inline=False)
+        
+        embed.set_footer(text="DestiFC • Type /guide for walkthrough • Join BeastlyFC: discord.gg/fVE7v6DNjt")
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="guide", description="Complete Master Guide: How to master DestiFC, build your squad & earn vouchers!")
@@ -151,7 +158,7 @@ class HelpCog(commands.Cog):
             inline=False
         )
 
-        embed.set_footer(text="DestiFC Official Guide • Support: https://discord.gg/wSMWDyscQY")
+        embed.set_footer(text="DestiFC Guide • BeastlyFC: discord.gg/fVE7v6DNjt • Support: discord.gg/W6YcPSGDMA")
         await interaction.followup.send(embed=embed)
 
 async def setup(bot):
