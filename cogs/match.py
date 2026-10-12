@@ -734,8 +734,10 @@ class MatchCog(commands.Cog):
                     elif tactic == "Kick and Rush":
                         atk_p += 4.0
                     elif tactic == "Park the Bus":
-                        def_p += 6.0
-                        gk_p += 4.0
+                        def_p += 3.5
+                        gk_p += 2.0
+                        atk_p -= 3.0
+                        mid_p -= 2.0
                     elif tactic == "Vertical Tiki-Taka":
                         mid_p += 4.0
                         atk_p += 3.5
@@ -847,6 +849,13 @@ class MatchCog(commands.Cog):
                 possession_a -= 6
             possession_a = max(30, min(70, possession_a))
             possession_b = 100 - possession_a
+
+            def format_match_player_name(p_name: str) -> str:
+                if not p_name:
+                    return ""
+                if "blank" in str(p_name).strip().lower():
+                    return "~𝔹𝕃𝔸ℕ𝕂"
+                return str(p_name)
 
             def calc_full_team_ratings(starters, is_winning_team, is_draw_match, goals_conceded, goals_scored, team_goals, team_assists, team_saves):
                 ratings = []
@@ -1133,25 +1142,29 @@ class MatchCog(commands.Cog):
                         team_name = player_b.display_name
                         team_b_player_goals[scorer] = team_b_player_goals.get(scorer, 0) + 1
 
-                    assist_comm = f" assisted by **{assister}**" if assister else ""
+                    scorer_disp = format_match_player_name(scorer)
+                    assister_disp = format_match_player_name(assister) if assister else ""
+                    assist_comm = f" assisted by **{assister_disp}**" if assister else ""
                     is_stoppage_goal = (is_et or min_scored >= 88)
                     s_lower = scorer.lower()
-                    if 'lewandowski' in s_lower:
+                    if 'blank' in s_lower:
+                        goal_commentary = f"🌌 **{time_label} GOAL! THE ENIGMA AWAKENS!** **~𝔹𝕃𝔸ℕ𝕂** (`{pos}`){assist_comm} ghosts past the entire defense with impossible agility and finishes into the bottom corner for **{team_name}**! 🔮✨"
+                    elif 'lewandowski' in s_lower:
                         goal_commentary = f"⚽ **{time_label} GOAL! PURE LETHALITY!** Robert **Lewandowski** (`{pos}`){assist_comm} clinically hammers a thunderbolt into the bottom corner for **{team_name}**! 🎯🇵🇱"
                     elif 'akari' in s_lower or 'watanabe' in s_lower:
                         goal_commentary = f"✨ **{time_label} GOAL! MAGICAL MAESTRO!** Akari **Watanabe** (`{pos}`){assist_comm} dances through the backline and chips the keeper with sublime flair for **{team_name}**! 🌸⚡"
                     elif is_stoppage_goal:
-                        goal_commentary = f"🚨 **{time_label} GOAL! UNBELIEVABLE DRAMA!** Stoppage-time pandemonium as **{scorer}** (`{pos}`){assist_comm} nets a breathless stunner for **{team_name}**! ⚡🔥"
+                        goal_commentary = f"🚨 **{time_label} GOAL! UNBELIEVABLE DRAMA!** Stoppage-time pandemonium as **{scorer_disp}** (`{pos}`){assist_comm} nets a breathless stunner for **{team_name}**! ⚡🔥"
                     elif ptype == "def":
-                        goal_commentary = f"⚽ **{time_label} GOAL!** BULLET HEADER! Defender **{scorer}** (`{pos}`){assist_comm} rises highest from the corner and thumps it home for **{team_name}**! 📐🔥"
+                        goal_commentary = f"⚽ **{time_label} GOAL!** BULLET HEADER! Defender **{scorer_disp}** (`{pos}`){assist_comm} rises highest from the corner and thumps it home for **{team_name}**! 📐🔥"
                     elif ptype == "mid":
-                        goal_commentary = f"⚽ **{time_label} GOAL!** 30-YARD SCREAMER! **{scorer}** (`{pos}`){assist_comm} unleashes an unstoppable rocket into the top corner for **{team_name}**! ☄️"
+                        goal_commentary = f"⚽ **{time_label} GOAL!** 30-YARD SCREAMER! **{scorer_disp}** (`{pos}`){assist_comm} unleashes an unstoppable rocket into the top corner for **{team_name}**! ☄️"
                     else:
-                        goal_commentary = f"⚽ **{time_label} GOAL!** PURE CLASS! **{scorer}** (`{pos}`){assist_comm} cuts past the keeper with silky footwork and finishes with ice in his veins for **{team_name}**! 🧊⚽"
+                        goal_commentary = f"⚽ **{time_label} GOAL!** PURE CLASS! **{scorer_disp}** (`{pos}`){assist_comm} cuts past the keeper with silky footwork and finishes with ice in his veins for **{team_name}**! 🧊⚽"
 
                     latest_events_feed.insert(0, goal_commentary)
-                    assist_str = f" *(🅰️ {assister})*" if assister else ""
-                    scoresheet_events.append(f"⚽ **{time_label}** - **{scorer}**{assist_str} ({team_name})")
+                    assist_str = f" *(🅰️ {assister_disp})*" if assister else ""
+                    scoresheet_events.append(f"⚽ **{time_label}** - **{scorer_disp}**{assist_str} ({team_name})")
 
                 # Random key event commentary every ~10-15 minutes if no goal
                 if not matched_goals and (m_val % 8 == 0 or (is_et and et_val == 1)) and phase_label != "Half Time Break":
@@ -1163,11 +1176,11 @@ class MatchCog(commands.Cog):
                     gk_pool = gk_b if is_a_attack else gk_a
                     opp_mid_pool = mid_b if is_a_attack else mid_a
 
-                    a_p = random.choice(atk_pool)
-                    m_p = random.choice(mid_pool)
-                    d_p = random.choice(def_pool)
-                    g_p = random.choice(gk_pool)
-                    om_p = random.choice(opp_mid_pool)
+                    a_p = format_match_player_name(random.choice(atk_pool))
+                    m_p = format_match_player_name(random.choice(mid_pool))
+                    d_p = format_match_player_name(random.choice(def_pool))
+                    g_p = format_match_player_name(random.choice(gk_pool))
+                    om_p = format_match_player_name(random.choice(opp_mid_pool))
 
                     commentary_choices = [
                         f"⚡ **{time_label}** **{m_p}** threads an audacious through-ball, slicing open {att_team_name}'s defense!",
@@ -1270,9 +1283,10 @@ class MatchCog(commands.Cog):
                 motm_entry = {"name": "Match MVP", "rating": 8.0, "goals": 0, "assists": 0}
                 motm_team = player_a.display_name
 
-            motm_str = f"⭐ **{motm_entry['name']}** `({motm_entry['rating']} Rating)` — *{motm_team}*"
+            motm_disp = format_match_player_name(motm_entry['name'])
+            motm_str = f"⭐ **{motm_disp}** `({motm_entry['rating']} Rating)` — *{motm_team}*"
             # Background AI analysis task (never delays the match)
-            events_summary = [f"{g[1]}' {g[2]} ({g[0].display_name})" for g in all_goals]
+            events_summary = [f"{g[1]}' {format_match_player_name(g[2])} ({g[0].display_name})" for g in all_goals]
             ai_analysis_task = asyncio.create_task(
                 ai_engine.generate_post_match_analysis(
                     player_a.display_name,
@@ -1354,7 +1368,10 @@ class MatchCog(commands.Cog):
                     if assists_cnt > 0:
                         stats_badge += f" {'🅰️' * assists_cnt}"
                         
-                    lines.append(f"{icon} `[{r.get('pos', 'SUB'):<3}]` **{r.get('name', 'Player')[:13]}** `{r.get('rating', 6.0)}`{star}{stats_badge}")
+                    p_disp = format_match_player_name(r.get('name', 'Player'))
+                    if len(p_disp) > 13 and not p_disp.startswith("~"):
+                        p_disp = p_disp[:13]
+                    lines.append(f"{icon} `[{r.get('pos', 'SUB'):<3}]` **{p_disp}** `{r.get('rating', 6.0)}`{star}{stats_badge}")
                 txt = "\n".join(lines) if lines else "*No rating data*"
                 return txt[:1024]
 

@@ -85,14 +85,14 @@ async def add_season_xp(user_id, amount):
 
 
 def get_current_tier(xp, config):
-    return min(xp // config.get('xp_per_tier', 500), config.get('tiers_count', 10))
+    return min(xp // config.get('xp_per_tier', 1000), config.get('tiers_count', 25))
 
 
 def xp_for_next_tier(xp, config):
     current = get_current_tier(xp, config)
-    if current >= config.get('tiers_count', 10):
+    if current >= config.get('tiers_count', 25):
         return 0
-    return ((current + 1) * config.get('xp_per_tier', 500)) - xp
+    return ((current + 1) * config.get('xp_per_tier', 1000)) - xp
 
 
 class SeasonCog(commands.Cog):
@@ -229,14 +229,20 @@ class SeasonCog(commands.Cog):
 
         # Give specific player OVR for card rewards (if not a custom card, or custom card fallback failed)
         if reward.get("card_reward") or (reward.get("custom_card") and not custom_flag):
-            from renderz_api import query_players_by_program
-            ovr_req = reward.get("card_reward", 120)
-            players = query_players_by_program("", min_rating=ovr_req, max_rating=120, size=50)
+            ovr_req = int(reward.get("card_reward", 120))
+            players = await database.get_official_cards_by_rating(ovr_req, 125, 50)
+            if not players:
+                try:
+                    from renderz_api import query_players_by_program
+                    players = query_players_by_program("", min_rating=ovr_req, max_rating=125, size=50)
+                except Exception as ex:
+                    print(f"[Season] Error querying renderz_api fallback: {ex}")
+                    players = []
             if players:
                 card = random.choice(players)
                 await database.add_player_to_inventory(user_id, card)
-                card_name = card.get('cardName', 'Unknown')
-                card_ovr = card.get('rating', ovr_req)
+                card_name = card.get('cardName') or card.get('lastName') or card.get('name') or f"Player ({ovr_req} OVR)"
+                card_ovr = card.get('rating') or card.get('ovr') or ovr_req
 
         # Mark claimed
         claimed.append(tier)

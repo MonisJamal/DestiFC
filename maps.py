@@ -525,10 +525,10 @@ TACTICS = {
     },
     "Park the Bus": {
         "name": "Park the Bus",
-        "description": "Impenetrable defensive low block in the box frustrating attacks.",
+        "description": "Defensive low block in the box sacrificing midfield/attack for box resilience.",
         "best_formations": ["5-4-1 Flat", "5-4-1 Defend", "4-5-1 Flat", "4-5-1 Attack"],
         "emoji": "🚌",
-        "boost_focus": "Defensive Blocks & Clean Sheet Rate (+15%)"
+        "boost_focus": "Defensive Resilience (+8%), Reduced Attack & Midfield (-6%)"
     },
     "Kick and Rush": {
         "name": "Kick and Rush",
