@@ -20,7 +20,7 @@ def main():
     core_files = [
         'main.py', 'bot.py', 'database.py', 'auth.py', 'card_generator.py',
         'lineup_generator.py', 'maps.py', 'renderz_api.py', 'ai_engine.py',
-        'requirements.txt', '.env'
+        'requirements.txt', '.env', 'utils.py'
     ]
     print("\n⚡ [1/3] Syncing core engine files...")
     for f in core_files:

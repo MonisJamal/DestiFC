@@ -1161,16 +1161,16 @@ DEFAULT_SIGNATURE_BOX = {
         "stats": {"PAC": 130, "SHO": 138, "PAS": 145, "DRI": 142, "DEF": 115, "PHY": 128}
     },
     "rewards_json": [
-        {"id": 1, "tier": "bad", "name": "100,000,000 Coins", "type": "coins", "amount": 100000000, "icon": "🪙", "base_weight": 46.7},
-        {"id": 2, "tier": "bad", "name": "50 Draft Vouchers", "type": "vouchers", "amount": 50, "icon": "🎟️", "base_weight": 28.0},
+        {"id": 1, "tier": "bad", "name": "100,000,000 Coins", "type": "coins", "amount": 100000000, "icon": "🪙", "base_weight": 45.5},
+        {"id": 2, "tier": "bad", "name": "50 Draft Vouchers", "type": "vouchers", "amount": 50, "icon": "🎟️", "base_weight": 27.5},
         {"id": 3, "tier": "mid", "name": "350,000,000 Coins", "type": "coins", "amount": 350000000, "icon": "💰", "base_weight": 13.0},
         {"id": 4, "tier": "mid", "name": "100 Draft Vouchers", "type": "vouchers", "amount": 100, "icon": "🎟️", "base_weight": 5.8},
         {"id": 5, "tier": "mid", "name": "1,500,000,000 Coins", "type": "coins", "amount": 1500000000, "icon": "💎", "base_weight": 3.4},
         {"id": 6, "tier": "mid", "name": "250 Draft Vouchers", "type": "vouchers", "amount": 250, "icon": "🎟️", "base_weight": 1.7},
-        {"id": 7, "tier": "mid", "name": "1x 117-121 Pack", "type": "pack", "amount": 1, "pack_rating_min": 117, "pack_rating_max": 121, "icon": "📦", "base_weight": 0.8},
-        {"id": 8, "tier": "good", "name": "4,000,000,000 Coins", "type": "coins", "amount": 4000000000, "icon": "👑", "base_weight": 0.4},
-        {"id": 9, "tier": "good", "name": "500 Draft Vouchers", "type": "vouchers", "amount": 500, "icon": "🎟️", "base_weight": 0.15},
-        {"id": 10, "tier": "good", "name": "🌟 122 OVR Signature Blank", "type": "signature_card", "amount": 1, "icon": "🌟", "base_weight": 0.05}
+        {"id": 7, "tier": "mid", "name": "1x 117-121 Pack", "type": "pack", "amount": 1, "pack_rating_min": 117, "pack_rating_max": 121, "icon": "📦", "base_weight": 1.0},
+        {"id": 8, "tier": "good", "name": "4,000,000,000 Coins", "type": "coins", "amount": 4000000000, "icon": "👑", "base_weight": 0.5},
+        {"id": 9, "tier": "good", "name": "500 Draft Vouchers", "type": "vouchers", "amount": 500, "icon": "🎟️", "base_weight": 1.55},
+        {"id": 10, "tier": "good", "name": "🌟 124 OVR Signature Sergio Busquets", "type": "signature_card", "amount": 1, "icon": "🌟", "base_weight": 0.05}
     ],
     "draw_costs_json": [
         {"draw": 1, "currency": "coins", "amount": 50000000},
