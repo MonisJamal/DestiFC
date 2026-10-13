@@ -52,9 +52,29 @@ class DropClaimView(discord.ui.View):
         self.is_rare = is_rare
         self.player_data = player_data
         self.claimed_users = set()
+        self.created_at = time.time()
+        self.flagged_cheaters = set()
 
     @discord.ui.button(label="🎁 Claim Crate!", style=discord.ButtonStyle.success, custom_id="claim_drop_btn")
     async def claim_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        now = time.time()
+        elapsed = now - self.created_at
+
+        # Anti-autoclicker / macro protection: human physical reaction latency threshold
+        if interaction.user.id in self.flagged_cheaters:
+            return await interaction.response.send_message(
+                "❌ **Auto-clicker detected!** You were locked out from this crate for clicking in under 250ms.",
+                ephemeral=True
+            )
+
+        if elapsed < 0.25:
+            self.flagged_cheaters.add(interaction.user.id)
+            print(f"[Drops Security] Auto-clicker blocked: User {interaction.user.id} ({interaction.user.name}) clicked in {elapsed*1000:.1f}ms!")
+            return await interaction.response.send_message(
+                f"⚡ **Auto-clicker / Macro detected!** Your click arrived in `{int(elapsed*1000)}ms` from crate spawn (inhuman speed). You cannot loot this crate.",
+                ephemeral=True
+            )
+
         if interaction.user.id in self.claimed_users:
             return await interaction.response.send_message("❌ You already claimed from this drop!", ephemeral=True)
 
@@ -179,6 +199,7 @@ class AdminPlayerDropSelect(discord.ui.Select):
                 await interaction.channel.send(embed=embed, file=file_attachment, view=view)
             else:
                 await interaction.channel.send(embed=embed, view=view)
+            view.created_at = time.time()
 
             await interaction.edit_original_response(
                 content=f"✅ Successfully dropped **{ovr} OVR {name}** into this channel!",
@@ -400,6 +421,7 @@ class DropsCog(commands.Cog):
                                 view = DropClaimView(r_vouchers, r_coins, r_claims, is_rare=True)
                                 msg_content = f"{ping_str}🌟 **RARE GIFT DROP HAS LANDED!**".strip()
                                 await ch.send(content=msg_content, embed=embed, view=view)
+                                view.created_at = time.time()
                                 print(f"[Drops] 🌟 Rare Gift Drop delivered to #{ch.name} (Guild: {ch.guild.name})!")
                             except Exception as ex:
                                 print(f"[Drops] Error sending rare drop to #{ch.name}: {ex}")
@@ -447,6 +469,7 @@ class DropsCog(commands.Cog):
                 try:
                     view = DropClaimView(vouchers, coins, max_claims, is_rare=False)
                     await ch.send(embed=embed, view=view)
+                    view.created_at = time.time()
                     print(f"[Drops] ✅ Supply crate dropped into channel #{ch.name} (Guild: {ch.guild.name})!")
                 except Exception as ex:
                     print(f"[Drops] Error sending crate to #{ch.name}: {ex}")
@@ -515,6 +538,7 @@ class DropsCog(commands.Cog):
             embed.set_footer(text="Random Server Drop • DestiFC Stadium")
             view = DropClaimView(vouchers, coins, max_claims)
             await interaction.channel.send(embed=embed, view=view)
+            view.created_at = time.time()
             await interaction.followup.send("✅ Mystery loot crate successfully dropped into this channel!", ephemeral=True)
         except Exception as e:
             import traceback
