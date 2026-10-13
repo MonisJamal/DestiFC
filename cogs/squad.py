@@ -741,8 +741,11 @@ class SquadCog(commands.Cog):
 
     async def theme_autocomplete(self, interaction: discord.Interaction, current: str):
         try:
+            unlocked = await database.get_user_themes(interaction.user.id)
             squad = await database.get_squad(interaction.user.id)
-            unlocked = squad.get("unlocked_themes", ["default"])
+            active_theme = squad.get("theme", "default")
+            if active_theme and active_theme not in unlocked:
+                unlocked.append(active_theme)
             THEME_NAMES = {
                 "default": "⚡ Neon Stadium (Default)",
                 "snow": "❄️ Frostbite Ice Arena",
@@ -767,7 +770,7 @@ class SquadCog(commands.Cog):
                     choices.append(app_commands.Choice(name=label, value=t))
             return choices[:25]
         except Exception:
-            return [app_commands.Choice(name="Default", value="default")]
+            return [app_commands.Choice(name="⚡ Neon Stadium (Default)", value="default")]
 
     @squad_group.command(name="theme", description="Equip a pitch theme or real-world stadium you have unlocked")
     @app_commands.describe(theme_id="Select a stadium/theme to equip")
@@ -776,14 +779,16 @@ class SquadCog(commands.Cog):
         await interaction.response.defer()
         user_id = interaction.user.id
         squad = await database.get_squad(user_id)
-        
-        unlocked = squad.get("unlocked_themes", ["default"])
-        theme_id = theme_id.lower()
+        unlocked = await database.get_user_themes(user_id)
+        theme_id = theme_id.lower().strip()
         
         if theme_id not in unlocked:
             return await interaction.followup.send(f"❌ You haven't unlocked the `{theme_id}` stadium yet! Check available stadiums in `/store themes`.")
             
         squad["theme"] = theme_id
+        if "unlocked_themes" not in squad:
+            squad["unlocked_themes"] = unlocked
+        await database.unlock_user_theme(user_id, theme_id)
         await database.update_squad(user_id, squad)
         await interaction.followup.send(f"✅ Successfully equipped **{theme_id.upper()}** as your home stadium! Check it out in `/squad view`.")
 

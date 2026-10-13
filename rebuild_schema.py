@@ -20,7 +20,7 @@ async def rebuild_schema():
         "store_player_shop", "global_drafts", "season_pass",
         "achievements", "user_stats", "formation_layouts",
         "portal_jobs", "matches", "market", "custom_draft_cards",
-        "official_cards", "squads", "inventory", "system_settings",
+        "official_cards", "squads", "user_themes", "inventory", "system_settings",
         "admin_users", "users"
     ]
     
@@ -103,6 +103,21 @@ async def rebuild_schema():
     );
     """)
     print("  ✅ squads")
+
+    # ============================================================
+    # TABLE: user_themes
+    # Used by: database.py, cogs/store.py, cogs/squad.py
+    # ============================================================
+    await conn.execute("""
+    CREATE TABLE user_themes (
+        user_id BIGINT NOT NULL,
+        theme_id TEXT NOT NULL,
+        unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, theme_id)
+    );
+    CREATE INDEX idx_user_themes_user ON user_themes(user_id);
+    """)
+    print("  ✅ user_themes")
     
     # ============================================================
     # TABLE: global_drafts

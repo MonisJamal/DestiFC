@@ -407,6 +407,32 @@ async def remove_players_from_inventory(user_id: int, inventory_ids: list):
         user_id, int_ids
     )
 
+async def get_user_themes(user_id: int) -> list:
+    """Returns list of unlocked theme IDs for user from user_themes table."""
+    p = await get_db()
+    try:
+        rows = await p.fetch('SELECT theme_id FROM user_themes WHERE user_id = $1', user_id)
+        themes = set(r['theme_id'] for r in rows)
+        themes.add("default")
+        return sorted(list(themes))
+    except Exception as e:
+        print(f"[Database] Error in get_user_themes: {e}")
+        return ["default"]
+
+async def unlock_user_theme(user_id: int, theme_id: str) -> bool:
+    """Permanently records unlocked stadium theme in user_themes table."""
+    p = await get_db()
+    try:
+        await p.execute('''
+            INSERT INTO user_themes (user_id, theme_id, unlocked_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (user_id, theme_id) DO NOTHING
+        ''', user_id, str(theme_id).lower().strip())
+        return True
+    except Exception as e:
+        print(f"[Database] Error in unlock_user_theme: {e}")
+        return False
+
 async def get_squad(user_id: int) -> dict:
     now = time.time()
     if user_id in _USER_SQUAD_CACHE:
@@ -428,16 +454,36 @@ async def get_squad(user_id: int) -> dict:
                 data = {}
         else:
             data = {}
+
         if "formation" not in data:
-            data = {"formation": "4-3-3 Flat", "players": data.get("players", data)}
+            data["formation"] = "4-3-3 Flat"
         if "tactic" not in data:
             data["tactic"] = "Tiki-Taka"
+        if "players" not in data or not isinstance(data["players"], dict):
+            data["players"] = {}
+
+        # Integrate and preserve unlocked_themes from user_themes
+        db_themes = await get_user_themes(user_id)
+        existing_themes = set(data.get("unlocked_themes", [])) if isinstance(data.get("unlocked_themes"), list) else set()
+        merged_themes = sorted(list(set(["default"] + db_themes + list(existing_themes))))
+        
+        active_theme = data.get("theme", "default")
+        if active_theme and active_theme not in merged_themes:
+            merged_themes.append(active_theme)
+            await unlock_user_theme(user_id, active_theme)
+            
+        data["unlocked_themes"] = merged_themes
+        data["theme"] = active_theme if active_theme else "default"
+
         _USER_SQUAD_CACHE[user_id] = {"data": data, "exp": now}
         return data
     
+    db_themes = await get_user_themes(user_id)
     default_squad = {
         "formation": "4-3-3 Flat",
         "tactic": "Tiki-Taka",
+        "theme": "default",
+        "unlocked_themes": db_themes,
         "players": {
             "LW": None, "ST": None, "RW": None,
             "CM1": None, "CM2": None, "CM3": None,
@@ -453,6 +499,23 @@ async def get_squad(user_id: int) -> dict:
     return default_squad
 
 async def update_squad(user_id: int, squad: dict):
+    # Ensure theme and unlocked_themes are never lost or corrupted
+    cur_theme = squad.get("theme", "default")
+    unlocked = squad.get("unlocked_themes")
+    if not isinstance(unlocked, list) or not unlocked:
+        unlocked = await get_user_themes(user_id)
+    if cur_theme and cur_theme not in unlocked:
+        unlocked.append(cur_theme)
+    if "default" not in unlocked:
+        unlocked.insert(0, "default")
+        
+    squad["unlocked_themes"] = sorted(list(set(unlocked)))
+    squad["theme"] = cur_theme
+
+    # Ensure all themes in unlocked_themes are permanently written to user_themes table
+    for t in squad["unlocked_themes"]:
+        await unlock_user_theme(user_id, t)
+
     _USER_SQUAD_CACHE[user_id] = {"data": squad, "exp": time.time()}
     await get_user(user_id)
     p = await get_db()

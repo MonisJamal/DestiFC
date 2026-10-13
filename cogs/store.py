@@ -437,7 +437,7 @@ class StoreCog(commands.Cog):
         await interaction.response.defer()
         user_id = interaction.user.id
         squad = await database.get_squad(user_id)
-        unlocked = squad.get("unlocked_themes", ["default"])
+        unlocked = await database.get_user_themes(user_id)
         active = squad.get("theme", "default")
         
         desc = "🏟️ **UPGRADE YOUR HOME STADIUM & UNLOCK EXCLUSIVE MATCH BUFFS!**\nEquipping custom pitches grants your squad visual 3D glory in `/squad view` **PLUS** gameplay boosts during live `/play` matches!\n\n"
@@ -468,7 +468,7 @@ class StoreCog(commands.Cog):
         user_id = interaction.user.id
         
         squad = await database.get_squad(user_id)
-        unlocked = squad.get("unlocked_themes", ["default"])
+        unlocked = await database.get_user_themes(user_id)
         
         if theme_id in unlocked:
             return await interaction.followup.send(f"❌ You already own the **{theme['name']}**! Equip it with `/squad theme {theme_id}`")
@@ -483,12 +483,14 @@ class StoreCog(commands.Cog):
         # Deduct coins
         await database.add_coins(user_id, -price)
             
-        # Unlock theme
+        # Permanently unlock and equip theme
+        await database.unlock_user_theme(user_id, theme_id)
         unlocked.append(theme_id)
-        squad["unlocked_themes"] = unlocked
+        squad["unlocked_themes"] = sorted(list(set(unlocked)))
+        squad["theme"] = theme_id
         await database.update_squad(user_id, squad)
         
-        await interaction.followup.send(f"🎉 Successfully purchased **{theme['name']}** for {price:,} Coins!\nEquip it now using `/squad theme {theme_id}`!")
+        await interaction.followup.send(f"🎉 Successfully purchased & equipped **{theme['name']}** for {price:,} Coins!\nIt is now set as your active stadium in `/squad view`! You can also switch stadiums anytime using `/squad theme`.")
 
     @store_group.command(name="vouchers", description="Exchange Coins for Draft Vouchers (1 for 30M, 10 for 250M!)")
     async def view_vouchers(self, interaction: discord.Interaction):
