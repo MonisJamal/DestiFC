@@ -353,22 +353,52 @@ class DestiFC(commands.AutoShardedBot):
                 elif job_type == 'SIGNAL_RELOAD_COGS':
                     print("[Remote Control] Flushing caches and reloading all bot cogs...")
                     database.flush_all_caches()
+                    reloaded_cogs = []
+                    reload_errors = []
                     for filename in os.listdir('./cogs'):
                         if filename.endswith('.py') and not filename.startswith('__'):
+                            cog_name = f'cogs.{filename[:-3]}'
                             try:
-                                await self.reload_extension(f'cogs.{filename[:-3]}')
+                                await self.reload_extension(cog_name)
+                                reloaded_cogs.append(cog_name)
                             except Exception as re_err:
-                                await self.load_extension(f'cogs.{filename[:-3]}')
-                    sync_needed = False
-                    if job.get('payload'):
+                                try:
+                                    await self.load_extension(cog_name)
+                                    reloaded_cogs.append(cog_name)
+                                except Exception as le_err:
+                                    reload_errors.append(f"{cog_name}: {le_err}")
+                                    print(f"[Remote Control] Failed reloading {cog_name}: {le_err}")
+
+                    sync_needed = True
+                    synced_info = []
+                    try:
+                        g_cmds = await self.tree.sync()
+                        synced_info.append(f"Global: {len(g_cmds)} commands")
+                    except Exception as sync_err:
+                        synced_info.append(f"Global sync error: {sync_err}")
+
+                    for g in self.guilds:
                         try:
-                            p_data = json.loads(job['payload']) if isinstance(job['payload'], str) else job['payload']
-                            sync_needed = bool(p_data.get('sync_tree'))
-                        except Exception:
-                            pass
-                    if sync_needed:
-                        await self.tree.sync()
-                        print("[Remote Control] Slash command tree synced!")
+                            self.tree.copy_global_to(guild=g)
+                            synced = await self.tree.sync(guild=g)
+                            synced_info.append(f"Guild '{g.name}' ({g.id}): {len(synced)} cmds")
+                            print(f"[Remote Control] Synced {len(synced)} commands to guild '{g.name}' ({g.id})")
+                        except Exception as g_err:
+                            synced_info.append(f"Guild error '{g.name}' ({g.id}): {g_err}")
+                            print(f"[Remote Control] Guild sync failed for {g.id}: {g_err}")
+
+                    all_cmds = [c.name for c in self.tree.get_commands()]
+                    res_msg = f"Reloaded {len(reloaded_cogs)} cogs. Commands in tree: {all_cmds}. Sync: {synced_info}."
+                    if reload_errors:
+                        res_msg += f" Errors: {reload_errors}"
+                    print(f"[Remote Control] {res_msg}")
+                    try:
+                        await database.execute(
+                            "UPDATE portal_jobs SET result = $2 WHERE id = $1",
+                            job_id, res_msg
+                        )
+                    except Exception:
+                        pass
                     print("[Remote Control] All caches flushed and cogs reloaded successfully!")
 
                 elif job_type == 'SIGNAL_RESTART':

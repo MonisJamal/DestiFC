@@ -709,6 +709,53 @@ class DropsCog(commands.Cog):
             traceback.print_exc()
             await interaction.followup.send(f"❌ Error dropping fake crate: `{e}`", ephemeral=True)
 
+    @app_commands.command(name="admin_sync", description="Admin: Immediately sync and push all slash commands to Discord servers")
+    async def admin_sync(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            from auth import is_team_admin_or_owner
+            if not await is_team_admin_or_owner(self.bot, interaction.user):
+                return await interaction.followup.send("❌ Admin command only.", ephemeral=True)
+
+            g_cmds = await self.bot.tree.sync()
+            guild_results = []
+            for g in self.bot.guilds:
+                try:
+                    self.bot.tree.clear_commands(guild=g)
+                    self.bot.tree.copy_global_to(guild=g)
+                    synced = await self.bot.tree.sync(guild=g)
+                    guild_results.append(f"• **{g.name}**: {len(synced)} commands")
+                except Exception as ge:
+                    guild_results.append(f"• **{g.name}**: Failed ({ge})")
+
+            guild_str = "\n".join(guild_results) if guild_results else "None"
+            await interaction.followup.send(
+                f"✅ **Slash commands synced!**\n"
+                f"• Global registered: **{len(g_cmds)}** commands\n"
+                f"• Pushed directly to guilds (instant visibility):\n{guild_str}\n\n"
+                f"*Note: If your Discord desktop/mobile app was open, press **Ctrl+R** (or **Cmd+R**) to reload your client cache.*",
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(f"❌ Error syncing commands: `{e}`", ephemeral=True)
+
 async def setup(bot):
     await bot.add_cog(DropsCog(bot))
+    async def _sync_tree_background():
+        try:
+            await asyncio.sleep(1)
+            g_cmds = await bot.tree.sync()
+            print(f"[Drops Setup] Synced {len(g_cmds)} global commands.")
+            for g in bot.guilds:
+                try:
+                    bot.tree.clear_commands(guild=g)
+                    bot.tree.copy_global_to(guild=g)
+                    synced = await bot.tree.sync(guild=g)
+                    print(f"[Drops Setup] Pushed {len(synced)} commands to guild '{g.name}' ({g.id})")
+                except Exception as ge:
+                    print(f"[Drops Setup] Guild sync error for {g.id}: {ge}")
+        except Exception as e:
+            print(f"[Drops Setup] Background tree sync error: {e}")
+
+    asyncio.create_task(_sync_tree_background())
 
