@@ -643,6 +643,15 @@ class MatchCog(commands.Cog):
             if custom_id.startswith("tourney_join_"):
                 t_id = int(custom_id.split("_")[2])
                 try:
+                    t_row = await database.fetch_one("SELECT registration_open, max_participants FROM tournaments WHERE id = $1", t_id)
+                    if t_row and t_row.get("registration_open") is False:
+                        await interaction.response.send_message("❌ Registration for this tournament is currently closed!", ephemeral=True)
+                        return
+                    if t_row and t_row.get("max_participants"):
+                        count = await database.fetch_val("SELECT COUNT(*) FROM tournament_participants WHERE tournament_id = $1", t_id) or 0
+                        if count >= t_row["max_participants"]:
+                            await interaction.response.send_message("⚠️ This tournament is already full!", ephemeral=True)
+                            return
                     await database.execute("INSERT INTO tournament_participants (tournament_id, user_id) VALUES ($1, $2)", t_id, interaction.user.id)
                     await interaction.response.send_message("✅ You have successfully registered for the tournament!", ephemeral=True)
                 except Exception as e:
