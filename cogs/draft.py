@@ -344,12 +344,14 @@ class DraftCog(commands.Cog):
         highest_ovr = 0
         is_walkout_pack = False
         
-        # Hardcoded 25% Pool A, 75% Pool B, 0% Pool C
-        cutoff_a = 25.0
+        # Dynamically configured via Admin Panel Luck Settings
+        luck = await database.get_luck_settings()
+        mult = max(0.1, float(luck.get("global_luck_multiplier", 1.0) or 1.0))
+        cutoff_a = min(99.0, max(5.0, 25.0 * mult))
         
-        # Helper to pick Pool A card with exact weightings (copied from draft)
-        share_122 = 6.0
-        share_121 = 35.0
+        # Helper to pick Pool A card with exact weightings from Admin Panel
+        share_122 = float(luck.get("walkout_122_share", 6.0) or 6.0)
+        share_121 = float(luck.get("walkout_121_share", 35.0) or 35.0)
         
         def pick_pool_a_weighted(pool_a_list):
             import random
