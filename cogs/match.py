@@ -647,13 +647,36 @@ class MatchCog(commands.Cog):
                     if t_row and t_row.get("registration_open") is False:
                         await interaction.response.send_message("❌ Registration for this tournament is currently closed!", ephemeral=True)
                         return
+                    count = 0
                     if t_row and t_row.get("max_participants"):
                         count = await database.fetch_val("SELECT COUNT(*) FROM tournament_participants WHERE tournament_id = $1", t_id) or 0
                         if count >= t_row["max_participants"]:
                             await interaction.response.send_message("⚠️ This tournament is already full!", ephemeral=True)
                             return
-                    await database.execute("INSERT INTO tournament_participants (tournament_id, user_id) VALUES ($1, $2)", t_id, interaction.user.id)
-                    await interaction.response.send_message("✅ You have successfully registered for the tournament!", ephemeral=True)
+                    
+                    username = interaction.user.name
+                    display_name = interaction.user.display_name or interaction.user.global_name or interaction.user.name
+                    await database.execute(
+                        """
+                        INSERT INTO tournament_participants (tournament_id, user_id, username, display_name) 
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT (tournament_id, user_id) DO UPDATE SET username = EXCLUDED.username, display_name = EXCLUDED.display_name
+                        """,
+                        t_id, interaction.user.id, username, display_name
+                    )
+
+                    new_count = count + 1
+                    max_spots = t_row.get("max_participants") if t_row else 16
+                    if max_spots and new_count >= max_spots:
+                        await database.execute("UPDATE tournaments SET registration_open = FALSE, status = 'REGISTRATION_CLOSED' WHERE id = $1", t_id)
+                        await interaction.response.send_message(f"✅ You have registered! ({new_count}/{max_spots})\n🎉 **Tournament is now 100% full!** Registration is officially closed.", ephemeral=True)
+                        try:
+                            if interaction.channel:
+                                await interaction.channel.send(f"🔒 **All {max_spots} spots for the tournament are filled!** Registration is now closed.")
+                        except Exception:
+                            pass
+                    else:
+                        await interaction.response.send_message(f"✅ You have successfully registered for the tournament! ({new_count}/{max_spots} spots filled)", ephemeral=True)
                 except Exception as e:
                     if 'unique constraint' in str(e).lower() or 'duplicate key' in str(e).lower():
                         await interaction.response.send_message("⚠️ You are already registered for this tournament.", ephemeral=True)
