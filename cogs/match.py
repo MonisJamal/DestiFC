@@ -683,7 +683,13 @@ class MatchCog(commands.Cog):
         btn = discord.ui.Button(label="Participate", style=discord.ButtonStyle.green, emoji="🎟️", custom_id=f"tourney_join_{t_id}")
         view.add_item(btn)
         
-        await channel.send(embed=embed, view=view)
+        role_mention = ""
+        if channel.guild:
+            role = discord.utils.get(channel.guild.roles, name="DestiFC Players") or channel.guild.get_role(1557010712013045860)
+            if role:
+                role_mention = role.mention
+
+        await channel.send(content=f"📢 {role_mention}" if role_mention else None, embed=embed, view=view)
 
     async def trigger_tournament_match(self, payload):
         import json
