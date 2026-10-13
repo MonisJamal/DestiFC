@@ -669,9 +669,15 @@ class MatchCog(commands.Cog):
         
         t_id = data.get('tournament_id')
         name = data.get('name')
+        custom_msg = data.get('announcement_msg')
+        desc = custom_msg.strip() if (custom_msg and custom_msg.strip()) else "A new tournament has been announced! Click the button below to register."
         
-        embed = discord.Embed(title=f"🏆 NEW TOURNAMENT: {name}", color=discord.Color.gold())
-        embed.description = "A new tournament has been announced! Click the button below to register."
+        embed = discord.Embed(title=f"🏆 NEW TOURNAMENT: {name}", description=desc, color=discord.Color.gold())
+        if data.get('type'):
+            t_format = data.get('format', 'Single Legged')
+            embed.add_field(name="⚔️ Format", value=f"{data.get('type')} ({t_format})", inline=True)
+        if data.get('max_participants'):
+            embed.add_field(name="👥 Max Spots", value=f"{data.get('max_participants')} Players", inline=True)
         
         view = discord.ui.View(timeout=None)
         btn = discord.ui.Button(label="Participate", style=discord.ButtonStyle.green, emoji="🎟️", custom_id=f"tourney_join_{t_id}")
