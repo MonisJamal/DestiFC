@@ -44,13 +44,24 @@ def get_card_thumbnail(player_data: dict) -> str | None:
     )
 
 class DropClaimView(discord.ui.View):
-    def __init__(self, vouchers: int, coins: int, max_claims: int, is_rare: bool = False, player_data: dict = None):
+    def __init__(
+        self,
+        vouchers: int,
+        coins: int,
+        max_claims: int,
+        is_rare: bool = False,
+        player_data: dict = None,
+        is_fake: bool = False,
+        fake_player_name: str | None = None
+    ):
         super().__init__(timeout=600)
         self.vouchers = vouchers
         self.coins = coins
         self.max_claims = max_claims
         self.is_rare = is_rare
         self.player_data = player_data
+        self.is_fake = is_fake or (vouchers < 0 or coins < 0)
+        self.fake_player_name = fake_player_name
         self.claimed_users = set()
         self.created_at = time.time()
         self.flagged_cheaters = set()
@@ -60,20 +71,26 @@ class DropClaimView(discord.ui.View):
         now = time.time()
         elapsed = now - self.created_at
 
-        # Anti-autoclicker / macro protection: human physical reaction latency threshold
-        if interaction.user.id in self.flagged_cheaters:
-            return await interaction.response.send_message(
-                "❌ **Auto-clicker detected!** You were locked out from this crate for clicking in under 250ms.",
-                ephemeral=True
-            )
+        is_trap = self.is_fake or (self.vouchers < 0 or self.coins < 0)
+        was_autoclicker = False
 
         if elapsed < 0.25:
-            self.flagged_cheaters.add(interaction.user.id)
-            print(f"[Drops Security] Auto-clicker blocked: User {interaction.user.id} ({interaction.user.name}) clicked in {elapsed*1000:.1f}ms!")
-            return await interaction.response.send_message(
-                f"⚡ **Auto-clicker / Macro detected!** Your click arrived in `{int(elapsed*1000)}ms` from crate spawn (inhuman speed). You cannot loot this crate.",
-                ephemeral=True
-            )
+            was_autoclicker = True
+            print(f"[Drops Security] Auto-clicker trigger: User {interaction.user.id} ({interaction.user.name}) clicked in {elapsed*1000:.1f}ms! Trap={is_trap}")
+
+        if not is_trap:
+            # On legitimate crates: Protect the crate by locking out auto-clickers
+            if interaction.user.id in self.flagged_cheaters:
+                return await interaction.response.send_message(
+                    "❌ **Auto-clicker detected!** You were locked out from this crate for clicking in under 250ms.",
+                    ephemeral=True
+                )
+            if was_autoclicker:
+                self.flagged_cheaters.add(interaction.user.id)
+                return await interaction.response.send_message(
+                    f"⚡ **Auto-clicker / Macro detected!** Your click arrived in `{int(elapsed*1000)}ms` from crate spawn (inhuman speed). You cannot loot this crate.",
+                    ephemeral=True
+                )
 
         if interaction.user.id in self.claimed_users:
             return await interaction.response.send_message("❌ You already claimed from this drop!", ephemeral=True)
@@ -83,12 +100,12 @@ class DropClaimView(discord.ui.View):
 
         self.claimed_users.add(interaction.user.id)
         
-        # Grant rewards
-        if self.vouchers > 0:
+        # Grant or deduct rewards
+        if self.vouchers != 0:
             await database.add_vouchers(interaction.user.id, self.vouchers)
-        if self.coins > 0:
+        if self.coins != 0:
             await database.add_coins(interaction.user.id, self.coins)
-        if self.player_data:
+        if self.player_data and not is_trap:
             await database.add_player_to_inventory(interaction.user.id, self.player_data)
 
         remaining = self.max_claims - len(self.claimed_users)
@@ -101,6 +118,51 @@ class DropClaimView(discord.ui.View):
             self.stop()
 
         await interaction.response.edit_message(view=self)
+
+        # ----------------------------------------------------
+        # BAIT / TRAP HANDLING
+        # ----------------------------------------------------
+        if is_trap:
+            lost_items = []
+            if self.vouchers < 0:
+                lost_items.append(f"🎟️ **-{abs(self.vouchers)} Draft Vouchers**")
+            elif self.vouchers > 0:
+                lost_items.append(f"🎟️ **+{self.vouchers} Draft Vouchers**")
+
+            if self.coins < 0:
+                lost_items.append(f"🪙 **-{abs(self.coins):,} Coins**")
+            elif self.coins > 0:
+                lost_items.append(f"🪙 **+{self.coins:,} Coins**")
+
+            lost_summary = " & ".join(lost_items) if lost_items else "their time (empty bait!)"
+
+            if was_autoclicker:
+                eph_msg = (
+                    f"🪤⚡ **AUTO-CLICKER CAUGHT IN THE BAIT!**\n"
+                    f"Your script clicked in `{int(elapsed*1000)}ms` and got trapped!\n"
+                    f"You lost {lost_summary}!"
+                )
+                pub_msg = (
+                    f"🤡⚡ **AUTO-CLICKER BAITED!** {interaction.user.mention} clicked in `{int(elapsed*1000)}ms` "
+                    f"and fell right into the trap crate! Lost {lost_summary}!"
+                )
+            else:
+                eph_msg = (
+                    f"🪤 **YOU GOT BAITED! TRAP CRATE TRIGGERED!**\n"
+                    f"You fell for the disguised crate!\n"
+                    f"You lost {lost_summary}!"
+                )
+                pub_msg = (
+                    f"🤡 **BAITED!** {interaction.user.mention} fell for the trap crate and lost {lost_summary}!"
+                )
+
+            await interaction.followup.send(eph_msg, ephemeral=True)
+            await interaction.channel.send(pub_msg)
+            return
+
+        # ----------------------------------------------------
+        # NORMAL REWARD HANDLING
+        # ----------------------------------------------------
         banner = "🌟 **RARE DAILY GIFT CLAIMED!**" if self.is_rare else "🎉 **Loot Claimed!**"
         
         rewards_text = []
@@ -168,8 +230,8 @@ class AdminPlayerDropSelect(discord.ui.Select):
                 description=(
                     f"An admin summoned an elite player supply crate!\n\n"
                     f"⭐ **Player:** `{ovr} OVR` **{name}** (`{pos}`)" + (f" [{prog}]" if prog else "") + f"\n"
-                    + (f"🎟️ **Vouchers:** `+{self.vouchers} Draft Vouchers`\n" if self.vouchers > 0 else "")
-                    + (f"🪙 **Coins:** `+{self.coins:,} Coins`\n" if self.coins > 0 else "")
+                    + (f"🎟️ **Vouchers:** `+{abs(self.vouchers)} Draft Vouchers`\n" if self.vouchers != 0 else "")
+                    + (f"🪙 **Coins:** `+{abs(self.coins):,} Coins`\n" if self.coins != 0 else "")
                     + f"\n⚡ **First {self.max_claims} players** to click claim get this player card!"
                 ),
                 color=discord.Color.gold()
@@ -482,8 +544,8 @@ class DropsCog(commands.Cog):
 
     @app_commands.command(name="admin_drop", description="Admin: Manually drop a loot crate into this channel (with optional player)")
     @app_commands.describe(
-        vouchers="Vouchers per claim (default 0)",
-        coins="Coins per claim (default 0)",
+        vouchers="Vouchers per claim (enter negative to bait/deduct, e.g. -10)",
+        coins="Coins per claim (enter negative to bait/deduct, e.g. -50000000)",
         max_claims="Number of players who can claim (default 3)",
         player_name="Optional player name to drop (shows choice menu of versions)"
     )
@@ -526,11 +588,19 @@ class DropsCog(commands.Cog):
                 vouchers = 3
                 coins = 5_000_000
 
+            # Disguise negative values as positive rewards so players/auto-clickers take the bait
+            desc_parts = []
+            if vouchers != 0:
+                desc_parts.append(f"`+{abs(vouchers)} Draft Vouchers`")
+            if coins != 0:
+                desc_parts.append(f"`+{abs(coins):,} Coins`")
+            contents_str = " & ".join(desc_parts) if desc_parts else "`Mystery Loot`"
+
             embed = discord.Embed(
                 title="🎁 A WILD SUPPLY CRATE HAS DROPPED!",
                 description=(
                     f"An admin summoned a mystery supply crate!\n\n"
-                    f"📦 **Contents:** `+{vouchers} Draft Vouchers`" + (f" & `+{coins:,} Coins`" if coins > 0 else "") + f"\n"
+                    f"📦 **Contents:** {contents_str}\n"
                     f"⚡ **First {max_claims} players** to click claim get the loot!"
                 ),
                 color=discord.Color.magenta()
@@ -539,11 +609,105 @@ class DropsCog(commands.Cog):
             view = DropClaimView(vouchers, coins, max_claims)
             await interaction.channel.send(embed=embed, view=view)
             view.created_at = time.time()
-            await interaction.followup.send("✅ Mystery loot crate successfully dropped into this channel!", ephemeral=True)
+
+            is_trap = vouchers < 0 or coins < 0
+            if is_trap:
+                await interaction.followup.send(
+                    f"🪤 **Trap crate active!** Disguised as `{contents_str}`. Claimants will lose `{abs(vouchers)}` vouchers & `{abs(coins):,}` coins.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.followup.send("✅ Mystery loot crate successfully dropped into this channel!", ephemeral=True)
         except Exception as e:
             import traceback
             traceback.print_exc()
             await interaction.followup.send(f"❌ Error dropping crate: `{e}`", ephemeral=True)
+
+    @app_commands.command(name="admin_fake_drop", description="Admin: Drop a disguised bait crate to trap auto-clickers and greedy players")
+    @app_commands.describe(
+        display_vouchers="Fake vouchers to display on the crate (default 25)",
+        display_coins="Fake coins to display on the crate (default 250,000,000)",
+        fake_player="Optional fake player name to bait with (e.g. '125 OVR Prime R9 Ronaldo')",
+        subtract_vouchers="Vouchers to deduct from victim upon claim (default 25)",
+        subtract_coins="Coins to deduct from victim upon claim (default 250,000,000)",
+        max_claims="Number of players who can fall for the trap (default 3)"
+    )
+    async def admin_fake_drop(
+        self,
+        interaction: discord.Interaction,
+        display_vouchers: int = 25,
+        display_coins: int = 250_000_000,
+        fake_player: str | None = None,
+        subtract_vouchers: int = 25,
+        subtract_coins: int = 250_000_000,
+        max_claims: int = 3
+    ):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            from auth import is_team_admin_or_owner
+            if not await is_team_admin_or_owner(self.bot, interaction.user):
+                return await interaction.followup.send("❌ Admin command only.", ephemeral=True)
+
+            if max_claims < 1:
+                max_claims = 1
+
+            # Prepare penalty amounts (always negative so they are deducted from balance)
+            deduct_v = -abs(subtract_vouchers) if subtract_vouchers != 0 else 0
+            deduct_c = -abs(subtract_coins) if subtract_coins != 0 else 0
+
+            # Build attractive fake drop embed disguised as a jackpot
+            if fake_player and fake_player.strip():
+                embed = discord.Embed(
+                    title="🎁 A WILD PLAYER CRATE HAS DROPPED!",
+                    description=(
+                        f"An admin summoned an elite player supply crate!\n\n"
+                        f"⭐ **Player:** `{fake_player.strip()}`\n"
+                        + (f"🎟️ **Vouchers:** `+{abs(display_vouchers)} Draft Vouchers`\n" if display_vouchers else "")
+                        + (f"🪙 **Coins:** `+{abs(display_coins):,} Coins`\n" if display_coins else "")
+                        + f"\n⚡ **First {max_claims} players** to click claim get this player card!"
+                    ),
+                    color=discord.Color.gold()
+                )
+            else:
+                desc_parts = []
+                if display_vouchers != 0:
+                    desc_parts.append(f"`+{abs(display_vouchers)} Draft Vouchers`")
+                if display_coins != 0:
+                    desc_parts.append(f"`+{abs(display_coins):,} Coins`")
+                contents_str = " & ".join(desc_parts) if desc_parts else "`+50 Draft Vouchers & +250,000,000 Coins`"
+
+                embed = discord.Embed(
+                    title="🎁 A WILD SUPPLY CRATE HAS DROPPED!",
+                    description=(
+                        f"An admin summoned a mystery supply crate!\n\n"
+                        f"📦 **Contents:** {contents_str}\n"
+                        f"⚡ **First {max_claims} players** to click claim get the loot!"
+                    ),
+                    color=discord.Color.magenta()
+                )
+            embed.set_footer(text="Random Server Drop • DestiFC Stadium")
+
+            view = DropClaimView(
+                vouchers=deduct_v,
+                coins=deduct_c,
+                max_claims=max_claims,
+                is_fake=True,
+                fake_player_name=fake_player
+            )
+            await interaction.channel.send(embed=embed, view=view)
+            view.created_at = time.time()
+
+            await interaction.followup.send(
+                f"🪤 **Fake bait crate successfully dropped into channel!**\n"
+                f"• Disguise: `{abs(display_vouchers)} vouchers` & `{abs(display_coins):,} coins`" + (f" + `{fake_player}`" if fake_player else "") + "\n"
+                f"• Actual Penalty: `-{abs(deduct_v)} vouchers` & `-{abs(deduct_c):,} coins`\n"
+                f"• Claims: `{max_claims}`",
+                ephemeral=True
+            )
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            await interaction.followup.send(f"❌ Error dropping fake crate: `{e}`", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(DropsCog(bot))
