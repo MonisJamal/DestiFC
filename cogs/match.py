@@ -11,6 +11,220 @@ from maps import TACTICS
 # Global tracking set to ensure only 1 active H2H match / challenge at a time per user
 ACTIVE_MATCH_USERS = set()
 
+def format_match_player_name(p_name: str) -> str:
+    if not p_name:
+        return ""
+    if "blank" in str(p_name).strip().lower():
+        return "~𝔹𝕃𝔸ℕ𝕂"
+    return str(p_name)
+
+def generate_dynamic_goal_commentary(
+    time_label: str,
+    scorer: str,
+    scorer_disp: str,
+    pos: str,
+    ptype: str,
+    assister: str | None,
+    assister_disp: str,
+    team_name: str,
+    opponent_name: str,
+    score_for_team: int,
+    score_for_opp: int,
+    is_stoppage: bool,
+    player_goals_today: int
+) -> str:
+    assist_phrases = [
+        f" assisted by **{assister_disp}**",
+        f" after a glorious through-ball from **{assister_disp}**",
+        f" served on a silver platter by **{assister_disp}**",
+        f" orchestrated by a pinpoint pass from **{assister_disp}**",
+        f" courtesy of a sublime delivery from **{assister_disp}**",
+        f" courtesy of a delicious cross by **{assister_disp}**",
+    ]
+    assist_comm = random.choice(assist_phrases) if assister_disp else ""
+    s_lower = str(scorer).lower()
+
+    # 1. Custom Lore Cards
+    if 'blank' in s_lower:
+        return f"🌌 **{time_label} GOAL! THE ENIGMA AWAKENS!** **~𝔹𝕃𝔸ℕ𝕂** (`{pos}`){assist_comm} ghosts past the entire defense with impossible agility and finishes into the bottom corner for **{team_name}**! 🔮✨"
+    if 'akari' in s_lower or 'watanabe' in s_lower:
+        return f"✨ **{time_label} GOAL! MAGICAL MAESTRO!** Akari **Watanabe** (`{pos}`){assist_comm} dances through the backline and chips the keeper with sublime flair for **{team_name}**! 🌸⚡"
+
+    # 2. Hat-Trick milestone
+    if player_goals_today >= 3:
+        return random.choice([
+            f"🎩🔥 **{time_label} GOAL! HAT-TRICK HERO! TAKE A BOW!** {scorer_disp} (`{pos}`){assist_comm} seals a breathtaking treble for **{team_name}**! The match ball is coming home with him! ⚽⚽⚽",
+            f"🌟🎩 **{time_label} GOAL! SENSATIONAL HAT-TRICK!** A majestic three-goal masterclass from {scorer_disp} (`{pos}`){assist_comm}! Searing brilliance putting **{team_name}** in dreamland! ⚽⚽⚽",
+            f"👑⚽ **{time_label} GOAL! THIRD OF THE MATCH!** What a day for {scorer_disp} (`{pos}`){assist_comm}! Completely unstoppable as he bags his hat-trick for **{team_name}**! 🔥🎩",
+        ])
+
+    # 3. Brace milestone
+    if player_goals_today == 2:
+        return random.choice([
+            f"🔥 **{time_label} GOAL! THAT'S TWO FOR HIM TODAY!** {scorer_disp} (`{pos}`){assist_comm} doubles his tally with relentless hunger for **{team_name}**! On fire! ⚡",
+            f"⚽💥 **{time_label} GOAL! A SENSATIONAL BRACE!** {scorer_disp} (`{pos}`){assist_comm} strikes again with deadly killer instinct for **{team_name}**! 🎯🔥",
+            f"✌️⚽ **{time_label} GOAL! BRACE SECURED!** Two for {scorer_disp} (`{pos}`){assist_comm}! Slicing through the defense once more for **{team_name}**! ⚡",
+        ])
+
+    # 4. Iconic Superstar Signatures
+    if 'ronaldo' in s_lower or 'cr7' in s_lower:
+        return random.choice([
+            f"🔥 **{time_label} GOAL! SIIIIIUUUUU!** {scorer_disp} (`{pos}`){assist_comm} leaps into orbit, hangs in mid-air, and powers an unstoppable header into the roof of the net! The King strikes for **{team_name}**! 👑🇵🇹",
+            f"⚽⚡ **{time_label} GOAL! THE INEVITABLE PHENOMENON!** {scorer_disp} (`{pos}`){assist_comm} executes blistering stepovers and lashes a dipping knuckleball past the despairing keeper for **{team_name}**! 🇵🇹💥",
+            f"💥🐐 **{time_label} GOAL! BIG-GAME PREDATOR!** Cometh the hour, cometh the man! {scorer_disp} (`{pos}`){assist_comm} finishes with laser precision into the bottom corner for **{team_name}**! 🇵🇹🎯",
+        ])
+    if 'messi' in s_lower:
+        return random.choice([
+            f"✨ **{time_label} GOAL! PURE FOOTBALL DIVINITY!** {scorer_disp} (`{pos}`){assist_comm} leaves three defenders frozen in time and caresses a sublime curler into the top corner for **{team_name}**! 🪄🇦🇷",
+            f"🌸👑 **{time_label} GOAL! ASTRONOMICAL GENIUS!** {scorer_disp} (`{pos}`){assist_comm} clips an audacious chip over the onrushing goalkeeper! Poetry in motion for **{team_name}**! 🐐⚽",
+            f"🪄⚡ **{time_label} GOAL! ANKARA MESSI!** Slalom dribble from {scorer_disp} (`{pos}`){assist_comm}, threading the ball through the eye of a needle into the side-netting for **{team_name}**! 🇦🇷🔥",
+        ])
+    if 'haaland' in s_lower:
+        return random.choice([
+            f"🤖 **{time_label} GOAL! THE CYBORG UNLEASHED!** {scorer_disp} (`{pos}`){assist_comm} bulldozes through the center-backs and obliterates the net with a thunderous 110 km/h rocket for **{team_name}**! 🇳🇴⚡",
+            f"💥🦁 **{time_label} GOAL! UNSTOPPABLE FORCE!** {scorer_disp} (`{pos}`){assist_comm} meets the ball airborne and smashes a ferocious volley off the crossbar and in for **{team_name}**! 🎯🔥",
+        ])
+    if 'mbappe' in s_lower or 'mbappé' in s_lower:
+        return random.choice([
+            f"⚡💨 **{time_label} GOAL! ELECTRIC BLUR!** {scorer_disp} (`{pos}`){assist_comm} turns on the supersonic afterburners, leaving everyone trailing, and slots with ice in his veins for **{team_name}**! 🇫🇷⚽",
+            f"🎯🔥 **{time_label} GOAL! LETHAL FINESSE!** {scorer_disp} (`{pos}`){assist_comm} opens up his body and curls a wicked strike around the diving keeper into the side-netting for **{team_name}**! 🐢⚡",
+        ])
+    if 'neymar' in s_lower:
+        return f"🪄🇧🇷 **{time_label} GOAL! JOGA BONITO!** {scorer_disp} (`{pos}`){assist_comm} dances through the penalty box with audacious samba flair and rolls it in with supreme swagger for **{team_name}**! ✨🤙"
+    if 'zidane' in s_lower:
+        return f"🎩🇫🇷 **{time_label} GOAL! ABSOLUTE MAJESTY!** {scorer_disp} (`{pos}`){assist_comm} pirouettes past his marker and hits an exquisite dropping volley into the top stanchion for **{team_name}**! 🪄👑"
+    if 'ronaldinho' in s_lower or 'dinho' in s_lower:
+        return f"😁🇧🇷 **{time_label} GOAL! MAGIC IN HIS BOOTS!** {scorer_disp} (`{pos}`){assist_comm} chips the keeper with a huge smile on his face! Pure unadulterated joy for **{team_name}**! 🤙💫"
+    if 'lewandowski' in s_lower:
+        return random.choice([
+            f"⚽🇵🇱 **{time_label} GOAL! CLINICAL MACHINE!** Robert **Lewandowski** (`{pos}`){assist_comm} clinically hammers a thunderbolt into the bottom corner for **{team_name}**! 🎯🇵🇱",
+            f"💥🎯 **{time_label} GOAL! NUMBER NINE PERFECTION!** **Lewandowski** (`{pos}`){assist_comm} traps the cross on his chest and rifles a half-volley home for **{team_name}**! ⚽🔥",
+        ])
+
+    # 5. Late Stoppage-Time Drama
+    if is_stoppage:
+        return random.choice([
+            f"🚨💥 **{time_label} GOAL! UNBELIEVABLE DRAMA! ABSOLUTE LIMBS!** {scorer_disp} (`{pos}`){assist_comm} strikes at the death for **{team_name}**! The stadium is in utter pandemonium! 🏟️🔥",
+            f"⏳⚡ **{time_label} GOAL! STOPPAGE-TIME HEARTBREAKER!** Right when the clock ticks into eternity, {scorer_disp} (`{pos}`){assist_comm} nets a breathless stunner for **{team_name}**! 💔⚽",
+            f"🔥🚨 **{time_label} GOAL! CLUTCH HEROICS!** Incredible scenes! {scorer_disp} (`{pos}`){assist_comm} stabs home a dramatic late goal in extra time for **{team_name}**! ⚡🤯",
+        ])
+
+    # 6. Equalizer Goal (e.g. 1-1, 2-2)
+    if score_for_team == score_for_opp and score_for_team >= 1:
+        return random.choice([
+            f"⚡🤝 **{time_label} GOAL! AN INSTANT REPLY! WE ARE LEVEL!** {scorer_disp} (`{pos}`){assist_comm} drags **{team_name}** back into the contest with a ruthless finish! All square! 🔥",
+            f"💥⚖️ **{time_label} GOAL! PARITY RESTORED!** {scorer_disp} (`{pos}`){assist_comm} connects on the half-turn and makes it all square for **{team_name}**! Game on! ⚽",
+            f"🔥🔄 **{time_label} GOAL! BACK FROM THE BRINK!** Sensational resilience! {scorer_disp} (`{pos}`){assist_comm} slots home the equalizer for **{team_name}**! 🎯",
+        ])
+
+    # 7. Go-Ahead / Lead Taking Goal (e.g. 2-1 after trailing or being tied)
+    if score_for_team == score_for_opp + 1 and score_for_opp >= 1:
+        return random.choice([
+            f"🚀🔥 **{time_label} GOAL! THEY HAVE TURNED IT AROUND!** {scorer_disp} (`{pos}`){assist_comm} fires **{team_name}** into the lead! What incredible character! ⚡",
+            f"💥📈 **{time_label} GOAL! IN THE DRIVER'S SEAT!** {scorer_disp} (`{pos}`){assist_comm} pounces and puts **{team_name}** ahead! Tremendous momentum! 🎯",
+        ])
+
+    # 8. Positional Finish Pools
+    if ptype == "def":
+        return random.choice([
+            f"⚽📐 **{time_label} GOAL! BULLET HEADER!** Defender {scorer_disp} (`{pos}`){assist_comm} towers above the penalty box and powers a thumping header home for **{team_name}**! 🏰🔥",
+            f"⚽⚔️ **{time_label} GOAL! PURE DESIRE!** Goalmouth scramble! Defender {scorer_disp} (`{pos}`){assist_comm} throws everything on the line to force the ball over the line for **{team_name}**! 🛡️",
+            f"⚽💥 **{time_label} GOAL! UNLIKELY HERO!** Center-back {scorer_disp} (`{pos}`){assist_comm} controls with the chest and volleys cleanly into the roof of the net for **{team_name}**! 🤯",
+            f"⚽⚡ **{time_label} GOAL! NEAR-POST STUNNER!** {scorer_disp} (`{pos}`){assist_comm} darts across the front post to glance the corner delivery into the far netting for **{team_name}**! 🎯",
+            f"⚽☄️ **{time_label} GOAL! AN UNBELIEVABLE THUNDERBOLT!** Defender {scorer_disp} (`{pos}`){assist_comm} steps into midfield and cracks an absolute piledriver past the stunned keeper for **{team_name}**! 💣",
+        ])
+    elif ptype == "mid":
+        return random.choice([
+            f"⚽☄️ **{time_label} GOAL! 30-YARD SCREAMER!** {scorer_disp} (`{pos}`){assist_comm} unleashes an unstoppable rocket into the top stanchion for **{team_name}**! 🚀",
+            f"⚽🏃 **{time_label} GOAL! LATE ARRIVAL!** {scorer_disp} (`{pos}`){assist_comm} arrives on the edge of the area unmarked and sidefoots with surgical precision for **{team_name}**! 🎯",
+            f"⚽🌀 **{time_label} GOAL! AUDACIOUS TRIVELA!** {scorer_disp} (`{pos}`){assist_comm} strikes with the outside of the boot and curls a magical effort into the side-netting for **{team_name}**! 🪄",
+            f"⚽📐 **{time_label} GOAL! BENT LIKE A BANANA!** {scorer_disp} (`{pos}`){assist_comm} whips an unstoppable dead-ball strike over the defensive wall for **{team_name}**! 🧱",
+            f"⚽💥 **{time_label} GOAL! WHAT A HIT, SON!** The corner was headed away, but {scorer_disp} (`{pos}`){assist_comm} met it with a ferocious dropping half-volley for **{team_name}**! 🔥",
+            f"⚽🤝 **{time_label} GOAL! TIKI-TAKA BLISS!** A razor-sharp one-two unlocks the 18-yard box, and {scorer_disp} (`{pos}`){assist_comm} tucks it into the corner for **{team_name}**! 🪄",
+        ])
+    else:  # Attackers
+        return random.choice([
+            f"⚽🧊 **{time_label} GOAL! PURE CLASS!** {scorer_disp} (`{pos}`){assist_comm} cuts past the keeper with silky footwork and finishes with ice in his veins for **{team_name}**! 🧊⚽",
+            f"⚽🎨 **{time_label} GOAL! DELICATE CHIP!** {scorer_disp} (`{pos}`){assist_comm} dinks it sublimely over the committed goalkeeper for **{team_name}**! Pure artistry! ✨",
+            f"⚽💥 **{time_label} GOAL! THUNDERBOLT VOLLEY!** {scorer_disp} (`{pos}`){assist_comm} smashes a venomous first-time strike off the crossbar and in for **{team_name}**! 🚀",
+            f"⚽⚡ **{time_label} GOAL! SOLO SPECTACULAR!** {scorer_disp} (`{pos}`){assist_comm} takes on three defenders single-handedly and slides it into the bottom corner for **{team_name}**! 💨",
+            f"⚽🎯 **{time_label} GOAL! TOP CORNER PERFECTION!** {scorer_disp} (`{pos}`){assist_comm} bends a peach of a curler right where postage stamps live for **{team_name}**! 📮✨",
+            f"⚽🦊 **{time_label} GOAL! POACHER'S INSTINCT!** {scorer_disp} (`{pos}`){assist_comm} gambles on the second ball and stabs home from 6 yards out for **{team_name}**! 🐾",
+            f"⚽🪄 **{time_label} GOAL! CHEEKY FINISH!** {scorer_disp} (`{pos}`){assist_comm} slips the ball right through the keeper's legs with supreme composure for **{team_name}**! 🪡",
+            f"⚽⚡ **{time_label} GOAL! RAPID BREAKAWAY!** A lightning 3-pass counter-attack ends with {scorer_disp} (`{pos}`){assist_comm} rounding the keeper for **{team_name}**! ⚡",
+        ])
+
+def generate_dynamic_in_play_commentary(
+    time_label: str,
+    att_team_name: str,
+    a_p: str,
+    m_p: str,
+    d_p: str,
+    g_p: str,
+    om_p: str
+) -> tuple[str, str | None]:
+    categories = [
+        # 1. Goalkeeping heroics
+        [
+            (f"🧤 **{time_label}** FINGERTIP SAVE! **{g_p}** produces an acrobatic reflex stop to tip **{a_p}**'s venomous volley around the post!", "save"),
+            (f"🧤 **{time_label}** WHAT A SAVE! **{g_p}** spreads himself wide and denies a point-blank blast from **{a_p}** with an outstretched boot!", "save"),
+            (f"🧤 **{time_label}** UNBELIEVABLE DOUBLE-SAVE! **{g_p}** parries **{a_p}**'s header and immediately scrambles off the turf to smother the rebound!", "save"),
+            (f"🧤 **{time_label}** SWEEPER KEEPER! **{g_p}** charges 30 yards out of goal to slide tackle the ball away right before **{a_p}** could shoot!", "save"),
+            (f"🧤 **{time_label}** FLYING STOP! **{g_p}** goes full stretch to turn **{m_p}**'s dipping 30-yard rocket away from the top corner!", "save"),
+            (f"🧤 **{time_label}** SAFE HANDS! **{g_p}** commands his area, leaping into a crowd of bodies to pluck the dangerous cross out of the air!", None),
+            (f"🧤 **{time_label}** HOW DID HE SAVE THAT?! **{a_p}** was certain he scored, but **{g_p}** claws it off the goal-line in the nick of time!", "save"),
+            (f"🧤 **{time_label}** CAT-LIKE DIVE! **{g_p}** gets a strong hand down to turn **{a_p}**'s deflected daisy-cutter behind for a corner!", "save"),
+        ],
+        # 2. Woodwork & Near Misses
+        [
+            (f"🚀 **{time_label}** WOODWORK! **{a_p}** rattles the crossbar with a ferocious 25-yard strike that leaves the goal frame vibrating!", None),
+            (f"🚀 **{time_label}** OFF THE POST! **{a_p}** cuts inside and unleashes a thunderous curler that pings off the upright and bounces out!", None),
+            (f"🚀 **{time_label}** AGONIZINGLY WIDE! **{a_p}**'s diving header skims the crossbar and ripples the roof of the net!", None),
+            (f"🚀 **{time_label}** INCHES AWAY! **{m_p}** connects with a dipping knuckleball that whistles mere centimeters over the bar!", None),
+            (f"🚀 **{time_label}** GOLDEN OPPORTUNITY MISSED! **{a_p}** breaks clean through on goal but drags his low finish agonizingly wide of the far post!", None),
+            (f"🚀 **{time_label}** WICKED DEFLECTION! **{a_p}**'s shot takes a looping deflection off **{d_p}** and drops just onto the roof of the net!", None),
+        ],
+        # 3. Dribbling, Skills & Through Balls
+        [
+            (f"⚡ **{time_label}** AUDACIOUS PASS! **{m_p}** threads an exquisite no-look through-ball, slicing open {att_team_name}'s defense!", None),
+            (f"🪄 **{time_label}** SILKY SKILLS! **{a_p}** beats two defenders with a mesmerizing roulette before squaring dangerously into the box!", None),
+            (f"🪄 **{time_label}** TEKKEN ON TURF! **{a_p}** executes a lightning-fast elastico, sending the fullback completely the wrong way!", None),
+            (f"🎯 **{time_label}** PINPOINT PING! **{m_p}** switches play with a breathtaking 50-yard diagonal pass landing on a sixpence for **{a_p}**!", None),
+            (f"🪄 **{time_label}** NUTMEG! **{a_p}** audaciously slips the ball through **{d_p}**'s legs and surges into the penalty box!", None),
+            (f"⚡ **{time_label}** TIKI-TAKA BLISS! A fluid 5-pass one-touch move between **{m_p}** and **{a_p}** carves open the final third!", None),
+            (f"🌀 **{time_label}** RABONA CROSS! **{a_p}** whips a delightful rabona into the mixer, creating sheer panic in the six-yard box!", None),
+            (f"⚡ **{time_label}** ANKLE-BREAKER! **{a_p}** drops the shoulder with such ferocity that **{d_p}** is left scrambling on the turf!", None),
+        ],
+        # 4. Defensive Heroics & Tackles
+        [
+            (f"🛡️ **{time_label}** GOAL-LINE CLEARANCE! **{d_p}** slides across the turf to hook **{a_p}**'s chip off the line at the very last second!", None),
+            (f"⚔️ **{time_label}** CRUNCHING TACKLE! **{om_p}** stops a dangerous breakaway with an inch-perfect, ball-winning challenge!", None),
+            (f"🛡️ **{time_label}** HEROIC BLOCK! **{d_p}** throws their entire body in front of **{a_p}**'s thunderous blast inside the 18-yard box!", None),
+            (f"🏰 **{time_label}** MONSTER IN THE AIR! **{d_p}** rises above three attackers to power away a lethal corner delivery!", None),
+            (f"🧠 **{time_label}** MASTERCLASS INTERCEPTION! **{om_p}** reads the attacker's mind, stepping forward to pinch possession cleanly!", None),
+            (f"⚔️ **{time_label}** RECOVERY PACE! **{a_p}** thought he was clean through, but **{d_p}** gallops back to make a textbook recovery tackle!", None),
+            (f"🛡️ **{time_label}** ROCK SOLID! **{d_p}** out-muscles **{a_p}** shoulder-to-shoulder and ushers the ball safely out for a goal kick!", None),
+            (f"📐 **{time_label}** OFFSIDE TRAP! **{d_p}** steps up in unison, leaving **{a_p}** stranded as the linesman's flag shoots up!", None),
+        ],
+        # 5. Discipline & Match Drama
+        [
+            (f"🟨 **{time_label}** YELLOW CARD! Tactical foul by **{d_p}** to cynically haul down **{a_p}** and stop a lightning counter-attack!", "yellow"),
+            (f"🟨 **{time_label}** YELLOW CARD! Late sliding tackle by **{om_p}** on the edge of the area! The referee reaches straight into his pocket!", "yellow"),
+            (f"⚠️ **{time_label}** PENALTY SHOUTS! **{a_p}** goes down in the box under contact from **{d_p}**, but the referee vigorously waves play on!", None),
+            (f"🔥 **{time_label}** TEMPERATURE RISES! **{m_p}** and **{om_p}** square up chest-to-chest after a ferocious 50-50 challenge!", None),
+            (f"🚑 **{time_label}** HEAVY COLLISION! **{a_p}** and keeper **{g_p}** collide contesting a high cross, but both get back up ready to fight on!", None),
+        ],
+        # 6. Stadium Atmosphere & Momentum
+        [
+            (f"📢 **{time_label}** THE STADIUM ROARS! The supporters are on their feet chanting as {att_team_name} surges forward with relentless momentum!", None),
+            (f"🔥 **{time_label}** HIGH VOLTAGE! {att_team_name} suffocating their opponent with an intense, suffocating high-press in the final third!", None),
+            (f"⚡ **{time_label}** BREATHLESS TEMPO! Both teams throwing caution to the wind in a thrilling, end-to-end transition battle!", None),
+            (f"⏳ **{time_label}** TENSION AT PEAK! Every pass, every tackle carries immense weight as managers scream instructions from the technical area!", None),
+        ]
+    ]
+    chosen_cat = random.choices(categories, weights=[25, 20, 20, 20, 10, 5], k=1)[0]
+    return random.choice(chosen_cat)
+
 class MatchRequestView(discord.ui.View):
     def __init__(self, challenger: discord.Member, opponent: discord.Member, cog, squad_a, squad_b, fans_a, fans_b, ovr_a, ovr_b, timeout_secs: int = 60):
         super().__init__(timeout=timeout_secs)
@@ -1154,38 +1368,46 @@ class MatchCog(commands.Cog):
                     if team_target == player_a:
                         current_score_a += 1
                         team_name = player_a.display_name
+                        opponent_name = player_b.display_name
                         team_a_player_goals[scorer] = team_a_player_goals.get(scorer, 0) + 1
+                        player_goals_today = team_a_player_goals[scorer]
+                        score_for_team = current_score_a
+                        score_for_opp = current_score_b
                     else:
                         current_score_b += 1
                         team_name = player_b.display_name
+                        opponent_name = player_a.display_name
                         team_b_player_goals[scorer] = team_b_player_goals.get(scorer, 0) + 1
+                        player_goals_today = team_b_player_goals[scorer]
+                        score_for_team = current_score_b
+                        score_for_opp = current_score_a
 
                     scorer_disp = format_match_player_name(scorer)
                     assister_disp = format_match_player_name(assister) if assister else ""
-                    assist_comm = f" assisted by **{assister_disp}**" if assister else ""
                     is_stoppage_goal = (is_et or min_scored >= 88)
-                    s_lower = scorer.lower()
-                    if 'blank' in s_lower:
-                        goal_commentary = f"🌌 **{time_label} GOAL! THE ENIGMA AWAKENS!** **~𝔹𝕃𝔸ℕ𝕂** (`{pos}`){assist_comm} ghosts past the entire defense with impossible agility and finishes into the bottom corner for **{team_name}**! 🔮✨"
-                    elif 'lewandowski' in s_lower:
-                        goal_commentary = f"⚽ **{time_label} GOAL! PURE LETHALITY!** Robert **Lewandowski** (`{pos}`){assist_comm} clinically hammers a thunderbolt into the bottom corner for **{team_name}**! 🎯🇵🇱"
-                    elif 'akari' in s_lower or 'watanabe' in s_lower:
-                        goal_commentary = f"✨ **{time_label} GOAL! MAGICAL MAESTRO!** Akari **Watanabe** (`{pos}`){assist_comm} dances through the backline and chips the keeper with sublime flair for **{team_name}**! 🌸⚡"
-                    elif is_stoppage_goal:
-                        goal_commentary = f"🚨 **{time_label} GOAL! UNBELIEVABLE DRAMA!** Stoppage-time pandemonium as **{scorer_disp}** (`{pos}`){assist_comm} nets a breathless stunner for **{team_name}**! ⚡🔥"
-                    elif ptype == "def":
-                        goal_commentary = f"⚽ **{time_label} GOAL!** BULLET HEADER! Defender **{scorer_disp}** (`{pos}`){assist_comm} rises highest from the corner and thumps it home for **{team_name}**! 📐🔥"
-                    elif ptype == "mid":
-                        goal_commentary = f"⚽ **{time_label} GOAL!** 30-YARD SCREAMER! **{scorer_disp}** (`{pos}`){assist_comm} unleashes an unstoppable rocket into the top corner for **{team_name}**! ☄️"
-                    else:
-                        goal_commentary = f"⚽ **{time_label} GOAL!** PURE CLASS! **{scorer_disp}** (`{pos}`){assist_comm} cuts past the keeper with silky footwork and finishes with ice in his veins for **{team_name}**! 🧊⚽"
+
+                    goal_commentary = generate_dynamic_goal_commentary(
+                        time_label=time_label,
+                        scorer=scorer,
+                        scorer_disp=scorer_disp,
+                        pos=pos,
+                        ptype=ptype,
+                        assister=assister,
+                        assister_disp=assister_disp,
+                        team_name=team_name,
+                        opponent_name=opponent_name,
+                        score_for_team=score_for_team,
+                        score_for_opp=score_for_opp,
+                        is_stoppage=is_stoppage_goal,
+                        player_goals_today=player_goals_today
+                    )
 
                     latest_events_feed.insert(0, goal_commentary)
                     assist_str = f" *(🅰️ {assister_disp})*" if assister else ""
                     scoresheet_events.append(f"⚽ **{time_label}** - **{scorer_disp}**{assist_str} ({team_name})")
 
-                # Random key event commentary every ~10-15 minutes if no goal
-                if not matched_goals and (m_val % 8 == 0 or (is_et and et_val == 1)) and phase_label != "Half Time Break":
+                # Random key event commentary every ~6 minutes if no goal, or start of stoppage time
+                if not matched_goals and (m_val % 6 == 0 or (is_et and et_val == 1)) and phase_label != "Half Time Break":
                     is_a_attack = random.random() < (possession_a / 100.0)
                     att_team_name = player_a.display_name if is_a_attack else player_b.display_name
                     atk_pool = atk_a if is_a_attack else atk_b
@@ -1200,20 +1422,20 @@ class MatchCog(commands.Cog):
                     g_p = format_match_player_name(random.choice(gk_pool))
                     om_p = format_match_player_name(random.choice(opp_mid_pool))
 
-                    commentary_choices = [
-                        f"⚡ **{time_label}** **{m_p}** threads an audacious through-ball, slicing open {att_team_name}'s defense!",
-                        f"🧤 **{time_label}** FINGERTIP SAVE! **{g_p}** produces an acrobatic stop to deny a blistering volley from **{a_p}**!",
-                        f"🚀 **{time_label}** WOODWORK! **{a_p}** rattles the crossbar with a ferocious 25-yard strike!",
-                        f"🛡️ **{time_label}** GOAL-LINE CLEARANCE! **{d_p}** slides across the turf to hook **{a_p}**'s chip off the line!",
-                        f"⚔️ **{time_label}** CRUNCHING TACKLE! **{om_p}** stops a dangerous breakaway with an inch-perfect challenge!",
-                        f"🎯 **{time_label}** SILKY SKILLS! **{a_p}** beats two defenders with a roulette before curling just wide!",
-                        f"🟨 **{time_label}** YELLOW CARD! Tactical foul by **{d_p}** to break up a lightning counter!"
-                    ]
-                    chosen_comm = random.choice(commentary_choices)
+                    chosen_comm, event_tag = generate_dynamic_in_play_commentary(
+                        time_label=time_label,
+                        att_team_name=att_team_name,
+                        a_p=a_p,
+                        m_p=m_p,
+                        d_p=d_p,
+                        g_p=g_p,
+                        om_p=om_p
+                    )
                     latest_events_feed.insert(0, f"🎙️ *{chosen_comm}*")
-                    if "yellow card" in chosen_comm.lower():
-                        scoresheet_events.append(f"🟨 **{time_label}** - **{d_p}** (Yellow Card)")
-                    elif "fingertip save" in chosen_comm.lower():
+                    if event_tag == "yellow":
+                        carded_p = d_p if f"**{d_p}**" in chosen_comm else om_p
+                        scoresheet_events.append(f"🟨 **{time_label}** - **{carded_p}** (Yellow Card)")
+                    elif event_tag == "save":
                         scoresheet_events.append(f"🧤 **{time_label}** - **{g_p}** (Great Save)")
 
                 # Keep latest events compact (top 3)
