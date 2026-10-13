@@ -12,7 +12,7 @@ DM_MONIS_URL = f"https://discord.com/users/{OWNER_DISCORD_ID}"
 class CustomCardOrderModal(discord.ui.Modal, title="🎨 Order Custom Player Card"):
     player_name = discord.ui.TextInput(
         label="Player / Card Name",
-        placeholder="e.g. Monis Jamal, Beastly King, Shadow Striker...",
+        placeholder="e.g. Desti, Beastly King, Shadow Striker...",
         required=True,
         max_length=50
     )
@@ -131,7 +131,7 @@ class CustomCardOrderModal(discord.ui.Modal, title="🎨 Order Custom Player Car
                 f"• **OVR & Pos:** `{rating} OVR {pos}`\n"
                 f"• **Club / Nation:** `{club}` / `{nation}`\n\n"
                 f"📩 **Next Step:**\n"
-                f"Please make sure your DMs are open and message **Monis** (<@{OWNER_DISCORD_ID}>) or join the **[Support Server]({SUPPORT_INVITE})** to finalize your card artwork and stats!"
+                f"Please make sure your DMs are open and message **Desti** (<@{OWNER_DISCORD_ID}>) or join the **[Support Server]({SUPPORT_INVITE})** to finalize your card artwork and stats!"
             ),
             color=0x00FF88
         )
@@ -144,7 +144,7 @@ class CustomOrderView(discord.ui.View):
         
         # Link buttons
         self.add_item(discord.ui.Button(
-            label="📩 DM Monis / Developer",
+            label="📩 DM Desti / Developer",
             style=discord.ButtonStyle.link,
             url=DM_MONIS_URL,
             emoji="💬"
@@ -254,7 +254,7 @@ class ServerSetupCog(commands.Cog):
                 "• 🏟️ **Playable in Starting 11** on the 3D stadium pitch lineup\n"
                 "• 📦 **Direct Inventory Drop** or exclusive in your server's Draft pool!\n\n"
                 "### 📩 How to Order:\n"
-                f"1. **DM Developer Monis directly:** <@{OWNER_DISCORD_ID}> (`monisjamal`)\n"
+                f"1. **DM Developer Desti directly:** <@{OWNER_DISCORD_ID}>\n"
                 f"2. Join **[BeastlyFC (Main Server)]({BEASTLYFC_INVITE})**\n"
                 f"3. Join **[DestiFC Support Server]({SUPPORT_INVITE})** to open an order ticket\n"
                 "4. Or click **Submit Order Form** below to send your details right now!"

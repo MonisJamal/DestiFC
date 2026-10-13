@@ -268,7 +268,21 @@ class MatchCog(commands.Cog):
         elif fans < 600000: return "Legendary III 💎"
         elif fans < 800000: return "Legendary II 💎"
         elif fans < 1000000: return "Legendary I 💎"
-        else: return "FC Champion 🏆"
+        elif fans < 1200000: return "FC Champion III 🏆"
+        elif fans < 1500000: return "FC Champion II 🏆"
+        else: return "FC Champion I 👑"
+
+    def get_division_tier(self, fans: int, gp_cfg: dict = None):
+        if gp_cfg and "division_tiers" in gp_cfg and gp_cfg["division_tiers"]:
+            tiers = sorted(gp_cfg["division_tiers"], key=lambda x: int(x.get('min_fans', 0)))
+            matched = tiers[0]
+            for t in tiers:
+                if fans >= int(t.get('min_fans', 0)):
+                    matched = t
+                else:
+                    break
+            return matched
+        return None
 
     def get_division_index(self, fans: int, gp_cfg: dict = None):
         if gp_cfg and "division_tiers" in gp_cfg and gp_cfg["division_tiers"]:
@@ -293,14 +307,18 @@ class MatchCog(commands.Cog):
         elif fans < 600000: return 9
         elif fans < 800000: return 10
         elif fans < 1000000: return 11
-        else: return 12
+        elif fans < 1200000: return 12
+        elif fans < 1500000: return 13
+        else: return 14
 
     def get_div_reward(self, index: int):
         if index <= 2: return 3
         elif index <= 5: return 5
         elif index <= 8: return 7
-        elif index <= 11: return 9
-        else: return 11
+        elif index <= 11: return 10
+        elif index == 12: return 15
+        elif index == 13: return 20
+        else: return 30
 
 
     async def run_series(self, interaction, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b, message, lobby):
@@ -1299,26 +1317,52 @@ class MatchCog(commands.Cog):
                 )
             )
 
+            gp_cfg = await database.get_gameplay_config()
+            u_data_a = await database.get_user(player_a.id)
+            u_data_b = await database.get_user(player_b.id)
+            fans_a = int(u_data_a.get('fans', 0))
+            fans_b = int(u_data_b.get('fans', 0))
+            tier_a = self.get_division_tier(fans_a, gp_cfg)
+            tier_b = self.get_division_tier(fans_b, gp_cfg)
+
+            win_coins_base = int(gp_cfg.get('match_win_coins', 100_000_000))
+            draw_coins = int(gp_cfg.get('match_draw_coins', 40_000_000))
+            loss_coins = int(gp_cfg.get('match_loss_coins', 20_000_000))
+            win_fans = int(gp_cfg.get('match_win_fans', 12_000))
+            draw_fans = int(gp_cfg.get('match_draw_fans', 3_000))
+            loss_fans = int(gp_cfg.get('match_loss_fans', -6_000))
+            win_xp = int(gp_cfg.get('match_win_xp', 150))
+
+            tier_coins_a = int(tier_a.get('win_reward_coins', 0)) if tier_a else 0
+            tier_coins_b = int(tier_b.get('win_reward_coins', 0)) if tier_b else 0
+            calc_win_a = max(win_coins_base, tier_coins_a)
+            calc_win_b = max(win_coins_base, tier_coins_b)
+            coins_won_num_a = int(calc_win_a * 1.25) if s_a.get('theme') == 'gold' else calc_win_a
+            coins_won_num_b = int(calc_win_b * 1.25) if s_b.get('theme') == 'gold' else calc_win_b
+
+            vouchers_won_a = max(3, int(tier_a.get('win_reward_vouchers', 3))) if tier_a else 3
+            vouchers_won_b = max(3, int(tier_b.get('win_reward_vouchers', 3))) if tier_b else 3
+
             color = discord.Color.light_grey()
             if winner is None:
                 result_text = f"🤝 **IT'S A DRAW!**\nFinal Score: `{current_score_a} - {current_score_b}`"
-                fan_change_str = "Both players gained **+2,000 Fans**"
+                fan_change_str = f"Both players gained **+{draw_fans:,} Fans**\n💰 **+{draw_coins:,} Coins** & 🎫 **+1x Draft Voucher** each"
                 bonus_a_str = ""
                 bonus_b_str = ""
             elif winner == player_a:
                 result_text = f"🏆 **{player_a.display_name} WINS!**\nFinal Score: `{current_score_a} - {current_score_b}`"
                 color = discord.Color.green()
-                fan_change_str = f"**{player_a.display_name}** gained **+10,000 Fans**\n**{player_b.display_name}** lost **-8,000 Fans**"
-                coins_won_a = "💰 **+31,250,000 Coins** *(👑 +25% Stadium Bonus!)*" if s_a.get('theme') == 'gold' else "💰 **+25,000,000 Coins**"
-                bonus_a_str = f"{coins_won_a}\n🎫 **+1x Draft Voucher**"
+                fan_change_str = f"**{player_a.display_name}** gained **+{win_fans:,} Fans**\n**{player_b.display_name}** lost **{loss_fans:,} Fans** *(+20M Consolation Coins)*"
+                bonus_theme = " *(👑 +25% Stadium Bonus!)*" if s_a.get('theme') == 'gold' else ""
+                bonus_a_str = f"💰 **+{coins_won_num_a:,} Coins**{bonus_theme}\n🎫 **+{vouchers_won_a}x Draft Vouchers**"
                 bonus_b_str = ""
             else:
                 result_text = f"🏆 **{player_b.display_name} WINS!**\nFinal Score: `{current_score_a} - {current_score_b}`"
                 color = discord.Color.red()
-                fan_change_str = f"**{player_b.display_name}** gained **+10,000 Fans**\n**{player_a.display_name}** lost **-8,000 Fans**"
-                coins_won_b = "💰 **+31,250,000 Coins** *(👑 +25% Stadium Bonus!)*" if s_b.get('theme') == 'gold' else "💰 **+25,000,000 Coins**"
+                fan_change_str = f"**{player_b.display_name}** gained **+{win_fans:,} Fans**\n**{player_a.display_name}** lost **{loss_fans:,} Fans** *(+20M Consolation Coins)*"
+                bonus_theme = " *(👑 +25% Stadium Bonus!)*" if s_b.get('theme') == 'gold' else ""
                 bonus_a_str = ""
-                bonus_b_str = f"{coins_won_b}\n🎫 **+1x Draft Voucher**"
+                bonus_b_str = f"💰 **+{coins_won_num_b:,} Coins**{bonus_theme}\n🎫 **+{vouchers_won_b}x Draft Vouchers**"
 
             embed = discord.Embed(title="FULL TIME ⏱️", description=result_text, color=color)
             
@@ -1408,28 +1452,19 @@ class MatchCog(commands.Cog):
                     p = await database.get_db()
                     await p.execute('UPDATE users SET last_match_time = $1 WHERE user_id = $2 OR user_id = $3', now, player_a.id, player_b.id)
 
-                    win_coins = int(gp_cfg.get('match_win_coins', 25_000_000))
-                    draw_coins = int(gp_cfg.get('match_draw_coins', 10_000_000))
-                    loss_coins = int(gp_cfg.get('match_loss_coins', 5_000_000))
-                    win_fans = int(gp_cfg.get('match_win_fans', 10_000))
-                    draw_fans = int(gp_cfg.get('match_draw_fans', 2_000))
-                    loss_fans = int(gp_cfg.get('match_loss_fans', -8_000))
-                    win_xp = int(gp_cfg.get('match_win_xp', 75))
-
-                    win_coins_a = int(win_coins * 1.25) if s_a.get('theme') == 'gold' else win_coins
-                    win_coins_b = int(win_coins * 1.25) if s_b.get('theme') == 'gold' else win_coins
-
                     if winner is None:
                         await database.add_fans(player_a.id, draw_fans)
                         await database.add_fans(player_b.id, draw_fans)
                         await database.add_coins(player_a.id, draw_coins)
                         await database.add_coins(player_b.id, draw_coins)
+                        await database.add_vouchers(player_a.id, 1)
+                        await database.add_vouchers(player_b.id, 1)
                     elif winner == player_a:
                         await database.add_fans(player_a.id, win_fans)
                         await database.add_fans(player_b.id, loss_fans)
-                        await database.add_coins(player_a.id, win_coins_a)
+                        await database.add_coins(player_a.id, coins_won_num_a)
                         await database.add_coins(player_b.id, loss_coins)
-                        await database.add_vouchers(player_a.id, 1)
+                        await database.add_vouchers(player_a.id, vouchers_won_a)
                         try:
                             from cogs.achievements import increment_stat, check_and_award
                             await increment_stat(player_a.id, "matches_won")
@@ -1440,9 +1475,9 @@ class MatchCog(commands.Cog):
                     else:
                         await database.add_fans(player_b.id, win_fans)
                         await database.add_fans(player_a.id, loss_fans)
-                        await database.add_coins(player_b.id, win_coins_b)
+                        await database.add_coins(player_b.id, coins_won_num_b)
                         await database.add_coins(player_a.id, loss_coins)
-                        await database.add_vouchers(player_b.id, 1)
+                        await database.add_vouchers(player_b.id, vouchers_won_b)
                         try:
                             from cogs.achievements import increment_stat, check_and_award
                             await increment_stat(player_b.id, "matches_won")

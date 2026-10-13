@@ -68,7 +68,7 @@ class HelpCog(commands.Cog):
         ), inline=False)
         
         embed.add_field(name="🎨 Custom Cards & Server Setup", value=(
-            "`> /custom_order` — 🎨 Order your own Custom Card with custom stats, perks & personal avatar (DM Monis)!\n"
+            "`> /custom_order` — 🎨 Order your own Custom Card with custom stats, perks & personal avatar (DM Desti)!\n"
             "`> /setchannel <channel>` — 📌 (Admins) Bind DestiFC commands to a dedicated channel in your server\n"
             "`> /resetchannel` — 🔓 (Admins) Remove channel restrictions and allow commands everywhere\n"
         ), inline=False)

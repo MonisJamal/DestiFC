@@ -105,9 +105,9 @@ class SeasonCog(commands.Cog):
 
     @tasks.loop(hours=1)
     async def season_reset_loop(self):
-        """Check if any user's season has expired (10 days) and reset them."""
+        """Check if any user's season has expired (15 days) and reset them."""
         p = await database.get_db()
-        cutoff = int(time.time()) - (10 * 86400)  # 10 days ago
+        cutoff = int(time.time()) - (15 * 86400)  # 15 days ago
         await p.execute('UPDATE season_pass SET xp = 0, claimed_tiers = $1, season_id = season_id + 1, started_at = $2 WHERE started_at < $3 AND started_at > 0',
                          '[]', int(time.time()), cutoff)
 
@@ -130,13 +130,13 @@ class SeasonCog(commands.Cog):
 
         # Calculate time remaining
         elapsed = int(time.time()) - data["started_at"]
-        remaining_secs = max(0, (10 * 86400) - elapsed)
+        remaining_secs = max(0, (15 * 86400) - elapsed)
         days_left = remaining_secs // 86400
         hours_left = (remaining_secs % 86400) // 3600
 
         # Build progress bar
-        xp_per_tier = config.get("xp_per_tier", 500)
-        tiers_count = config.get("tiers_count", 10)
+        xp_per_tier = config.get("xp_per_tier", 1000)
+        tiers_count = config.get("tiers_count", 25)
         
         progress_pct = (xp % xp_per_tier) / xp_per_tier if current_tier < tiers_count else 1.0
         filled = int(progress_pct * 20)
@@ -171,7 +171,7 @@ class SeasonCog(commands.Cog):
         user_id = interaction.user.id
         
         config = await fetch_season_config()
-        tiers_count = config.get("tiers_count", 10)
+        tiers_count = config.get("tiers_count", 25)
 
         if tier < 1 or tier > tiers_count:
             return await interaction.followup.send(f"❌ Tier must be between 1 and {tiers_count}.")
