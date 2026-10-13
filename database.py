@@ -1698,9 +1698,9 @@ async def save_economy_config(config_dict: dict) -> bool:
 # ================= Global Gameplay & Match Settings =================
 
 DEFAULT_GAMEPLAY_CONFIG = {
-    "match_win_coins": 100_000_000,
-    "match_draw_coins": 40_000_000,
-    "match_loss_coins": 20_000_000,
+    "match_win_coins": 10_000_000,
+    "match_draw_coins": 5_000_000,
+    "match_loss_coins": 2_000_000,
     "match_win_fans": 12000,
     "match_draw_fans": 3000,
     "match_loss_fans": -6000,
@@ -1714,21 +1714,21 @@ DEFAULT_GAMEPLAY_CONFIG = {
     "custom_card_match_boost": 1.15,
     "penalty_shootout_enabled": True,
     "division_tiers": [
-        { "id": 1, "name": "Amateur III", "min_fans": 0, "badge": "🥉", "win_reward_coins": 30000000, "win_reward_vouchers": 2 },
-        { "id": 2, "name": "Amateur II", "min_fans": 10000, "badge": "🥉", "win_reward_coins": 35000000, "win_reward_vouchers": 2 },
-        { "id": 3, "name": "Amateur I", "min_fans": 20000, "badge": "🥉", "win_reward_coins": 40000000, "win_reward_vouchers": 2 },
-        { "id": 4, "name": "Pro III", "min_fans": 30000, "badge": "🥈", "win_reward_coins": 50000000, "win_reward_vouchers": 3 },
-        { "id": 5, "name": "Pro II", "min_fans": 50000, "badge": "🥈", "win_reward_coins": 60000000, "win_reward_vouchers": 3 },
-        { "id": 6, "name": "Pro I", "min_fans": 70000, "badge": "🥈", "win_reward_coins": 75000000, "win_reward_vouchers": 3 },
-        { "id": 7, "name": "World Class III", "min_fans": 100000, "badge": "🥇", "win_reward_coins": 100000000, "win_reward_vouchers": 4 },
-        { "id": 8, "name": "World Class II", "min_fans": 200000, "badge": "🥇", "win_reward_coins": 125000000, "win_reward_vouchers": 4 },
-        { "id": 9, "name": "World Class I", "min_fans": 300000, "badge": "🥇", "win_reward_coins": 150000000, "win_reward_vouchers": 5 },
-        { "id": 10, "name": "Legendary III", "min_fans": 400000, "badge": "💎", "win_reward_coins": 200000000, "win_reward_vouchers": 6 },
-        { "id": 11, "name": "Legendary II", "min_fans": 600000, "badge": "💎", "win_reward_coins": 250000000, "win_reward_vouchers": 7 },
-        { "id": 12, "name": "Legendary I", "min_fans": 800000, "badge": "💎", "win_reward_coins": 350000000, "win_reward_vouchers": 8 },
-        { "id": 13, "name": "FC Champion III", "min_fans": 1000000, "badge": "🏆", "win_reward_coins": 500000000, "win_reward_vouchers": 10 },
-        { "id": 14, "name": "FC Champion II", "min_fans": 1200000, "badge": "🏆", "win_reward_coins": 750000000, "win_reward_vouchers": 15 },
-        { "id": 15, "name": "FC Champion I", "min_fans": 1500000, "badge": "👑", "win_reward_coins": 1000000000, "win_reward_vouchers": 25 }
+        { "id": 1, "name": "Amateur III", "min_fans": 0, "badge": "🥉", "win_reward_coins": 10000000, "win_reward_vouchers": 1 },
+        { "id": 2, "name": "Amateur II", "min_fans": 10000, "badge": "🥉", "win_reward_coins": 12000000, "win_reward_vouchers": 1 },
+        { "id": 3, "name": "Amateur I", "min_fans": 20000, "badge": "🥉", "win_reward_coins": 15000000, "win_reward_vouchers": 1 },
+        { "id": 4, "name": "Pro III", "min_fans": 30000, "badge": "🥈", "win_reward_coins": 18000000, "win_reward_vouchers": 2 },
+        { "id": 5, "name": "Pro II", "min_fans": 50000, "badge": "🥈", "win_reward_coins": 20000000, "win_reward_vouchers": 2 },
+        { "id": 6, "name": "Pro I", "min_fans": 70000, "badge": "🥈", "win_reward_coins": 25000000, "win_reward_vouchers": 2 },
+        { "id": 7, "name": "World Class III", "min_fans": 100000, "badge": "🥇", "win_reward_coins": 30000000, "win_reward_vouchers": 3 },
+        { "id": 8, "name": "World Class II", "min_fans": 200000, "badge": "🥇", "win_reward_coins": 35000000, "win_reward_vouchers": 3 },
+        { "id": 9, "name": "World Class I", "min_fans": 300000, "badge": "🥇", "win_reward_coins": 40000000, "win_reward_vouchers": 3 },
+        { "id": 10, "name": "Legendary III", "min_fans": 400000, "badge": "💎", "win_reward_coins": 50000000, "win_reward_vouchers": 4 },
+        { "id": 11, "name": "Legendary II", "min_fans": 600000, "badge": "💎", "win_reward_coins": 65000000, "win_reward_vouchers": 4 },
+        { "id": 12, "name": "Legendary I", "min_fans": 800000, "badge": "💎", "win_reward_coins": 80000000, "win_reward_vouchers": 5 },
+        { "id": 13, "name": "FC Champion III", "min_fans": 1000000, "badge": "🏆", "win_reward_coins": 100000000, "win_reward_vouchers": 6 },
+        { "id": 14, "name": "FC Champion II", "min_fans": 1200000, "badge": "🏆", "win_reward_coins": 200000000, "win_reward_vouchers": 10 },
+        { "id": 15, "name": "FC Champion I", "min_fans": 1500000, "badge": "👑", "win_reward_coins": 300000000, "win_reward_vouchers": 15 }
     ]
 }
 

@@ -1335,8 +1335,8 @@ class MatchCog(commands.Cog):
 
             tier_coins_a = int(tier_a.get('win_reward_coins', 0)) if tier_a else 0
             tier_coins_b = int(tier_b.get('win_reward_coins', 0)) if tier_b else 0
-            calc_win_a = max(win_coins_base, tier_coins_a)
-            calc_win_b = max(win_coins_base, tier_coins_b)
+            calc_win_a = tier_coins_a if tier_coins_a > 0 else win_coins_base
+            calc_win_b = tier_coins_b if tier_coins_b > 0 else win_coins_base
             coins_won_num_a = int(calc_win_a * 1.25) if s_a.get('theme') == 'gold' else calc_win_a
             coins_won_num_b = int(calc_win_b * 1.25) if s_b.get('theme') == 'gold' else calc_win_b
 
