@@ -22,7 +22,7 @@ FORMATION_MAP = {
     "4-2-3-1 Wide": {"ST": None, "CAM": None, "LM": None, "RM": None, "CDM1": None, "CDM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
     "4-2-4": {"LW": None, "ST1": None, "ST2": None, "RW": None, "CM1": None, "CM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
     "4-3-1-2": {"ST1": None, "ST2": None, "CAM": None, "CM1": None, "CM2": None, "CM3": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
-    "4-3-2-1": {"ST": None, "LF": None, "RF": None, "CM1": None, "CM2": None, "CM3": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
+    "4-3-2-1": {"ST": None, "CAM1": None, "CAM2": None, "CM1": None, "CM2": None, "CM3": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
     "4-3-3 Flat": {"LW": None, "ST": None, "RW": None, "CM1": None, "CM2": None, "CM3": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
     "4-3-3 Attack": {"LW": None, "ST": None, "RW": None, "CAM": None, "CM1": None, "CM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
     "4-3-3 Defend": {"LW": None, "ST": None, "RW": None, "CM": None, "CDM1": None, "CDM2": None, "LB": None, "CB1": None, "CB2": None, "RB": None, "GK": None},
