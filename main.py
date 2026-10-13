@@ -292,20 +292,36 @@ class DestiFC(commands.AutoShardedBot):
             for job in jobs:
                 job_id = job['id']
                 job_type = job['job_type']
-                
-                await database.execute(
-                    "UPDATE portal_jobs SET status = 'completed', result = 'Executed successfully' WHERE id = $1",
-                    job_id
-                )
 
                 if job_type == 'ANNOUNCE_TOURNAMENT':
-                    match_cog = bot.get_cog('MatchCog')
+                    match_cog = self.get_cog('MatchCog')
                     if match_cog:
-                        asyncio.create_task(match_cog.announce_tournament(job['payload']))
+                        res = await match_cog.announce_tournament(job['payload'])
+                        is_success = "Successfully" in str(res)
+                        await database.execute(
+                            "UPDATE portal_jobs SET status = $2, result = $3 WHERE id = $1",
+                            job_id, 'completed' if is_success else 'failed', str(res)
+                        )
+                    else:
+                        print("[Remote Control] MatchCog not found in bot cogs!")
+                        await database.execute(
+                            "UPDATE portal_jobs SET status = 'failed', result = 'MatchCog not found in bot cogs' WHERE id = $1",
+                            job_id
+                        )
                 elif job_type == 'TRIGGER_TOURNAMENT_MATCH':
-                    match_cog = bot.get_cog('MatchCog')
+                    match_cog = self.get_cog('MatchCog')
                     if match_cog:
                         asyncio.create_task(match_cog.trigger_tournament_match(job['payload']))
+                        await database.execute(
+                            "UPDATE portal_jobs SET status = 'completed', result = 'Match simulation initiated' WHERE id = $1",
+                            job_id
+                        )
+                    else:
+                        print("[Remote Control] MatchCog not found in bot cogs!")
+                        await database.execute(
+                            "UPDATE portal_jobs SET status = 'failed', result = 'MatchCog not found in bot cogs' WHERE id = $1",
+                            job_id
+                        )
                 elif job_type == 'mass_dm':
                     import asyncio
                     import json
@@ -324,7 +340,7 @@ class DestiFC(commands.AutoShardedBot):
                                 errs = 0
                                 for u in users:
                                     try:
-                                        user = await bot.fetch_user(int(u['user_id']))
+                                        user = await self.fetch_user(int(u['user_id']))
                                         if user:
                                             embed = discord.Embed(
                                                 title=title,
@@ -345,10 +361,18 @@ class DestiFC(commands.AutoShardedBot):
                                 with open("mass_dm.log", "a") as f:
                                     f.write(f"[Mass DM] Fatal Error: {ex}\n{traceback.format_exc()}\n")
                                 
-                        bot.loop.create_task(bg_mass_dm())
+                        asyncio.create_task(bg_mass_dm())
+                        await database.execute(
+                            "UPDATE portal_jobs SET status = 'completed', result = 'Mass DM blast queued' WHERE id = $1",
+                            job_id
+                        )
                         print(f"[Mass DM] Queued DM blast for {title}")
                     except Exception as e:
                         print(f"Error parsing mass_dm payload: {e}")
+                        await database.execute(
+                            "UPDATE portal_jobs SET status = 'failed', result = $2 WHERE id = $1",
+                            job_id, f"Error parsing mass_dm payload: {e}"
+                        )
                         
                 elif job_type == 'SIGNAL_RELOAD_COGS':
                     print("[Remote Control] Flushing caches and reloading all bot cogs...")
@@ -394,7 +418,7 @@ class DestiFC(commands.AutoShardedBot):
                     print(f"[Remote Control] {res_msg}")
                     try:
                         await database.execute(
-                            "UPDATE portal_jobs SET result = $2 WHERE id = $1",
+                            "UPDATE portal_jobs SET status = 'completed', result = $2 WHERE id = $1",
                             job_id, res_msg
                         )
                     except Exception:
@@ -403,12 +427,26 @@ class DestiFC(commands.AutoShardedBot):
 
                 elif job_type == 'SIGNAL_RESTART':
                     print("[Remote Control] Received restart signal from Admin Panel. Gracefully rebooting...")
+                    try:
+                        await database.execute(
+                            "UPDATE portal_jobs SET status = 'completed', result = 'Bot process reboot initiated' WHERE id = $1",
+                            job_id
+                        )
+                    except Exception:
+                        pass
                     await self.close()
                     import sys
                     os.execv(sys.executable, [sys.executable] + sys.argv)
 
                 elif job_type == 'SIGNAL_SHUTDOWN':
                     print("[Remote Control] Received shutdown signal from Admin Panel. Closing bot...")
+                    try:
+                        await database.execute(
+                            "UPDATE portal_jobs SET status = 'completed', result = 'Bot shutdown executed' WHERE id = $1",
+                            job_id
+                        )
+                    except Exception:
+                        pass
                     await self.close()
                     import sys
                     sys.exit(0)
@@ -420,10 +458,13 @@ class DestiFC(commands.AutoShardedBot):
                         if bm_cog:
                             await bm_cog.trigger_market_opening(force=True)
                             print("[Remote Control] Black Market successfully opened and announced via remote signal!")
+                            await database.execute("UPDATE portal_jobs SET status = 'completed', result = 'Black Market opened successfully' WHERE id = $1", job_id)
                         else:
                             print("[Remote Control] BlackMarketCog not loaded!")
+                            await database.execute("UPDATE portal_jobs SET status = 'failed', result = 'BlackMarketCog not loaded' WHERE id = $1", job_id)
                     except Exception as bm_err:
                         print(f"[Remote Control] Error triggering Black Market opening: {bm_err}")
+                        await database.execute("UPDATE portal_jobs SET status = 'failed', result = $2 WHERE id = $1", job_id, str(bm_err))
 
                 elif job_type == 'open_special_market':
                     print("[Remote Control] Received open_special_market signal from Admin Panel! Triggering VIP market...")
@@ -440,14 +481,18 @@ class DestiFC(commands.AutoShardedBot):
                         if bm_cog:
                             await bm_cog.trigger_special_market_opening(duration_minutes=dur)
                             print(f"[Remote Control] VIP Special Market successfully opened (duration: {dur or 'default'}m) and announced via remote signal!")
+                            await database.execute("UPDATE portal_jobs SET status = 'completed', result = 'VIP Special Market opened successfully' WHERE id = $1", job_id)
                         else:
                             print("[Remote Control] BlackMarketCog not loaded!")
+                            await database.execute("UPDATE portal_jobs SET status = 'failed', result = 'BlackMarketCog not loaded' WHERE id = $1", job_id)
                     except Exception as bm_err:
                         print(f"[Remote Control] Error triggering VIP Special Market opening: {bm_err}")
+                        await database.execute("UPDATE portal_jobs SET status = 'failed', result = $2 WHERE id = $1", job_id, str(bm_err))
 
                 elif job_type == 'SIGNAL_FLUSH_CACHES':
                     print("[Remote Control] Flushing all in-memory caches...")
                     database.flush_all_caches()
+                    await database.execute("UPDATE portal_jobs SET status = 'completed', result = 'All caches flushed' WHERE id = $1", job_id)
                     print("[Remote Control] All caches flushed!")
         except Exception as e:
             print(f"[Remote Signal Error] {e}")

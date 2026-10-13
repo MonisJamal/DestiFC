@@ -661,70 +661,110 @@ class MatchCog(commands.Cog):
                         await interaction.response.send_message("❌ Error registering for tournament.", ephemeral=True)
 
     async def announce_tournament(self, payload):
-        import json
-        data = json.loads(payload)
-        channel_id = int(data.get('channel_id'))
-        channel = self.bot.get_channel(channel_id)
-        if not channel: return
-        
-        t_id = data.get('tournament_id')
-        name = data.get('name')
-        custom_msg = data.get('announcement_msg')
-        desc = custom_msg.strip() if (custom_msg and custom_msg.strip()) else "A new tournament has been announced! Click the button below to register."
-        
-        embed = discord.Embed(title=f"🏆 NEW TOURNAMENT: {name}", description=desc, color=discord.Color.gold())
-        if data.get('type'):
-            t_format = data.get('format', 'Single Legged')
-            embed.add_field(name="⚔️ Format", value=f"{data.get('type')} ({t_format})", inline=True)
-        if data.get('max_participants'):
-            embed.add_field(name="👥 Max Spots", value=f"{data.get('max_participants')} Players", inline=True)
-        
-        view = discord.ui.View(timeout=None)
-        btn = discord.ui.Button(label="Participate", style=discord.ButtonStyle.green, emoji="🎟️", custom_id=f"tourney_join_{t_id}")
-        view.add_item(btn)
-        
-        role_mention = ""
-        if channel.guild:
-            role = discord.utils.get(channel.guild.roles, name="DestiFC Players") or channel.guild.get_role(1557010712013045860)
-            if role:
-                role_mention = role.mention
+        try:
+            import json
+            data = json.loads(payload) if isinstance(payload, str) else payload
+            channel_id = int(data.get('channel_id'))
+            channel = self.bot.get_channel(channel_id)
+            if not channel:
+                try:
+                    channel = await self.bot.fetch_channel(channel_id)
+                except Exception as fe:
+                    print(f"[Announce Tournament] Could not fetch channel {channel_id}: {fe}")
+                    return f"Could not fetch channel {channel_id}: {fe}"
+            if not channel:
+                print(f"[Announce Tournament] Channel {channel_id} not found!")
+                return f"Channel {channel_id} not found"
+            
+            t_id = data.get('tournament_id')
+            name = data.get('name')
+            custom_msg = data.get('announcement_msg')
+            desc = custom_msg.strip() if (custom_msg and custom_msg.strip()) else "A new tournament has been announced! Click the button below to register."
+            
+            embed = discord.Embed(title=f"🏆 NEW TOURNAMENT: {name}", description=desc, color=discord.Color.gold())
+            if data.get('type'):
+                t_format = data.get('format', 'Single Legged')
+                embed.add_field(name="⚔️ Format", value=f"{data.get('type')} ({t_format})", inline=True)
+            if data.get('max_participants'):
+                embed.add_field(name="👥 Max Spots", value=f"{data.get('max_participants')} Players", inline=True)
+            
+            view = discord.ui.View(timeout=None)
+            btn = discord.ui.Button(label="Participate", style=discord.ButtonStyle.green, emoji="🎟️", custom_id=f"tourney_join_{t_id}")
+            view.add_item(btn)
+            
+            role_mention = ""
+            if channel.guild:
+                role = discord.utils.get(channel.guild.roles, name="DestiFC Players") or channel.guild.get_role(1557010712013045860)
+                if role:
+                    role_mention = role.mention
 
-        await channel.send(content=f"📢 {role_mention}" if role_mention else None, embed=embed, view=view)
+            msg = await channel.send(content=f"📢 {role_mention}" if role_mention else None, embed=embed, view=view)
+            res_str = f"Successfully posted announcement (Msg ID: {msg.id}) in channel {channel_id}!"
+            print(f"[Announce Tournament] {res_str}")
+            return res_str
+        except Exception as e:
+            err_str = f"Announce Tournament Error: {e}"
+            print(f"[{err_str}]")
+            import traceback
+            traceback.print_exc()
+            return err_str
 
     async def trigger_tournament_match(self, payload):
-        import json
-        data = json.loads(payload)
-        channel_id = int(data.get('channel_id'))
-        player_a_id = int(data.get('player_a_id'))
-        player_b_id = int(data.get('player_b_id'))
-        
-        channel = self.bot.get_channel(channel_id)
-        if not channel: return
-        
-        player_a = channel.guild.get_member(player_a_id)
-        player_b = channel.guild.get_member(player_b_id)
-        if not player_a or not player_b:
-            await channel.send(f"Error: One or both players ({player_a_id}, {player_b_id}) are not in the server.")
-            return
+        try:
+            import json
+            data = json.loads(payload) if isinstance(payload, str) else payload
+            channel_id = int(data.get('channel_id'))
+            player_a_id = int(data.get('player_a_id'))
+            player_b_id = int(data.get('player_b_id'))
             
-        squad_a = await database.get_squad(player_a.id)
-        squad_b = await database.get_squad(player_b.id)
-        
-        ovr_a = self.calculate_ovr(squad_a)
-        ovr_b = self.calculate_ovr(squad_b)
-        
-        msg = await channel.send(f"📢 **TOURNAMENT MATCH STARTING!**\n{player_a.mention} vs {player_b.mention}")
-        
-        class DummyInteraction:
-            def __init__(self, channel, user):
-                self.channel = channel
-                self.user = user
-                self.response = None
-            async def edit_original_response(self, *args, **kwargs):
-                raise Exception("Dummy interaction")
+            channel = self.bot.get_channel(channel_id)
+            if not channel:
+                try:
+                    channel = await self.bot.fetch_channel(channel_id)
+                except Exception as fe:
+                    print(f"[Trigger Match] Could not fetch channel {channel_id}: {fe}")
+                    return
+            if not channel:
+                return
+            
+            player_a = channel.guild.get_member(player_a_id)
+            if not player_a:
+                try:
+                    player_a = await channel.guild.fetch_member(player_a_id)
+                except Exception:
+                    pass
+            player_b = channel.guild.get_member(player_b_id)
+            if not player_b:
+                try:
+                    player_b = await channel.guild.fetch_member(player_b_id)
+                except Exception:
+                    pass
+            if not player_a or not player_b:
+                await channel.send(f"Error: One or both players ({player_a_id}, {player_b_id}) are not in the server.")
+                return
                 
-        dummy = DummyInteraction(channel, player_a)
-        await self.simulate_live_match(dummy, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b, message=msg)
+            squad_a = await database.get_squad(player_a.id)
+            squad_b = await database.get_squad(player_b.id)
+            
+            ovr_a = self.calculate_ovr(squad_a)
+            ovr_b = self.calculate_ovr(squad_b)
+            
+            msg = await channel.send(f"📢 **TOURNAMENT MATCH STARTING!**\n{player_a.mention} vs {player_b.mention}")
+        
+            class DummyInteraction:
+                def __init__(self, channel, user):
+                    self.channel = channel
+                    self.user = user
+                    self.response = None
+                async def edit_original_response(self, *args, **kwargs):
+                    raise Exception("Dummy interaction")
+                    
+            dummy = DummyInteraction(channel, player_a)
+            await self.simulate_live_match(dummy, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b, message=msg)
+        except Exception as e:
+            print(f"[Trigger Tournament Match Error] {e}")
+            import traceback
+            traceback.print_exc()
 
     @app_commands.command(name="play", description="Challenge another user to a H2H Division Rivals Match!")
     async def play(self, interaction: discord.Interaction, opponent: discord.Member):
