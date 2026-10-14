@@ -663,6 +663,17 @@ class MatchCog(commands.Cog):
                             await interaction.response.send_message("⚠️ This tournament is already full!", ephemeral=True)
                             return
                     
+                    # Enforce valid 11-player squad
+                    squad = await database.get_squad(interaction.user.id)
+                    s_players = squad.get("players", {}) if squad else {}
+                    valid_squad_players = [p for p in s_players.values() if p and isinstance(p, dict)]
+                    if len(valid_squad_players) < 11:
+                        await interaction.response.send_message(
+                            f"❌ You need a complete 11-player squad to enter this tournament!\nYour squad currently has only **{len(valid_squad_players)}/11 players**. Use `/squad` to finish setting up your team before joining.",
+                            ephemeral=True
+                        )
+                        return
+
                     username = interaction.user.name
                     display_name = interaction.user.display_name or interaction.user.global_name or interaction.user.name
                     await database.execute(
