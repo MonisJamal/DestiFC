@@ -1,4 +1,5 @@
 import os
+import re
 import hashlib
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageChops, ImageFilter
@@ -9,6 +10,12 @@ except ImportError:
 import json
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
+
+try:
+    from maps import nation_map, club_map
+except ImportError:
+    nation_map = {}
+    club_map = {}
 
 FONT_DIR = "assets/fonts"
 CACHE_DIR = "assets/cache/images"
@@ -31,10 +38,57 @@ DEFAULT_CARD_LAYOUT = {
     'position': {'sizeX': 40, 'sizeY': 20, 'posX': 56, 'posY': 64, 'fontSize': 24},
     'nation': {'sizeX': 24, 'sizeY': 24, 'posX': 82.7, 'posY': 188},
     'club': {'sizeX': 24, 'sizeY': 24, 'posX': 146.6, 'posY': 188},
-    'name': {'sizeX': 0, 'sizeY': 0, 'posX': 128, 'posY': 178, 'fontSize': 22},
+    'name': {'sizeX': 0, 'sizeY': 0, 'posX': 128, 'posY': 172, 'fontSize': 21},
     'level': {'sizeX': 64, 'sizeY': 32, 'posX': 128, 'posY': 233, 'fontSize': 23},
     'rank': {'sizeX': 32, 'sizeY': 32, 'posX': 128, 'posY': 232}
 }
+
+def resolve_nation_id(val):
+    if not val:
+        return None
+    if isinstance(val, dict):
+        if val.get('id'):
+            return val['id']
+        val = val.get('name') or ''
+    if isinstance(val, (int, float)):
+        return int(val)
+    s = str(val).strip()
+    if s.isdigit():
+        return int(s)
+    clean_s = re.sub(r'[^\w\s]', '', s).strip().lower()
+    if not clean_s:
+        return None
+    for nid, name in nation_map.items():
+        clean_name = re.sub(r'[^\w\s]', '', name).strip().lower()
+        if clean_s == clean_name or clean_s in clean_name or clean_name in clean_s:
+            return nid
+    return None
+
+def resolve_club_id(val):
+    if not val:
+        return None
+    if isinstance(val, dict):
+        if val.get('id'):
+            return val['id']
+        val = val.get('name') or ''
+    if isinstance(val, (int, float)):
+        return int(val)
+    s = str(val).strip()
+    if s.isdigit():
+        return int(s)
+    low = s.lower()
+    if 'icon' in low:
+        return 114154
+    if 'hero' in low:
+        return 115935
+    clean_s = re.sub(r'[^\w\s]', '', s).strip().lower()
+    if not clean_s:
+        return None
+    for cid, name in club_map.items():
+        clean_name = re.sub(r'[^\w\s]', '', name).strip().lower()
+        if clean_s == clean_name or clean_s in clean_name or clean_name in clean_s:
+            return cid
+    return None
 
 DEFAULT_CARD_COLORS = {
     'rating': '#FFFFFF',
@@ -154,10 +208,10 @@ def get_image_from_url(url: str, size=None) -> Image.Image:
                 time.sleep(1)
                 if attempt == 2:
                     print(f"Failed to fetch {url} after 3 attempts: {e}")
-    if size and img.size != size:
-        img = img.resize(size, Image.Resampling.LANCZOS)
-
-    _put_memory_cache(_MEMORY_IMAGE_CACHE, cache_key, img.copy(), max_items=25)
+    if img is not None:
+        if size and img.size != size:
+            img = img.resize(size, Image.Resampling.LANCZOS)
+        _put_memory_cache(_MEMORY_IMAGE_CACHE, cache_key, img.copy(), max_items=25)
         
     return img
 
@@ -235,17 +289,32 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
         images.get("playerCardSpecialAvatar") or
         images.get("avatar")
     )
-    flag_url = images.get("flagImage") or player.get("flagImage")
-    club_url = images.get("clubImage") or player.get("clubImage")
-    league_url = images.get("leagueImage") or player.get("leagueImage")
+    flag_url = (
+        images.get("flagImage") or 
+        player.get("flagImage") or 
+        images.get("flag") or
+        (player.get("images") or {}).get("flagImage")
+    )
+    club_url = (
+        images.get("clubImage") or 
+        player.get("clubImage") or 
+        images.get("club") or
+        (player.get("images") or {}).get("clubImage")
+    )
+    league_url = (
+        images.get("leagueImage") or 
+        player.get("leagueImage") or 
+        images.get("league") or
+        (player.get("images") or {}).get("leagueImage")
+    )
 
     # Smart fallback for nation flag and club badge URLs if omitted in images
     if not flag_url:
-        nid = player.get("nation", {}).get("id") if isinstance(player.get("nation"), dict) else None
+        nid = resolve_nation_id(player.get("nation") or player.get("nation_name") or player.get("country"))
         if nid:
             flag_url = f"https://images-v2.renderz.app/flags_23_128x128_{nid}"
     if not club_url:
-        cid = player.get("club", {}).get("id") if isinstance(player.get("club"), dict) else None
+        cid = resolve_club_id(player.get("club") or player.get("club_name") or player.get("team"))
         if cid:
             club_url = f"https://images-v2.renderz.app/club_23_{cid}"
     
@@ -314,17 +383,13 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
     position_color = sanitize_card_color(raw_colors.get("position"), fallback=rating_color)
     name_color = sanitize_card_color(raw_colors.get("name"), fallback=rating_color)
 
-    # High-contrast subtle stroke/shadow for crystal-clear readability on all backgrounds
-    stroke_w = max(1, int(1.2 * SCALE))
-    stroke_col = (0, 0, 0, 190)
-
     def draw_centered_text(text, layout_key, color, y_offset=0):
         if layout_key in layout:
             l = layout[layout_key]
             x = (float(l["posX"]) + (float(l["sizeX"]) / 2)) * SCALE
             y = (float(l["posY"]) + (float(l["sizeY"]) / 2) + y_offset) * SCALE
             font = font_bold(int(float(l.get("fontSize", 24)) * SCALE))
-            draw.text((x, y), str(text), fill=color, font=font, anchor='mm', stroke_width=stroke_w, stroke_fill=stroke_col)
+            draw.text((x, y), str(text), fill=color, font=font, anchor='mm')
 
     draw_centered_text(player.get("rating", "?"), "rating", rating_color, y_offset=-2)
     draw_centered_text(str(player.get("position", "?")).upper(), "position", position_color, y_offset=-1)
@@ -332,30 +397,35 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
     name_layout = layout.get("name", {})
     if name_layout:
         name = str(player.get("cardName") or player.get("lastName", "?"))
-        font_size = int(float(name_layout.get("fontSize", 22)) * SCALE)
+        base_font_size = float(name_layout.get("fontSize", 21))
+        base_font_size = min(base_font_size, 21.0)
+        font_size = int(base_font_size * SCALE)
         if len(name) > 13:
             font_size = int(font_size * 0.82)
         elif len(name) > 9:
             font_size = int(font_size * 0.90)
         font = font_bold(font_size)
-        x = float(name_layout.get("posX", 128)) * SCALE
-        y = float(name_layout.get("posY", 178)) * SCALE
+        x_center = float(name_layout.get("posX", 128))
+        if float(name_layout.get("sizeX", 0)) > 0:
+            x_center += float(name_layout.get("sizeX")) / 2.0
+        x = x_center * SCALE
+        # Align y to sit cleanly above badges (badges start at posY: 188)
+        raw_y = float(name_layout.get("posY", 172))
+        y = min(raw_y, 172.0) * SCALE
         draw.text(
             (x, y),
             name.upper(),
             fill=name_color,
             font=font,
-            anchor='mm',
-            stroke_width=stroke_w,
-            stroke_fill=stroke_col
+            anchor='mm'
         )
     elif bg_url and not player.get("is_custom") and not str(player_id).startswith("custom_"):
         # Safe fallback text rendering matching official coordinates
         name = str(player.get("cardName") or player.get("lastName", "Player"))
         font = font_bold(int(18 * SCALE))
-        draw.text((target_size[0] // 2, int(178 * SCALE)), name.upper()[:14], fill=(255, 255, 255), font=font, anchor='mm', stroke_width=stroke_w, stroke_fill=stroke_col)
-        draw.text((int(76 * SCALE), int(42 * SCALE)), str(rating), fill=(255, 255, 255), font=font_bold(int(36 * SCALE)), anchor='mm', stroke_width=stroke_w, stroke_fill=stroke_col)
-        draw.text((int(76 * SCALE), int(73 * SCALE)), str(player.get("position", "ST")).upper(), fill=(255, 255, 255), font=font_bold(int(24 * SCALE)), anchor='mm', stroke_width=stroke_w, stroke_fill=stroke_col)
+        draw.text((target_size[0] // 2, int(172 * SCALE)), name.upper()[:14], fill=(255, 255, 255), font=font, anchor='mm')
+        draw.text((int(76 * SCALE), int(42 * SCALE)), str(rating), fill=(255, 255, 255), font=font_bold(int(36 * SCALE)), anchor='mm')
+        draw.text((int(76 * SCALE), int(73 * SCALE)), str(player.get("position", "ST")).upper(), fill=(255, 255, 255), font=font_bold(int(24 * SCALE)), anchor='mm')
 
     # If animated and sprite exists, render animated GIF frames
     sprite_sheet = fetched_images.get("sprite")
