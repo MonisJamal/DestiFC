@@ -142,8 +142,9 @@ class DestiFC(commands.AutoShardedBot):
                                 return
                             role_id = int(str(bot_cfg['auto_role_id']).strip())
                             role = guild.get_role(role_id)
-                            if not role:
-                                # Role might not belong to this guild or not in cache
+                            if not role or role.managed:
+                                role = discord.utils.get(guild.roles, name="DestiFC Players") or guild.get_role(1557010712013045860)
+                            if not role or role.managed:
                                 return
                             
                             # Ensure we have a discord.Member object
@@ -284,7 +285,7 @@ class DestiFC(commands.AutoShardedBot):
                 """
                 SELECT id, job_type, payload
                 FROM portal_jobs
-                WHERE status = 'pending' AND job_type IN ('mass_dm', 'SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES', 'open_black_market', 'open_special_market', 'ANNOUNCE_TOURNAMENT', 'TRIGGER_TOURNAMENT_MATCH')
+                WHERE status = 'pending' AND job_type IN ('mass_dm', 'SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES', 'open_black_market', 'open_special_market', 'ANNOUNCE_TOURNAMENT', 'TRIGGER_TOURNAMENT_MATCH', 'SYNC_ALL_MEMBERS_ROLE')
                 ORDER BY created_at ASC
                 LIMIT 1
                 """
@@ -322,6 +323,50 @@ class DestiFC(commands.AutoShardedBot):
                             "UPDATE portal_jobs SET status = 'failed', result = 'MatchCog not found in bot cogs' WHERE id = $1",
                             job_id
                         )
+                elif job_type == 'SYNC_ALL_MEMBERS_ROLE':
+                    async def bg_sync_members():
+                        try:
+                            guild_id = 1222195412295745536
+                            target_guild = self.get_guild(guild_id)
+                            if not target_guild:
+                                print(f"[Sync Roles] Guild {guild_id} not cached, fetching...")
+                                target_guild = await self.fetch_guild(guild_id)
+                            if not target_guild:
+                                print(f"[Sync Roles] Guild {guild_id} not found!")
+                                return
+                            role = discord.utils.get(target_guild.roles, name="DestiFC Players") or target_guild.get_role(1557010712013045860)
+                            if not role:
+                                print("[Sync Roles] Role DestiFC Players not found!")
+                                return
+                            count = 0
+                            skipped = 0
+                            print(f"[Sync Roles] Starting mass role grant for '{role.name}' in {target_guild.name}...")
+                            async for m in target_guild.fetch_members(limit=None):
+                                if m.bot or role in m.roles:
+                                    skipped += 1
+                                    continue
+                                try:
+                                    await m.add_roles(role, reason="DestiFC Mass Auto-Role Sync")
+                                    count += 1
+                                    if count % 50 == 0:
+                                        print(f"[Sync Roles Progress] Assigned to {count} members (skipped {skipped})...")
+                                    await asyncio.sleep(0.25)
+                                except discord.HTTPException as err:
+                                    if err.status == 429:
+                                        retry_after = getattr(err, 'retry_after', 2.0)
+                                        await asyncio.sleep(retry_after + 0.5)
+                                    else:
+                                        await asyncio.sleep(0.5)
+                                except Exception:
+                                    await asyncio.sleep(0.5)
+                            print(f"[Sync Roles Complete] Finished! Granted '{role.name}' to {count} members (skipped {skipped}).")
+                        except Exception as ex:
+                            print(f"[Sync Roles Fatal Error] {ex}")
+                    asyncio.create_task(bg_sync_members())
+                    await database.execute(
+                        "UPDATE portal_jobs SET status = 'completed', result = 'Mass role sync background task started' WHERE id = $1",
+                        job_id
+                    )
                 elif job_type == 'mass_dm':
                     import asyncio
                     import json
@@ -543,6 +588,29 @@ class DestiFC(commands.AutoShardedBot):
         uid = interaction.user.id
         self.active_user_commands.discard(uid)
         self.user_command_cooldowns[uid] = time.time()
+
+    async def on_member_join(self, member: discord.Member):
+        """Automatically assigns the configured auto-role (DestiFC Players) to newly joined members."""
+        try:
+            bot_cfg = await database.get_bot_config()
+            if not bot_cfg.get('auto_role_enabled', True):
+                return
+
+            role_id = int(str(bot_cfg.get('auto_role_id') or 1557010712013045860).strip())
+            role = member.guild.get_role(role_id)
+            if not role or role.managed:
+                role = discord.utils.get(member.guild.roles, name="DestiFC Players") or member.guild.get_role(1557010712013045860)
+
+            if role and not role.managed and role not in member.roles:
+                bot_member = member.guild.me or member.guild.get_member(self.user.id)
+                if not bot_member:
+                    bot_member = await member.guild.fetch_member(self.user.id)
+
+                if bot_member and bot_member.guild_permissions.manage_roles and bot_member.top_role > role:
+                    await member.add_roles(role, reason="DestiFC Auto-Role: New member joined")
+                    print(f"[Auto-Role Join] Successfully assigned role '{role.name}' ({role.id}) to new member {member.display_name} ({member.id}) in '{member.guild.name}'")
+        except Exception as e:
+            print(f"[Auto-Role Join Exception] Failed to assign role to {member.id}: {e}")
 
     async def on_ready(self):
         print(f'Logged in as {self.user} (ID: {self.user.id})')
