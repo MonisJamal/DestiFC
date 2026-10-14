@@ -485,9 +485,12 @@ class DestiFC(commands.AutoShardedBot):
                         )
                     except Exception:
                         pass
-                    await self.close()
-                    import sys
-                    os.execv(sys.executable, [sys.executable] + sys.argv)
+                    try:
+                        await self.close()
+                    except Exception:
+                        pass
+                    import os
+                    os._exit(0)
 
                 elif job_type == 'SIGNAL_SHUTDOWN':
                     print("[Remote Control] Received shutdown signal from Admin Panel. Closing bot...")
@@ -498,9 +501,12 @@ class DestiFC(commands.AutoShardedBot):
                         )
                     except Exception:
                         pass
-                    await self.close()
-                    import sys
-                    sys.exit(0)
+                    try:
+                        await self.close()
+                    except Exception:
+                        pass
+                    import os
+                    os._exit(0)
 
                 elif job_type == 'open_black_market':
                     print("[Remote Control] Received open_black_market signal from Admin Panel! Triggering opening...")
