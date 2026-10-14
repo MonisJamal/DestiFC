@@ -221,6 +221,7 @@ class DestiFC(commands.AutoShardedBot):
         self.bot_heartbeat_loop.start()
         self.remote_signal_listener_loop.start()
         self.memory_hygiene_loop.start()
+        self.scheduled_renderz_sync_loop.start()
 
     @tasks.loop(minutes=5)
     async def memory_hygiene_loop(self):
@@ -290,7 +291,7 @@ class DestiFC(commands.AutoShardedBot):
                 """
                 SELECT id, job_type, payload
                 FROM portal_jobs
-                WHERE status = 'pending' AND job_type IN ('mass_dm', 'SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES', 'open_black_market', 'open_special_market', 'ANNOUNCE_TOURNAMENT', 'TRIGGER_TOURNAMENT_MATCH', 'SYNC_ALL_MEMBERS_ROLE')
+                WHERE status = 'pending' AND job_type IN ('mass_dm', 'SIGNAL_RESTART', 'SIGNAL_SHUTDOWN', 'SIGNAL_RELOAD_COGS', 'SIGNAL_FLUSH_CACHES', 'open_black_market', 'open_special_market', 'ANNOUNCE_TOURNAMENT', 'TRIGGER_TOURNAMENT_MATCH', 'SYNC_ALL_MEMBERS_ROLE', 'SYNC_RENDERZ_CARDS')
                 ORDER BY created_at ASC
                 LIMIT 1
                 """
@@ -544,11 +545,52 @@ class DestiFC(commands.AutoShardedBot):
                     database.flush_all_caches()
                     await database.execute("UPDATE portal_jobs SET status = 'completed', result = 'All caches flushed' WHERE id = $1", job_id)
                     print("[Remote Control] All caches flushed!")
+
+                elif job_type == 'SYNC_RENDERZ_CARDS':
+                    print("[Remote Control] Received SYNC_RENDERZ_CARDS signal! Starting background RenderZ sync...")
+                    async def bg_sync(jid):
+                        try:
+                            from renderz_sync import sync_renderz_cards
+                            res = await sync_renderz_cards(min_ovr=105, max_ovr=125, fetch_leaks=True)
+                            msg = f"Synced {res['scraped']} cards ({res['new_cards_added']} new). Total in DB: {res['total_official_cards']}"
+                            await database.execute("UPDATE portal_jobs SET status = 'completed', result = $2 WHERE id = $1", jid, msg)
+                            print(f"[Remote Control] RenderZ sync completed: {msg}")
+                        except Exception as e:
+                            print(f"[Remote Control] RenderZ sync error: {e}")
+                            await database.execute("UPDATE portal_jobs SET status = 'failed', result = $2 WHERE id = $1", jid, str(e))
+                    asyncio.create_task(bg_sync(job_id))
         except Exception as e:
             print(f"[Remote Signal Error] {e}")
 
     @remote_signal_listener_loop.before_loop
     async def before_signal_listener_loop(self):
+        await self.wait_until_ready()
+
+    @tasks.loop(minutes=1)
+    async def scheduled_renderz_sync_loop(self):
+        """Automatically runs twice a day at 10:00 AM IST and 10:00 PM IST (04:30 UTC and 16:30 UTC)."""
+        try:
+            import datetime
+            utc_now = datetime.datetime.now(datetime.timezone.utc)
+            # IST = UTC + 5h30m
+            ist_now = utc_now + datetime.timedelta(hours=5, minutes=30)
+
+            # Trigger at 10:00 AM (10:00) or 10:00 PM (22:00) IST
+            is_10am = (ist_now.hour == 10 and ist_now.minute == 0)
+            is_10pm = (ist_now.hour == 22 and ist_now.minute == 0)
+
+            current_slot = f"{ist_now.strftime('%Y-%m-%d')}_{ist_now.hour}"
+            if (is_10am or is_10pm) and getattr(self, 'last_renderz_sync_slot', None) != current_slot:
+                self.last_renderz_sync_slot = current_slot
+                print(f"[RenderZ Scheduler] Triggering automatic card sync at {ist_now.strftime('%Y-%m-%d %H:%M:%S')} IST...")
+                from renderz_sync import sync_renderz_cards
+                res = await sync_renderz_cards(min_ovr=105, max_ovr=125, fetch_leaks=True)
+                print(f"[RenderZ Scheduler] Auto-sync finished: {res}")
+        except Exception as e:
+            print(f"[RenderZ Scheduler Error] {e}")
+
+    @scheduled_renderz_sync_loop.before_loop
+    async def before_renderz_sync_loop(self):
         await self.wait_until_ready()
 
     @tasks.loop(seconds=30)
