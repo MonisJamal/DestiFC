@@ -25,6 +25,50 @@ _MEMORY_IMAGE_CACHE = {}
 _MEMORY_CARD_CACHE = {}
 _MEMORY_CARD_BYTES_CACHE = {}
 
+DEFAULT_CARD_LAYOUT = {
+    'player': {'sizeX': 256, 'sizeY': 256, 'posX': 0, 'posY': 0},
+    'rating': {'sizeX': 80, 'sizeY': 80, 'posX': 36.167, 'posY': 4.083, 'fontSize': 36},
+    'position': {'sizeX': 40, 'sizeY': 20, 'posX': 56, 'posY': 64, 'fontSize': 24},
+    'nation': {'sizeX': 24, 'sizeY': 24, 'posX': 82.7, 'posY': 188},
+    'club': {'sizeX': 24, 'sizeY': 24, 'posX': 146.6, 'posY': 188},
+    'name': {'sizeX': 0, 'sizeY': 0, 'posX': 128, 'posY': 178, 'fontSize': 22},
+    'level': {'sizeX': 64, 'sizeY': 32, 'posX': 128, 'posY': 233, 'fontSize': 23},
+    'rank': {'sizeX': 32, 'sizeY': 32, 'posX': 128, 'posY': 232}
+}
+
+DEFAULT_CARD_COLORS = {
+    'rating': '#FFFFFF',
+    'position': '#FFFFFF',
+    'name': '#FFFFFF',
+    'level': '#FFFFFF'
+}
+
+MUDDY_COLORS = {
+    '#493721', '#483721', '#3f260a', '#3a2d04', '#513d03', 
+    '#513c27', '#3d2e0b', '#584428', '#4a3b1a', '#2b1e09',
+    '#433016', '#38290f', '#261a05', '#473212'
+}
+
+def sanitize_card_color(hex_val, fallback='#FFFFFF'):
+    if not hex_val or not isinstance(hex_val, str):
+        return fallback
+    c = hex_val.strip()
+    if not c.startswith('#'):
+        c = '#' + c
+    if c.lower() in MUDDY_COLORS:
+        return fallback
+    try:
+        h = c.lstrip('#')
+        if len(h) == 6:
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+            lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            if lum < 115:
+                return fallback
+    except Exception:
+        pass
+    return c
+
+
 def _put_memory_cache(cache_dict, key, val, max_items=25):
     if len(cache_dict) >= max_items:
         try:
@@ -145,9 +189,18 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
 
     images = player.get("images") or {}
     anim = player.get("animation") or {}
-    colors = anim.get("colors") or {}
-    layout = anim.get("layout") or {}
+    raw_colors = anim.get("colors") or {}
+    raw_layout = anim.get("layout") or {}
     
+    # Safely merge with DEFAULT_CARD_LAYOUT to guarantee all layout attributes exist
+    layout = dict(DEFAULT_CARD_LAYOUT)
+    if isinstance(raw_layout, dict):
+        for k, v in raw_layout.items():
+            if isinstance(v, dict):
+                layout[k] = {**DEFAULT_CARD_LAYOUT.get(k, {}), **v}
+            else:
+                layout[k] = v
+
     # Extract sprite animation if animated is requested
     sprite_url = None
     max_frames = 0
@@ -185,6 +238,16 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
     flag_url = images.get("flagImage") or player.get("flagImage")
     club_url = images.get("clubImage") or player.get("clubImage")
     league_url = images.get("leagueImage") or player.get("leagueImage")
+
+    # Smart fallback for nation flag and club badge URLs if omitted in images
+    if not flag_url:
+        nid = player.get("nation", {}).get("id") if isinstance(player.get("nation"), dict) else None
+        if nid:
+            flag_url = f"https://images-v2.renderz.app/flags_23_128x128_{nid}"
+    if not club_url:
+        cid = player.get("club", {}).get("id") if isinstance(player.get("club"), dict) else None
+        if cid:
+            club_url = f"https://images-v2.renderz.app/club_23_{cid}"
     
     target_size = (int(256 * SCALE), int(256 * SCALE))
 
@@ -197,13 +260,13 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
         tasks["sprite"] = (sprite_url, None)
     if flag_url and "nation" in layout:
         l = layout["nation"]
-        tasks["flag"] = (flag_url, (int(int(l["sizeX"]) * SCALE), int(int(l["sizeY"]) * SCALE)))
+        tasks["flag"] = (flag_url, (int(float(l["sizeX"]) * SCALE), int(float(l["sizeY"]) * SCALE)))
     if club_url and "club" in layout:
         l = layout["club"]
-        tasks["club"] = (club_url, (int(int(l["sizeX"]) * SCALE), int(int(l["sizeY"]) * SCALE)))
+        tasks["club"] = (club_url, (int(float(l["sizeX"]) * SCALE), int(float(l["sizeY"]) * SCALE)))
     if league_url and "league" in layout:
         l = layout["league"]
-        tasks["league"] = (league_url, (int(int(l["sizeX"]) * SCALE), int(int(l["sizeY"]) * SCALE)))
+        tasks["league"] = (league_url, (int(float(l["sizeX"]) * SCALE), int(float(l["sizeY"]) * SCALE)))
 
     fetched_images = {}
     with ThreadPoolExecutor(max_workers=6) as executor:
@@ -233,54 +296,66 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
 
     if "flag" in fetched_images and fetched_images["flag"] and "nation" in layout:
         l = layout["nation"]
-        overlay.alpha_composite(fetched_images["flag"], (int(int(l["posX"]) * SCALE), int(int(l["posY"]) * SCALE)))
+        overlay.alpha_composite(fetched_images["flag"], (int(float(l["posX"]) * SCALE), int(float(l["posY"]) * SCALE)))
 
     if "league" in fetched_images and fetched_images["league"] and "league" in layout:
         l = layout["league"]
-        overlay.alpha_composite(fetched_images["league"], (int(int(l["posX"]) * SCALE), int(int(l["posY"]) * SCALE)))
+        overlay.alpha_composite(fetched_images["league"], (int(float(l["posX"]) * SCALE), int(float(l["posY"]) * SCALE)))
 
     if "club" in fetched_images and fetched_images["club"] and "club" in layout:
         l = layout["club"]
-        overlay.alpha_composite(fetched_images["club"], (int(int(l["posX"]) * SCALE), int(int(l["posY"]) * SCALE)))
+        overlay.alpha_composite(fetched_images["club"], (int(float(l["posX"]) * SCALE), int(float(l["posY"]) * SCALE)))
 
     draw = ImageDraw.Draw(overlay)
     font_bold = lambda size: get_font("CruyffSansCondensed-Bold", size)
     
-    rating_color = colors.get("rating", "#FDF6D1")
-    position_color = colors.get("position", "#FDF6D1")
-    name_color = colors.get("name", "#493721")
+    # Premium sanitized colors: replace muddy browns with crisp white/gold matching official FC Mobile cards
+    rating_color = sanitize_card_color(raw_colors.get("rating"), fallback="#FFFFFF")
+    position_color = sanitize_card_color(raw_colors.get("position"), fallback=rating_color)
+    name_color = sanitize_card_color(raw_colors.get("name"), fallback=rating_color)
+
+    # High-contrast subtle stroke/shadow for crystal-clear readability on all backgrounds
+    stroke_w = max(1, int(1.2 * SCALE))
+    stroke_col = (0, 0, 0, 190)
 
     def draw_centered_text(text, layout_key, color, y_offset=0):
         if layout_key in layout:
             l = layout[layout_key]
-            x = (int(l["posX"]) + (int(l["sizeX"]) / 2)) * SCALE
-            y = (int(l["posY"]) + (int(l["sizeY"]) / 2) + y_offset) * SCALE
-            font = font_bold(int(int(l.get("fontSize", 24)) * SCALE))
-            draw.text((x, y), str(text), fill=color, font=font, anchor='mm')
+            x = (float(l["posX"]) + (float(l["sizeX"]) / 2)) * SCALE
+            y = (float(l["posY"]) + (float(l["sizeY"]) / 2) + y_offset) * SCALE
+            font = font_bold(int(float(l.get("fontSize", 24)) * SCALE))
+            draw.text((x, y), str(text), fill=color, font=font, anchor='mm', stroke_width=stroke_w, stroke_fill=stroke_col)
 
     draw_centered_text(player.get("rating", "?"), "rating", rating_color, y_offset=-2)
-    draw_centered_text(player.get("position", "?").upper(), "position", position_color, y_offset=-1)
+    draw_centered_text(str(player.get("position", "?")).upper(), "position", position_color, y_offset=-1)
     
     name_layout = layout.get("name", {})
     if name_layout:
-        name = player.get("cardName") or player.get("lastName", "?")
-        font = font_bold(int(int(name_layout.get("fontSize", 22)) * SCALE))
-        x = int(int(name_layout.get("posX", 128)) * SCALE)
-        y = int(int(name_layout.get("posY", 178)) * SCALE)
+        name = str(player.get("cardName") or player.get("lastName", "?"))
+        font_size = int(float(name_layout.get("fontSize", 22)) * SCALE)
+        if len(name) > 13:
+            font_size = int(font_size * 0.82)
+        elif len(name) > 9:
+            font_size = int(font_size * 0.90)
+        font = font_bold(font_size)
+        x = float(name_layout.get("posX", 128)) * SCALE
+        y = float(name_layout.get("posY", 178)) * SCALE
         draw.text(
             (x, y),
             name.upper(),
             fill=name_color,
             font=font,
-            anchor='mm'
+            anchor='mm',
+            stroke_width=stroke_w,
+            stroke_fill=stroke_col
         )
     elif bg_url and not player.get("is_custom") and not str(player_id).startswith("custom_"):
-        # Fallback text rendering ONLY if there is a separate background and not a custom full-card upload
-        name = player.get("cardName") or player.get("lastName", "Player")
+        # Safe fallback text rendering matching official coordinates
+        name = str(player.get("cardName") or player.get("lastName", "Player"))
         font = font_bold(int(18 * SCALE))
-        draw.text((target_size[0] // 2, int(target_size[1] * 0.85)), name.upper()[:14], fill=(255, 255, 255), font=font, anchor='mm')
-        draw.text((int(target_size[0] * 0.22), int(target_size[1] * 0.28)), str(rating), fill=(255, 215, 0), font=font_bold(int(22 * SCALE)), anchor='mm')
-        draw.text((int(target_size[0] * 0.22), int(target_size[1] * 0.38)), str(player.get("position", "ST")).upper(), fill=(220, 220, 220), font=font_bold(int(14 * SCALE)), anchor='mm')
+        draw.text((target_size[0] // 2, int(178 * SCALE)), name.upper()[:14], fill=(255, 255, 255), font=font, anchor='mm', stroke_width=stroke_w, stroke_fill=stroke_col)
+        draw.text((int(76 * SCALE), int(42 * SCALE)), str(rating), fill=(255, 255, 255), font=font_bold(int(36 * SCALE)), anchor='mm', stroke_width=stroke_w, stroke_fill=stroke_col)
+        draw.text((int(76 * SCALE), int(73 * SCALE)), str(player.get("position", "ST")).upper(), fill=(255, 255, 255), font=font_bold(int(24 * SCALE)), anchor='mm', stroke_width=stroke_w, stroke_fill=stroke_col)
 
     # If animated and sprite exists, render animated GIF frames
     sprite_sheet = fetched_images.get("sprite")

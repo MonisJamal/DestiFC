@@ -107,6 +107,28 @@ async def sync_renderz_cards(min_ovr: int = 105, max_ovr: int = 125, fetch_leaks
         c_str = get_club_string(pl.get("club"))
         n_str = get_nation_string(pl.get("nation"))
 
+        # Ensure animation layout and colors are present
+        if not pl.get("animation") or not pl["animation"].get("layout"):
+            if not pl.get("animation"):
+                pl["animation"] = {}
+            pl["animation"]["layout"] = {
+                'player': {'sizeX': 256, 'sizeY': 256, 'posX': 0, 'posY': 0},
+                'rating': {'sizeX': 80, 'sizeY': 80, 'posX': 36.167, 'posY': 4.083, 'fontSize': 36},
+                'position': {'sizeX': 40, 'sizeY': 20, 'posX': 56, 'posY': 64, 'fontSize': 24},
+                'nation': {'sizeX': 24, 'sizeY': 24, 'posX': 82.7, 'posY': 188},
+                'club': {'sizeX': 24, 'sizeY': 24, 'posX': 146.6, 'posY': 188},
+                'name': {'sizeX': 0, 'sizeY': 0, 'posX': 128, 'posY': 178, 'fontSize': 22},
+                'level': {'sizeX': 64, 'sizeY': 32, 'posX': 128, 'posY': 233, 'fontSize': 23},
+                'rank': {'sizeX': 32, 'sizeY': 32, 'posX': 128, 'posY': 232}
+            }
+            if not pl["animation"].get("colors"):
+                pl["animation"]["colors"] = {
+                    'rating': '#FFFFFF',
+                    'position': '#FFFFFF',
+                    'name': '#FFFFFF',
+                    'level': '#FFFFFF'
+                }
+
         rows.append((
             int(aid),
             pname,
