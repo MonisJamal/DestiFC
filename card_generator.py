@@ -97,30 +97,22 @@ DEFAULT_CARD_COLORS = {
     'level': '#FFFFFF'
 }
 
-MUDDY_COLORS = {
-    '#493721', '#483721', '#3f260a', '#3a2d04', '#513d03', 
-    '#513c27', '#3d2e0b', '#584428', '#4a3b1a', '#2b1e09',
-    '#433016', '#38290f', '#261a05', '#473212'
-}
-
-def sanitize_card_color(hex_val, fallback='#FFFFFF'):
-    if not hex_val or not isinstance(hex_val, str):
+def format_card_color(color_val, fallback='#FFFFFF'):
+    """
+    Returns the exact color defined by RenderZ, formatted cleanly as a valid hex string.
+    Only falls back if no valid color is provided.
+    """
+    if not color_val or not isinstance(color_val, str):
         return fallback
-    c = hex_val.strip()
+    c = color_val.strip()
+    if not c:
+        return fallback
     if not c.startswith('#'):
         c = '#' + c
-    if c.lower() in MUDDY_COLORS:
-        return fallback
-    try:
-        h = c.lstrip('#')
-        if len(h) == 6:
-            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-            lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-            if lum < 115:
-                return fallback
-    except Exception:
-        pass
-    return c
+    clean_hex = c.lstrip('#')
+    if len(clean_hex) in (3, 6) and all(ch in '0123456789abcdefABCDEF' for ch in clean_hex):
+        return c.upper()
+    return fallback
 
 
 def _put_memory_cache(cache_dict, key, val, max_items=25):
@@ -243,7 +235,9 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
 
     images = player.get("images") or {}
     anim = player.get("animation") or {}
-    raw_colors = anim.get("colors") or {}
+    raw_colors = anim.get("colors") or player.get("colors") or {}
+    if not isinstance(raw_colors, dict):
+        raw_colors = {}
     raw_layout = anim.get("layout") or {}
     
     # Safely merge with DEFAULT_CARD_LAYOUT to guarantee all layout attributes exist
@@ -378,10 +372,10 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
     draw = ImageDraw.Draw(overlay)
     font_bold = lambda size: get_font("CruyffSansCondensed-Bold", size)
     
-    # Premium sanitized colors: replace muddy browns with crisp white/gold matching official FC Mobile cards
-    rating_color = sanitize_card_color(raw_colors.get("rating"), fallback="#FFFFFF")
-    position_color = sanitize_card_color(raw_colors.get("position"), fallback=rating_color)
-    name_color = sanitize_card_color(raw_colors.get("name"), fallback=rating_color)
+    # Authentic font colors matching RenderZ specifications directly
+    rating_color = format_card_color(raw_colors.get("rating"), fallback="#FFFFFF")
+    position_color = format_card_color(raw_colors.get("position"), fallback=rating_color)
+    name_color = format_card_color(raw_colors.get("name"), fallback=rating_color)
 
     def draw_centered_text(text, layout_key, color, y_offset=0):
         if layout_key in layout:
