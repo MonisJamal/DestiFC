@@ -133,42 +133,48 @@ class DestiFC(commands.AutoShardedBot):
                     # Mark user as currently running a command
                     self.active_user_commands.add(uid)
 
-                # Auto-Role Grant for any user executing a command
-                if bot_cfg.get('auto_role_enabled') and bot_cfg.get('auto_role_id'):
+                # Auto-Role Grant for any registered user executing a command
+                if bot_cfg.get('auto_role_enabled'):
                     async def _assign_role():
                         try:
-                            guild = interaction.guild
-                            if not guild:
-                                return
-                            role_id = int(str(bot_cfg['auto_role_id']).strip())
-                            role = guild.get_role(role_id)
-                            if not role:
-                                # Role might not belong to this guild or not in cache
-                                return
-                            
-                            # Ensure we have a discord.Member object
-                            member = interaction.user
-                            if not isinstance(member, discord.Member) or member.guild.id != guild.id:
+                            # 1. Assign in the interaction guild if configured
+                            role_id_str = bot_cfg.get('auto_role_id')
+                            if interaction.guild and role_id_str:
                                 try:
-                                    member = await guild.fetch_member(interaction.user.id)
+                                    role_id = int(str(role_id_str).strip())
+                                    role = interaction.guild.get_role(role_id)
+                                    member = interaction.user
+                                    if not isinstance(member, discord.Member) or member.guild.id != interaction.guild.id:
+                                        try:
+                                            member = await interaction.guild.fetch_member(interaction.user.id)
+                                        except Exception:
+                                            member = interaction.guild.get_member(interaction.user.id)
+                                    if member and role and role not in member.roles:
+                                        await member.add_roles(role, reason="DestiFC Auto-Role: Registered player command")
+                                except Exception as e:
+                                    print(f"[Auto-Role Guild Error] {e}")
+
+                            # 2. Specifically ensure BeastlyFC player role is granted to all registered players
+                            beastly_id = 1222195412295745536
+                            beastly_role_id = 1557010712013045860
+                            beastly_guild = self.get_guild(beastly_id)
+                            if not beastly_guild:
+                                try:
+                                    beastly_guild = await self.fetch_guild(beastly_id)
                                 except Exception:
-                                    member = guild.get_member(interaction.user.id)
-                            
-                            if member and role not in member.roles:
-                                bot_member = guild.me or guild.get_member(self.user.id)
-                                if not bot_member:
-                                    bot_member = await guild.fetch_member(self.user.id)
-                                
-                                if not bot_member.guild_permissions.manage_roles:
-                                    print(f"[Auto-Role Warning] Bot in guild '{guild.name}' lacks 'Manage Roles' permission to grant role {role.name} ({role_id})")
-                                    return
-                                
-                                if bot_member.top_role <= role:
-                                    print(f"[Auto-Role Warning] Bot's top role '{bot_member.top_role.name}' (pos {bot_member.top_role.position}) is NOT higher than target role '{role.name}' (pos {role.position}) in guild '{guild.name}'")
-                                    return
-                                
-                                await member.add_roles(role, reason="DestiFC Auto-Role: User executed bot command")
-                                print(f"[Auto-Role] Successfully assigned role '{role.name}' ({role_id}) to {member.display_name} ({member.id}) in '{guild.name}'")
+                                    pass
+                            if beastly_guild:
+                                beastly_role = beastly_guild.get_role(beastly_role_id)
+                                if beastly_role:
+                                    b_member = beastly_guild.get_member(interaction.user.id)
+                                    if not b_member:
+                                        try:
+                                            b_member = await beastly_guild.fetch_member(interaction.user.id)
+                                        except Exception:
+                                            pass
+                                    if b_member and beastly_role not in b_member.roles:
+                                        await b_member.add_roles(beastly_role, reason="DestiFC Auto-Role: Registered player in BeastlyFC")
+                                        print(f"[Auto-Role] Granted BeastlyFC player role to {b_member.display_name} ({b_member.id})")
                         except Exception as e:
                             print(f"[Auto-Role Exception] Failed to assign role: {e}")
 
