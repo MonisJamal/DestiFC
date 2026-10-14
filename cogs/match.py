@@ -647,6 +647,15 @@ class MatchCog(commands.Cog):
                     if t_row and t_row.get("registration_open") is False:
                         await interaction.response.send_message("❌ Registration for this tournament is currently closed!", ephemeral=True)
                         return
+
+                    already_registered = await database.fetch_val(
+                        "SELECT 1 FROM tournament_participants WHERE tournament_id = $1 AND user_id = $2",
+                        t_id, interaction.user.id
+                    )
+                    if already_registered:
+                        await interaction.response.send_message("⚠️ You are already registered for this tournament!", ephemeral=True)
+                        return
+
                     count = 0
                     if t_row and t_row.get("max_participants"):
                         count = await database.fetch_val("SELECT COUNT(*) FROM tournament_participants WHERE tournament_id = $1", t_id) or 0
@@ -660,7 +669,6 @@ class MatchCog(commands.Cog):
                         """
                         INSERT INTO tournament_participants (tournament_id, user_id, username, display_name) 
                         VALUES ($1, $2, $3, $4)
-                        ON CONFLICT (tournament_id, user_id) DO UPDATE SET username = EXCLUDED.username, display_name = EXCLUDED.display_name
                         """,
                         t_id, interaction.user.id, username, display_name
                     )

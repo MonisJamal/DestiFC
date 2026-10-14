@@ -142,9 +142,8 @@ class DestiFC(commands.AutoShardedBot):
                                 return
                             role_id = int(str(bot_cfg['auto_role_id']).strip())
                             role = guild.get_role(role_id)
-                            if not role or role.managed:
-                                role = discord.utils.get(guild.roles, name="DestiFC Players") or guild.get_role(1557010712013045860)
-                            if not role or role.managed:
+                            if not role:
+                                # Role might not belong to this guild or not in cache
                                 return
                             
                             # Ensure we have a discord.Member object
@@ -588,29 +587,6 @@ class DestiFC(commands.AutoShardedBot):
         uid = interaction.user.id
         self.active_user_commands.discard(uid)
         self.user_command_cooldowns[uid] = time.time()
-
-    async def on_member_join(self, member: discord.Member):
-        """Automatically assigns the configured auto-role (DestiFC Players) to newly joined members."""
-        try:
-            bot_cfg = await database.get_bot_config()
-            if not bot_cfg.get('auto_role_enabled', True):
-                return
-
-            role_id = int(str(bot_cfg.get('auto_role_id') or 1557010712013045860).strip())
-            role = member.guild.get_role(role_id)
-            if not role or role.managed:
-                role = discord.utils.get(member.guild.roles, name="DestiFC Players") or member.guild.get_role(1557010712013045860)
-
-            if role and not role.managed and role not in member.roles:
-                bot_member = member.guild.me or member.guild.get_member(self.user.id)
-                if not bot_member:
-                    bot_member = await member.guild.fetch_member(self.user.id)
-
-                if bot_member and bot_member.guild_permissions.manage_roles and bot_member.top_role > role:
-                    await member.add_roles(role, reason="DestiFC Auto-Role: New member joined")
-                    print(f"[Auto-Role Join] Successfully assigned role '{role.name}' ({role.id}) to new member {member.display_name} ({member.id}) in '{member.guild.name}'")
-        except Exception as e:
-            print(f"[Auto-Role Join Exception] Failed to assign role to {member.id}: {e}")
 
     async def on_ready(self):
         print(f'Logged in as {self.user} (ID: {self.user.id})')
