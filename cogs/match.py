@@ -949,12 +949,12 @@ class MatchCog(commands.Cog):
                 a6 = avg.get('avg6')
                 
                 if is_gk:
-                    div = int(a1 or st.get('gkd') or (eff_ovr + 4))
-                    pos_stat = int(a2 or st.get('gkp') or (eff_ovr + 3))
-                    han = int(a3 or st.get('han') or (eff_ovr + 2))
-                    ref = int(a4 or st.get('ref') or (eff_ovr + 5))
-                    kic = int(a5 or st.get('gkk') or max(50, eff_ovr - 4))
-                    phy = int(a6 or st.get('str') or st.get('phy') or (eff_ovr + 1))
+                    div = int(a1 or st.get('gkd') or (eff_ovr + 29))
+                    pos_stat = int(a2 or st.get('gkp') or (eff_ovr + 28))
+                    han = int(a3 or st.get('han') or (eff_ovr + 28))
+                    ref = int(a4 or st.get('ref') or (eff_ovr + 30))
+                    kic = int(a5 or st.get('gkk') or max(50, eff_ovr + 24))
+                    phy = int(a6 or st.get('str') or st.get('phy') or (eff_ovr + 3))
                     
                     # Goalkeeper sector power: heavy emphasis on Reflexes & Diving
                     stat_rating = (ref * 0.40) + (div * 0.30) + (pos_stat * 0.20) + (han * 0.10)
@@ -965,24 +965,29 @@ class MatchCog(commands.Cog):
                         "stat_rating": stat_rating
                     }
                 else:
+                    # Exact empirical RenderZ average attribute deltas from over 1,800 official cards:
                     if p_pos in ['ST', 'CF']:
-                        d1, d2, d3, d4, d5, d6 = 2, 5, -8, 2, -45, 1
-                    elif p_pos in ['LW', 'RW', 'LF', 'RF']:
-                        d1, d2, d3, d4, d5, d6 = 6, 2, -2, 6, -45, -6
+                        d1, d2, d3, d4, d5, d6 = 23, 24, -3, 17, -47, 5
+                    elif p_pos in ['LW', 'LF']:
+                        d1, d2, d3, d4, d5, d6 = 30, 17, 11, 27, -47, -8
+                    elif p_pos in ['RW', 'RF']:
+                        d1, d2, d3, d4, d5, d6 = 28, 16, 11, 26, -48, -11
                     elif p_pos == 'CAM':
-                        d1, d2, d3, d4, d5, d6 = -1, 2, 5, 5, -35, -4
+                        d1, d2, d3, d4, d5, d6 = 19, 17, 15, 24, -33, -14
                     elif p_pos == 'CM':
-                        d1, d2, d3, d4, d5, d6 = -2, 0, 4, 2, -1, 1
+                        d1, d2, d3, d4, d5, d6 = 11, 5, 19, 17, 1, 0
                     elif p_pos in ['LM', 'RM']:
-                        d1, d2, d3, d4, d5, d6 = 5, -1, 3, 5, -20, -3
+                        d1, d2, d3, d4, d5, d6 = 25, 10, 14, 22, -25, -6
                     elif p_pos == 'CDM':
-                        d1, d2, d3, d4, d5, d6 = -4, -12, 2, 0, 5, 5
+                        d1, d2, d3, d4, d5, d6 = 6, -13, 6, 11, 19, 16
                     elif p_pos == 'CB':
-                        d1, d2, d3, d4, d5, d6 = -4, -50, -14, -10, 6, 6
-                    elif p_pos in ['LB', 'RB', 'LWB', 'RWB']:
-                        d1, d2, d3, d4, d5, d6 = 5, -25, 0, 1, 3, 2
+                        d1, d2, d3, d4, d5, d6 = 8, -29, -9, 1, 28, 23
+                    elif p_pos in ['LB', 'LWB']:
+                        d1, d2, d3, d4, d5, d6 = 21, -17, 7, 13, 17, 10
+                    elif p_pos in ['RB', 'RWB']:
+                        d1, d2, d3, d4, d5, d6 = 18, -25, -1, 8, 19, 12
                     else:
-                        d1, d2, d3, d4, d5, d6 = 0, 0, 0, 0, 0, 0
+                        d1, d2, d3, d4, d5, d6 = 15, 10, 10, 15, 0, 5
 
                     pac = int(a1 or st.get('spd') or st.get('pac') or max(40, eff_ovr + d1))
                     sho = int(a2 or st.get('sho') or st.get('fin') or max(40, eff_ovr + d2))
