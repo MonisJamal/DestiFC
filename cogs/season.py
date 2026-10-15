@@ -162,7 +162,134 @@ class SeasonCog(commands.Cog):
                         "\n".join(lines),
             color=discord.Color.purple()
         )
-        embed.set_footer(text="🟡 = Ready to claim! Use /season_claim <tier>")
+        embed.set_footer(text="🟡 = Ready to claim! Use /season_claim <tier> or /season_claim_all")
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="season_claim_all", description="Claim all unlocked and unclaimed Season Pass tier rewards at once!")
+    async def season_claim_all(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        user_id = interaction.user.id
+
+        config = await fetch_season_config()
+        tiers_count = config.get("tiers_count", 25)
+
+        data = await get_season_data(user_id)
+        current_tier = get_current_tier(data["xp"], config)
+        claimed = set(data["claimed_tiers"])
+
+        unclaimed_tiers = [t for t in range(1, min(current_tier, tiers_count) + 1) if t not in claimed]
+
+        if not unclaimed_tiers:
+            if current_tier == 0:
+                return await interaction.followup.send("❌ You haven't reached Tier 1 yet! Earn Season XP by playing matches and opening packs.")
+            return await interaction.followup.send(f"❌ You have no unclaimed Season Pass rewards! (Reached Tier {current_tier}/{tiers_count})")
+
+        total_coins = 0
+        total_vouchers = 0
+        total_fans = 0
+        awarded_badges = []
+        cards_received = []
+
+        from cogs.achievements import try_award, ACHIEVEMENTS
+        season_badges = {
+            "season_grinder":  {"emoji": "⭐", "name": "Season Grinder",   "desc": "Reach Tier 5 in a Season Pass", "coins": 0},
+            "season_veteran":  {"emoji": "🏅", "name": "Season Veteran",   "desc": "Reach Tier 9 in a Season Pass", "coins": 0},
+            "season_champion": {"emoji": "👑", "name": "Season Champion",  "desc": "Complete a full Season Pass",   "coins": 0},
+        }
+
+        custom_cards_pool = None
+
+        for t in unclaimed_tiers:
+            reward = SEASON_REWARDS.get(t)
+            if not reward:
+                continue
+
+            total_coins += reward.get("coins", 0)
+            total_vouchers += reward.get("vouchers", 0)
+            total_fans += reward.get("fans", 0)
+
+            if "badge" in reward:
+                b_key = reward["badge"]
+                if b_key not in ACHIEVEMENTS:
+                    ACHIEVEMENTS[b_key] = season_badges.get(b_key, {})
+                await try_award(user_id, b_key)
+                b_info = season_badges.get(b_key, {})
+                awarded_badges.append(f"{b_info.get('emoji', '🎖️')} {b_info.get('name', b_key)}")
+
+            custom_flag = False
+            card_name = None
+            card_ovr = None
+
+            if reward.get("custom_card"):
+                if custom_cards_pool is None:
+                    custom_cards_pool = await database.get_all_custom_draft_cards()
+                if custom_cards_pool:
+                    c_card = random.choice(custom_cards_pool)
+                    await database.add_player_to_inventory(user_id, c_card)
+                    card_name = c_card.get('cardName') or c_card.get('player_name') or 'Unknown Custom Card'
+                    card_ovr = c_card.get('rating') or c_card.get('ovr') or 120
+                    custom_flag = True
+
+            if reward.get("card_reward") or (reward.get("custom_card") and not custom_flag):
+                ovr_req = int(reward.get("card_reward", 120))
+                players = await database.get_official_cards_by_rating(ovr_req, 125, 50)
+                if not players:
+                    try:
+                        from renderz_api import query_players_by_program
+                        players = query_players_by_program("", min_rating=ovr_req, max_rating=125, size=50)
+                    except Exception as ex:
+                        print(f"[Season] Error querying renderz_api fallback: {ex}")
+                        players = []
+                if players:
+                    card = random.choice(players)
+                    await database.add_player_to_inventory(user_id, card)
+                    card_name = card.get('cardName') or card.get('lastName') or card.get('name') or f"Player ({ovr_req} OVR)"
+                    card_ovr = card.get('rating') or card.get('ovr') or ovr_req
+
+            if card_name:
+                prefix = "✨ [CUSTOM]" if custom_flag else "🃏"
+                cards_received.append(f"{prefix} **{card_name}** ({card_ovr} OVR)")
+
+            claimed.add(t)
+
+        if total_coins > 0:
+            await database.add_coins(user_id, total_coins)
+        if total_vouchers > 0:
+            await database.add_vouchers(user_id, total_vouchers)
+        if total_fans > 0:
+            await database.add_fans(user_id, total_fans)
+
+        claimed_list = sorted(list(claimed))
+        p = await database.get_db()
+        await p.execute('UPDATE season_pass SET claimed_tiers = $1 WHERE user_id = $2', json.dumps(claimed_list), user_id)
+
+        tiers_str = ", ".join(f"Tier {t}" for t in unclaimed_tiers)
+        if len(unclaimed_tiers) > 6:
+            tiers_str = f"Tiers {unclaimed_tiers[0]} - {unclaimed_tiers[-1]} ({len(unclaimed_tiers)} tiers)"
+
+        summary_lines = [
+            f"Successfully claimed **{len(unclaimed_tiers)}** tiers ({tiers_str})!\n",
+            f"**Total Rewards Received:**"
+        ]
+        if total_coins > 0:
+            summary_lines.append(f"🪙 **{total_coins:,} Coins**")
+        if total_vouchers > 0:
+            summary_lines.append(f"🎟️ **{total_vouchers} Draft Vouchers**")
+        if total_fans > 0:
+            summary_lines.append(f"👥 **{total_fans:,} Fans**")
+        if awarded_badges:
+            summary_lines.append(f"🎖️ Badges: {', '.join(awarded_badges)}")
+        if cards_received:
+            summary_lines.append("\n**Players Unlocked:**")
+            for c in cards_received:
+                summary_lines.append(f"• {c}")
+
+        embed = discord.Embed(
+            title="🎫 Season Pass Rewards Claimed All!",
+            description="\n".join(summary_lines),
+            color=discord.Color.gold()
+        )
+        embed.set_footer(text=f"Current Season Progress: Tier {current_tier}/{tiers_count}")
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="season_claim", description="Claim a Season Pass tier reward!")
