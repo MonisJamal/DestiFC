@@ -419,7 +419,7 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
 
             # Dynamic font fitting to ensure long names (e.g. Van Nistelrooy) fit proportionally within card frame
             font = font_bold(font_size)
-            max_name_width = int(108 * SCALE)
+            max_name_width = int(120 * SCALE)
             while font_size > int(10 * SCALE):
                 bbox = font.getbbox(name.upper())
                 text_w = bbox[2] - bbox[0]
@@ -433,9 +433,9 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                 x_center += float(name_layout.get("sizeX")) / 2.0
             x = x_center * SCALE
             
-            # Optimal vertical centering: position name cleanly above badges with balanced clearance
-            raw_y = float(name_layout.get("posY", 167))
-            y = min(raw_y, 167.0) * SCALE
+            # Position name cleanly with proper clearance above badges
+            raw_y = float(name_layout.get("posY", 174))
+            y = min(raw_y, 174.0) * SCALE
             draw.text(
                 (x, y),
                 name.upper(),
@@ -447,7 +447,7 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
             # Safe fallback text rendering matching official coordinates
             name = str(player.get("cardName") or player.get("lastName", "Player"))
             font = font_bold(int(18 * SCALE))
-            draw.text((target_size[0] // 2, int(172 * SCALE)), name.upper()[:14], fill=(255, 255, 255), font=font, anchor='mm')
+            draw.text((target_size[0] // 2, int(174 * SCALE)), name.upper()[:14], fill=(255, 255, 255), font=font, anchor='mm')
             draw.text((int(76 * SCALE), int(42 * SCALE)), str(rating), fill=(255, 255, 255), font=font_bold(int(36 * SCALE)), anchor='mm')
             draw.text((int(76 * SCALE), int(73 * SCALE)), str(player.get("position", "ST")).upper(), fill=(255, 255, 255), font=font_bold(int(24 * SCALE)), anchor='mm')
 
@@ -473,7 +473,10 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                 d_back.ellipse([int(target_size[0]*0.12), int(target_size[1]*0.15), int(target_size[0]*0.88), int(target_size[1]*0.92)], fill=(38, 48, 72, 160))
                 backdrop = backdrop.filter(ImageFilter.GaussianBlur(radius=int(14 * SCALE)))
 
-                card_alpha = card.split()[3] if len(card.split()) == 4 else None
+                # Combined card silhouette (including background + player portrait) to never cut off outer card elements
+                silhouette = card.copy()
+                silhouette.alpha_composite(overlay)
+                card_alpha = silhouette.split()[3] if len(silhouette.split()) == 4 else None
 
                 for frame_idx in range(0, total_frames, step):
                     col = frame_idx % cols
@@ -484,11 +487,15 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                         frame_sprite = frame_sprite.resize(target_size, Image.Resampling.BILINEAR)
                     
                     if card_alpha:
-                        # Strictly mask sprite alpha to card silhouette to completely eliminate outside noise/bleeding
+                        # Mask sprite alpha to full card silhouette so outside particles/noise do not bleed beyond the card
                         sp_r, sp_g, sp_b, sp_a = frame_sprite.split()
                         sp_a = ImageChops.multiply(sp_a, card_alpha)
                         frame_sprite = Image.merge("RGBA", (sp_r, sp_g, sp_b, sp_a))
 
+                    # Official layer compositing:
+                    # 1. Background
+                    # 2. Sprite animation effects
+                    # 3. Player portrait & badges & typography
                     frame_card = card.copy()
                     frame_card.alpha_composite(frame_sprite)
                     frame_card.alpha_composite(overlay)
