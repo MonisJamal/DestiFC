@@ -3,6 +3,8 @@ from discord.ext import commands
 from discord import app_commands
 import random
 import asyncio
+import time
+import json
 
 import database
 import ai_engine
@@ -475,6 +477,41 @@ class WagerCardModal(discord.ui.Modal, title="Wager Card"):
 class MatchCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self._official_players_cache = None
+        self._last_cache_time = 0
+
+    async def get_official_players_cache(self):
+        """Preload and cache authentic RenderZ official players from official_cards."""
+        now = time.time()
+        if self._official_players_cache and (now - self._last_cache_time < 3600):
+            return self._official_players_cache
+        try:
+            rows = await database.fetch_all("SELECT player_name, card_name, rating, position, player_data FROM official_cards")
+            cache = {}
+            for r in (rows or []):
+                p_name = (r.get('card_name') or r.get('player_name') or '').strip().lower()
+                if not p_name: continue
+                pd = r.get('player_data')
+                if isinstance(pd, str):
+                    try: pd = json.loads(pd)
+                    except Exception: pd = {}
+                avg = pd.get('avgStats') or {}
+                avg_gk = pd.get('avgGkStats') or {}
+                st = pd.get('stats') or {}
+                rating = int(r.get('rating') or 100)
+                if p_name not in cache or rating > cache[p_name].get('ovr', 0):
+                    cache[p_name] = {
+                        'ovr': rating,
+                        'pos': r.get('position'),
+                        'avgStats': avg,
+                        'avgGkStats': avg_gk,
+                        'stats': st
+                    }
+            self._official_players_cache = cache
+            self._last_cache_time = now
+            return cache
+        except Exception:
+            return self._official_players_cache or {}
 
     def calculate_ovr(self, squad):
         total = 0
@@ -932,21 +969,58 @@ class MatchCog(commands.Cog):
 
             gp_cfg = await database.get_gameplay_config()
             default_custom_boost = float(gp_cfg.get('custom_card_match_boost', 1.15))
+            official_players_map = await self.get_official_players_cache()
 
-            def extract_player_stats(pd_dict, p_pos, eff_ovr):
+            def extract_player_stats(pd_dict, p_name, p_pos, eff_ovr):
                 """Extract authentic RenderZ stats (avgStats and detailed stats) for H2H match engine."""
                 p_pos = (p_pos or 'ST').upper()
                 is_gk = (p_pos == 'GK')
+                p_name_clean = (p_name or '').strip().lower()
                 
-                avg = pd_dict.get('avgStats') or {} if isinstance(pd_dict, dict) else {}
+                # Check player_data first (for GK prefer avgGkStats)
+                avg = {}
+                if isinstance(pd_dict, dict):
+                    avg = (pd_dict.get('avgGkStats') if is_gk else pd_dict.get('avgStats')) or pd_dict.get('avgStats') or {}
                 st = pd_dict.get('stats') or {} if isinstance(pd_dict, dict) else {}
-                
-                a1 = avg.get('avg1')
-                a2 = avg.get('avg2')
-                a3 = avg.get('avg3')
-                a4 = avg.get('avg4')
-                a5 = avg.get('avg5')
-                a6 = avg.get('avg6')
+
+                # If avgStats is missing or has no avg1, resolve from authentic RenderZ official players cache!
+                if not avg.get('avg1') and p_name_clean:
+                    matched = official_players_map.get(p_name_clean)
+                    if not matched:
+                        for k, v in official_players_map.items():
+                            if k in p_name_clean or p_name_clean in k:
+                                matched = v
+                                break
+
+                    if matched:
+                        base_ovr = int(matched.get('ovr') or 100)
+                        ovr_delta = eff_ovr - base_ovr
+                        rz_avg = (matched.get('avgGkStats') if is_gk else matched.get('avgStats')) or matched.get('avgStats') or {}
+                        rz_st = matched.get('stats') or {}
+
+                        if is_gk:
+                            a1 = int(rz_avg.get('avg1') or rz_st.get('gkd') or (base_ovr + 29)) + ovr_delta
+                            a2 = int(rz_avg.get('avg2') or rz_st.get('gkp') or (base_ovr + 28)) + ovr_delta
+                            a3 = int(rz_avg.get('avg3') or rz_st.get('han') or (base_ovr + 28)) + ovr_delta
+                            a4 = int(rz_avg.get('avg4') or rz_st.get('ref') or (base_ovr + 30)) + ovr_delta
+                            a5 = int(rz_avg.get('avg5') or rz_st.get('gkk') or max(50, base_ovr + 24)) + ovr_delta
+                            a6 = int(rz_avg.get('avg6') or rz_st.get('str') or rz_st.get('phy') or (base_ovr + 3)) + ovr_delta
+                        else:
+                            a1 = int(rz_avg.get('avg1') or rz_st.get('spd') or rz_st.get('pac') or (base_ovr + 20)) + ovr_delta
+                            a2 = int(rz_avg.get('avg2') or rz_st.get('sho') or rz_st.get('fin') or (base_ovr + 20)) + ovr_delta
+                            a3 = int(rz_avg.get('avg3') or rz_st.get('spa') or rz_st.get('pas') or (base_ovr + 10)) + ovr_delta
+                            a4 = int(rz_avg.get('avg4') or rz_st.get('dri') or rz_st.get('agi') or (base_ovr + 20)) + ovr_delta
+                            a5 = int(rz_avg.get('avg5') or rz_st.get('mrk') or rz_st.get('def') or (base_ovr - 20)) + ovr_delta
+                            a6 = int(rz_avg.get('avg6') or rz_st.get('str') or rz_st.get('phy') or base_ovr) + ovr_delta
+                    else:
+                        a1, a2, a3, a4, a5, a6 = None, None, None, None, None, None
+                else:
+                    a1 = avg.get('avg1')
+                    a2 = avg.get('avg2')
+                    a3 = avg.get('avg3')
+                    a4 = avg.get('avg4')
+                    a5 = avg.get('avg5')
+                    a6 = avg.get('avg6')
                 
                 if is_gk:
                     div = int(a1 or st.get('gkd') or (eff_ovr + 29))
@@ -1103,7 +1177,7 @@ class MatchCog(commands.Cog):
                             card_perks = raw_perks
 
                     # Extract authentic RenderZ stats & role ratings
-                    p_stats = extract_player_stats(pd, pos, effective_ovr)
+                    p_stats = extract_player_stats(pd, name, pos, effective_ovr)
 
                     # Store clean base_ovr for stats, records, and displays;
                     # use authentic RenderZ stat_rating and stats for match physics
