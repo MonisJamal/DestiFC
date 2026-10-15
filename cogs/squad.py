@@ -828,23 +828,6 @@ class SquadCog(commands.Cog):
         pos = extract_pos(player)
         await interaction.followup.send(f"🔓 **{player['player_name']} ({pos}) ({player['ovr']})** is now unlocked.", ephemeral=True)
 
-    @app_commands.command(name="lock", description="Lock a player card (protects from exchange/SBC/quicksell)")
-    @app_commands.describe(inventory_id="Select player card to lock")
-    @app_commands.autocomplete(inventory_id=player_card_autocomplete)
-    async def lock_alias(self, interaction: discord.Interaction, inventory_id: int):
-        await self.lock_player(interaction, inventory_id)
-
-    @app_commands.command(name="squad_set", description="Set a player card in your starting 11 squad")
-    @app_commands.describe(position="Position slot in your formation", player="Select player card from your inventory (or type card name/ID)")
-    @app_commands.autocomplete(position=squad_position_autocomplete, player=player_card_autocomplete)
-    async def top_squad_set(self, interaction: discord.Interaction, position: str, player: str):
-        await self.set_player(interaction, position, player)
-
-    @app_commands.command(name="squad_view", description="View your or another user's current squad lineup in 3D")
-    @app_commands.describe(user="User whose squad you want to view (leave empty for yours)")
-    async def top_squad_view(self, interaction: discord.Interaction, user: discord.Member = None):
-        await self.view_squad(interaction, user)
-
     @app_commands.command(name="club_stats", description="View your club's personal stats leaders (Top Scorer, Assists, Ratings, Clean Sheets, Cards)")
     @app_commands.describe(user="User whose club stats you want to view (leave empty for yours)")
     async def club_stats(self, interaction: discord.Interaction, user: discord.Member = None):
@@ -947,11 +930,6 @@ class SquadCog(commands.Cog):
 
         embed.set_footer(text="Use /player_stats [player] to inspect individual player cards")
         await interaction.followup.send(embed=embed)
-
-    @app_commands.command(name="stats", description="View club performance records (Top Scorer, Assists, Ratings, Clean Sheets)")
-    @app_commands.describe(user="User whose club stats you want to view (leave empty for yours)")
-    async def stats_alias(self, interaction: discord.Interaction, user: discord.Member = None):
-        await self.club_stats.callback(self, interaction, user)
 
     @app_commands.command(name="player_stats", description="View lifetime match statistics of a specific player in your squad or club")
     @app_commands.describe(player="Select or search player name", user="Target user (leave empty for yourself)")

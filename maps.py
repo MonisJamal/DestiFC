@@ -386,24 +386,44 @@ def extract_pos(item) -> str:
 # Players play with 100% full OVR at their primary position, official potentialPositions, or natural alternate positions
 
 NATURAL_ALT_POSITIONS = {
-    "ST": ["CF", "LF", "RF"],
-    "CF": ["ST", "CAM", "LF", "RF"],
-    "LW": ["LM", "RW", "LF"],
-    "RW": ["RM", "LW", "RF"],
-    "LM": ["LW", "RM"],
-    "RM": ["RW", "LM"],
-    "CAM": ["CM", "CF"],
-    "CM": ["CAM", "CDM"],
-    "CDM": ["CM", "CB"],
-    "CB": ["CDM"],
-    "LB": ["LWB", "LM"],
-    "RB": ["RWB", "RM"],
-    "LWB": ["LB", "LM"],
-    "RWB": ["RB", "RM"],
-    "LF": ["LW", "CF", "ST", "CAM"],
-    "RF": ["RW", "CF", "ST", "CAM"],
+    "ST": ["CF"],
+    "CF": ["ST"],
+    "LW": ["LM"],
+    "RW": ["RM"],
+    "LM": ["LW"],
+    "RM": ["RW"],
+    "LB": ["LWB"],
+    "RB": ["RWB"],
+    "LWB": ["LB"],
+    "RWB": ["RB"],
+    "CAM": [],
+    "CM": [],
+    "CDM": [],
+    "CB": [],
     "GK": []
 }
+
+def is_custom_card(player_item) -> bool:
+    """
+    Returns True if player_item represents a custom card or signature box card.
+    """
+    if not isinstance(player_item, dict):
+        return False
+    if player_item.get('is_custom') or player_item.get('is_signature_box'):
+        return True
+    pd = player_item.get('player_data')
+    if isinstance(pd, str):
+        try:
+            pd = json.loads(pd)
+        except Exception:
+            pd = {}
+    if isinstance(pd, dict):
+        if pd.get('is_custom') or pd.get('is_signature_box'):
+            return True
+    pid = str(player_item.get('player_id') or player_item.get('id') or player_item.get('inv_id') or '')
+    if pid.startswith(('custom_', 'sig_')):
+        return True
+    return False
 
 def get_player_official_positions(player_item) -> tuple[str, list[str]]:
     """
@@ -431,7 +451,7 @@ def get_player_official_positions(player_item) -> tuple[str, list[str]]:
 
     main_pos = extract_pos(player_item)
     
-    # 1. Extract potentialPositions from official card data
+    # 1. Extract potentialPositions from card data
     alt_raw = (
         player_item.get('potentialPositions') 
         or player_item.get('potential_positions') 
@@ -469,7 +489,11 @@ def get_player_official_positions(player_item) -> tuple[str, list[str]]:
         if clean_ap and clean_ap != main_pos and clean_ap not in clean_alts:
             clean_alts.append(clean_ap)
                     
-    # 2. Append Natural Alternate Positions if not already included
+    # Custom cards ONLY have the alternate positions explicitly configured on them
+    if is_custom_card(player_item):
+        return main_pos, clean_alts
+
+    # 2. Append Natural Alternate Positions for official cards if not already included
     for nat_ap in NATURAL_ALT_POSITIONS.get(main_pos, []):
         if nat_ap != main_pos and nat_ap not in clean_alts:
             clean_alts.append(nat_ap)
@@ -492,11 +516,12 @@ def check_player_position_eligibility(player_item, slot_pos: str) -> tuple[bool,
     if clean_slot in alts:
         return True, False
 
-    # Forward flex compatibility for 3-4-2-1 LF and RF slots
-    if clean_slot == "LF" and (main_pos in ("LW", "CF", "ST") or any(a in ("LW", "CF", "ST") for a in alts)):
-        return True, False
-    if clean_slot == "RF" and (main_pos in ("RW", "CF", "ST") or any(a in ("RW", "CF", "ST") for a in alts)):
-        return True, False
+    # Forward flex compatibility for 3-4-2-1 LF and RF slots (official cards only)
+    if not is_custom_card(player_item):
+        if clean_slot == "LF" and (main_pos in ("LW", "CF", "ST") or any(a in ("LW", "CF", "ST") for a in alts)):
+            return True, False
+        if clean_slot == "RF" and (main_pos in ("RW", "CF", "ST") or any(a in ("RW", "CF", "ST") for a in alts)):
+            return True, False
 
     return False, False
 

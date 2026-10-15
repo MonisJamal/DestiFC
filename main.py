@@ -213,7 +213,15 @@ class DestiFC(commands.AutoShardedBot):
             except Exception:
                 pass
 
-        # Sync slash commands
+        # Clear any lingering duplicate guild commands so only global commands exist
+        for g in self.guilds:
+            try:
+                self.tree.clear_commands(guild=g)
+                await self.tree.sync(guild=g)
+            except Exception as e:
+                print(f"[Command Sync] Note clearing guild commands for {g.id}: {e}")
+
+        # Sync slash commands globally
         await self.tree.sync()
 
         # Start dynamic presence and heartbeat sync loops
@@ -446,21 +454,20 @@ class DestiFC(commands.AutoShardedBot):
 
                     sync_needed = True
                     synced_info = []
+
+                    # Purge duplicate guild commands so Discord only keeps global commands
+                    for g in self.guilds:
+                        try:
+                            self.tree.clear_commands(guild=g)
+                            await self.tree.sync(guild=g)
+                        except Exception as g_err:
+                            pass
+
                     try:
                         g_cmds = await self.tree.sync()
                         synced_info.append(f"Global: {len(g_cmds)} commands")
                     except Exception as sync_err:
                         synced_info.append(f"Global sync error: {sync_err}")
-
-                    for g in self.guilds:
-                        try:
-                            self.tree.copy_global_to(guild=g)
-                            synced = await self.tree.sync(guild=g)
-                            synced_info.append(f"Guild '{g.name}' ({g.id}): {len(synced)} cmds")
-                            print(f"[Remote Control] Synced {len(synced)} commands to guild '{g.name}' ({g.id})")
-                        except Exception as g_err:
-                            synced_info.append(f"Guild error '{g.name}' ({g.id}): {g_err}")
-                            print(f"[Remote Control] Guild sync failed for {g.id}: {g_err}")
 
                     all_cmds = [c.name for c in self.tree.get_commands()]
                     res_msg = f"Reloaded {len(reloaded_cogs)} cogs. Commands in tree: {all_cmds}. Sync: {synced_info}."
