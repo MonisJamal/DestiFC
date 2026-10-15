@@ -273,7 +273,7 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                     for sub in sub_anims:
                         if sub.get("image"):
                             sprite_url = sub.get("image")
-                            max_frames = sub.get("maxFrames", 30)
+                            max_frames = int(sub.get("maxFrames") or 0)
                             break
                 if sprite_url:
                     break
@@ -416,18 +416,26 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
             base_font_size = float(name_layout.get("fontSize", 21))
             base_font_size = min(base_font_size, 21.0)
             font_size = int(base_font_size * SCALE)
-            if len(name) > 13:
-                font_size = int(font_size * 0.82)
-            elif len(name) > 9:
-                font_size = int(font_size * 0.90)
+
+            # Dynamic font fitting to ensure long names (e.g. Van Nistelrooy) fit proportionally within card frame
             font = font_bold(font_size)
+            max_name_width = int(108 * SCALE)
+            while font_size > int(10 * SCALE):
+                bbox = font.getbbox(name.upper())
+                text_w = bbox[2] - bbox[0]
+                if text_w <= max_name_width:
+                    break
+                font_size -= 1
+                font = font_bold(font_size)
+
             x_center = float(name_layout.get("posX", 128))
             if float(name_layout.get("sizeX", 0)) > 0:
                 x_center += float(name_layout.get("sizeX")) / 2.0
             x = x_center * SCALE
-            # Align y to sit cleanly above badges (badges start at posY: 188)
-            raw_y = float(name_layout.get("posY", 172))
-            y = min(raw_y, 172.0) * SCALE
+            
+            # Optimal vertical centering: position name cleanly above badges with balanced clearance
+            raw_y = float(name_layout.get("posY", 167))
+            y = min(raw_y, 167.0) * SCALE
             draw.text(
                 (x, y),
                 name.upper(),
@@ -448,9 +456,15 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
     if animated and sprite_sheet:
         try:
             cols = sprite_sheet.width // 256
-            if cols > 0:
-                capped_frames = min(max_frames or 30, 30)
-                step = 2 if capped_frames > 18 else 1
+            rows = sprite_sheet.height // 256
+            if cols > 0 and rows > 0:
+                total_sheet_frames = cols * rows
+                # Preserve full authentic animation loop from RenderZ / FC Mobile
+                total_frames = max_frames if (max_frames and 0 < max_frames <= total_sheet_frames) else total_sheet_frames
+                
+                # Up to 45 frames: include every frame for a 100% seamless, smooth loop
+                # If sheet exceeds 45 frames: step by 2 while spanning the full animation cycle
+                step = 1 if total_frames <= 45 else 2
                 frames = []
                 
                 # Sleek dark stadium walkout backdrop to prevent alpha distortion
@@ -461,11 +475,10 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
 
                 card_alpha = card.split()[3] if len(card.split()) == 4 else None
 
-                for frame_idx in range(0, capped_frames, step):
+                for frame_idx in range(0, total_frames, step):
                     col = frame_idx % cols
                     row = frame_idx // cols
                     box = (col * 256, row * 256, (col + 1) * 256, (row + 1) * 256)
-                    import time; time.sleep(0.01)
                     frame_sprite = sprite_sheet.crop(box)
                     if SCALE != 1.0:
                         frame_sprite = frame_sprite.resize(target_size, Image.Resampling.BILINEAR)
@@ -524,12 +537,14 @@ def save_card_to_bytes(card_result):
             for fr in card_result
         ]
         
+        # Dynamically calculate frame duration to maintain natural broadcast speed (~1.6s per loop)
+        frame_duration = max(35, min(100, int(1600 / len(quantized_frames))))
         quantized_frames[0].save(
             binary,
             format='GIF',
             save_all=True,
             append_images=quantized_frames[1:],
-            duration=80,
+            duration=frame_duration,
             loop=0,
             optimize=True
         )
