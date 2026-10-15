@@ -90,23 +90,53 @@ class ShootoutChallengeView(discord.ui.View):
         self.opponent = opponent
         self.wager = wager_coins
         self.cog = cog
+        self.accepted = False
+        self.message = None
+
+    async def on_timeout(self):
+        if self.accepted:
+            return
+        database.ACTIVE_MATCH_USERS.discard(self.challenger.id)
+        database.ACTIVE_MATCH_USERS.discard(self.opponent.id)
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(content=f"⏱️ **Shootout Challenge Expired!** {self.opponent.display_name} did not respond.", view=self)
+            except Exception:
+                pass
 
     @discord.ui.button(label="Accept Shootout 🥅", style=discord.ButtonStyle.success)
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.opponent.id:
             return await interaction.response.send_message("❌ Only the challenged player can accept!", ephemeral=True)
         
+        if self.accepted:
+            return await interaction.response.send_message("❌ This shootout challenge has already been accepted!", ephemeral=True)
+
         user_a = await database.get_user(self.challenger.id)
         user_b = await database.get_user(self.opponent.id)
         if self.wager > 0:
             if user_a.get('coins', 0) < self.wager:
+                database.ACTIVE_MATCH_USERS.discard(self.challenger.id)
+                database.ACTIVE_MATCH_USERS.discard(self.opponent.id)
                 return await interaction.response.send_message(f"❌ {self.challenger.mention} no longer has enough coins!", ephemeral=True)
             if user_b.get('coins', 0) < self.wager:
+                database.ACTIVE_MATCH_USERS.discard(self.challenger.id)
+                database.ACTIVE_MATCH_USERS.discard(self.opponent.id)
                 return await interaction.response.send_message("❌ You do not have enough coins for this wager!", ephemeral=True)
             await database.add_coins(self.challenger.id, -self.wager)
             await database.add_coins(self.opponent.id, -self.wager)
 
+        self.accepted = True
         self.stop()
+        for child in self.children:
+            child.disabled = True
+
+        # Refresh lock for active shootout gameplay (300s = 5 mins)
+        database.ACTIVE_MATCH_USERS.add(self.challenger.id, duration=300)
+        database.ACTIVE_MATCH_USERS.add(self.opponent.id, duration=300)
+
         await interaction.response.defer()
         await self.cog.start_pvp_shootout(interaction, self.challenger, self.opponent, self.wager)
 
@@ -115,8 +145,12 @@ class ShootoutChallengeView(discord.ui.View):
         if interaction.user.id != self.opponent.id and interaction.user.id != self.challenger.id:
             return await interaction.response.send_message("❌ You are not part of this challenge.", ephemeral=True)
         self.stop()
+        database.ACTIVE_MATCH_USERS.discard(self.challenger.id)
+        database.ACTIVE_MATCH_USERS.discard(self.opponent.id)
+        for child in self.children:
+            child.disabled = True
         embed = discord.Embed(title="🚫 Shootout Declined", description=f"{interaction.user.mention} declined the penalty shootout.", color=discord.Color.red())
-        await interaction.response.edit_message(embed=embed, view=None)
+        await interaction.response.edit_message(embed=embed, view=self)
 
 class ShootoutCog(commands.Cog):
     def __init__(self, bot):
@@ -138,10 +172,18 @@ class ShootoutCog(commands.Cog):
 
         if user is None or user.id == interaction.user.id or user.bot:
             # Solo Shootout vs AI
+            if not database.ACTIVE_MATCH_USERS.acquire(interaction.user.id, duration=300):
+                return await interaction.response.send_message("❌ You already have an active match, shootout, or draft battle! Please finish it before starting another.", ephemeral=True)
             await interaction.response.defer()
             await self.start_solo_shootout(interaction, interaction.user, wager)
         else:
             # PvP Challenge
+            if not database.ACTIVE_MATCH_USERS.acquire_both(interaction.user.id, user.id, duration=75):
+                if interaction.user.id in database.ACTIVE_MATCH_USERS:
+                    return await interaction.response.send_message("❌ You already have an active match, shootout, or draft battle! Please finish it before starting another.", ephemeral=True)
+                else:
+                    return await interaction.response.send_message(f"❌ **{user.display_name}** is already in an active match, lobby, or shootout! Please wait for them to finish.", ephemeral=True)
+
             view = ShootoutChallengeView(interaction.user, user, wager, self)
             embed = discord.Embed(
                 title="🥅 PENALTY SHOOTOUT CHALLENGE!",
@@ -155,8 +197,15 @@ class ShootoutCog(commands.Cog):
             )
             embed.set_thumbnail(url=interaction.user.display_avatar.url)
             await interaction.response.send_message(content=user.mention, embed=embed, view=view)
+            view.message = await interaction.original_response()
 
     async def start_solo_shootout(self, interaction: discord.Interaction, user: discord.Member, wager: str):
+        try:
+            await self._run_solo_shootout(interaction, user, wager)
+        finally:
+            database.ACTIVE_MATCH_USERS.discard(user.id)
+
+    async def _run_solo_shootout(self, interaction: discord.Interaction, user: discord.Member, wager: str):
         if isinstance(wager, str): wager = parse_number(wager)
         score_user = 0
         score_ai = 0
@@ -272,6 +321,13 @@ class ShootoutCog(commands.Cog):
         await channel.send(embed=final_embed)
 
     async def start_pvp_shootout(self, interaction: discord.Interaction, user_a: discord.Member, user_b: discord.Member, wager: str):
+        try:
+            await self._run_pvp_shootout(interaction, user_a, user_b, wager)
+        finally:
+            database.ACTIVE_MATCH_USERS.discard(user_a.id)
+            database.ACTIVE_MATCH_USERS.discard(user_b.id)
+
+    async def _run_pvp_shootout(self, interaction: discord.Interaction, user_a: discord.Member, user_b: discord.Member, wager: str):
         if isinstance(wager, str): wager = parse_number(wager)
         score_a = 0
         score_b = 0

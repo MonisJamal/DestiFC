@@ -284,6 +284,21 @@ class DraftBattleRoomView(discord.ui.View):
         }
         self.update_buttons()
 
+    async def on_timeout(self):
+        database.ACTIVE_MATCH_USERS.discard(self.challenger.id)
+        if not self.is_solo:
+            database.ACTIVE_MATCH_USERS.discard(self.opponent.id)
+            if self.wager > 0:
+                await database.add_coins(self.challenger.id, self.wager)
+                await database.add_coins(self.opponent.id, self.wager)
+        for child in self.children:
+            child.disabled = True
+        try:
+            if self.message:
+                await self.message.edit(content="⏱️ **Draft Room Expired!** Drafting session took too long.", view=self)
+        except Exception:
+            pass
+
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item = None):
         print(f"[DraftBattle] Error in DraftBattleRoomView: {error}")
         traceback.print_exc()
@@ -314,6 +329,27 @@ class DraftBattleRoomView(discord.ui.View):
                 auto_btn = discord.ui.Button(label="🤖 Auto-Draft for Opponent & Play", style=discord.ButtonStyle.success, custom_id="draft_btn_auto")
                 auto_btn.callback = self.on_auto_fill
                 self.add_item(auto_btn)
+
+        cancel_btn = discord.ui.Button(label="Cancel Draft", style=discord.ButtonStyle.secondary, custom_id="draft_btn_cancel")
+        cancel_btn.callback = self.on_cancel
+        self.add_item(cancel_btn)
+
+    async def on_cancel(self, interaction: discord.Interaction):
+        if interaction.user.id != self.challenger.id and (self.is_solo or interaction.user.id != self.opponent.id):
+            return await interaction.response.send_message("❌ You are not part of this draft battle!", ephemeral=True)
+        self.stop()
+        database.ACTIVE_MATCH_USERS.discard(self.challenger.id)
+        if not self.is_solo:
+            database.ACTIVE_MATCH_USERS.discard(self.opponent.id)
+            if self.wager > 0:
+                await database.add_coins(self.challenger.id, self.wager)
+                await database.add_coins(self.opponent.id, self.wager)
+        for child in self.children:
+            child.disabled = True
+        try:
+            await interaction.response.edit_message(content=f"❌ **Draft Battle Cancelled** by {interaction.user.display_name}.", embed=None, view=self)
+        except Exception:
+            pass
 
     def generate_status_embed(self):
         wager_text = f"\n🪙 **Coin Wager:** `{self.wager:,}` Coins each (Winner takes `{self.wager * 2:,}`)" if self.wager > 0 else ""
@@ -429,6 +465,14 @@ class DraftBattleRoomView(discord.ui.View):
                 traceback.print_exc()
 
     async def simulate_match(self, interaction: discord.Interaction = None):
+        try:
+            await self._run_simulate_match(interaction)
+        finally:
+            database.ACTIVE_MATCH_USERS.discard(self.challenger.id)
+            if not self.is_solo:
+                database.ACTIVE_MATCH_USERS.discard(self.opponent.id)
+
+    async def _run_simulate_match(self, interaction: discord.Interaction = None):
         user_a = self.challenger
         user_b = self.opponent
         data_a = self.draft_data.get(user_a.id, {})
@@ -701,6 +745,20 @@ class DraftBattleChallengeView(discord.ui.View):
         self.bot = bot
         self.channel_id = channel_id
         self.accepted = False
+        self.message = None
+
+    async def on_timeout(self):
+        if self.accepted:
+            return
+        database.ACTIVE_MATCH_USERS.discard(self.challenger.id)
+        database.ACTIVE_MATCH_USERS.discard(self.opponent.id)
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(content=f"⏱️ **Draft Battle Challenge Expired!** {self.opponent.display_name} did not respond.", view=self)
+            except Exception:
+                pass
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item = None):
         print(f"[DraftBattle] Error in DraftBattleChallengeView: {error}")
@@ -716,12 +774,19 @@ class DraftBattleChallengeView(discord.ui.View):
         if interaction.user.id != self.opponent.id:
             return await interaction.response.send_message("❌ Only the challenged opponent can accept this match!", ephemeral=True)
 
+        if self.accepted:
+            return await interaction.response.send_message("❌ This draft challenge has already been accepted!", ephemeral=True)
+
         if self.wager > 0:
             user_a = await database.get_user(self.challenger.id)
             user_b = await database.get_user(self.opponent.id)
             if user_a.get("coins", 0) < self.wager:
+                database.ACTIVE_MATCH_USERS.discard(self.challenger.id)
+                database.ACTIVE_MATCH_USERS.discard(self.opponent.id)
                 return await interaction.response.send_message(f"❌ {self.challenger.mention} no longer has enough coins for the **{self.wager:,}** coin wager!", ephemeral=True)
             if user_b.get("coins", 0) < self.wager:
+                database.ACTIVE_MATCH_USERS.discard(self.challenger.id)
+                database.ACTIVE_MATCH_USERS.discard(self.opponent.id)
                 return await interaction.response.send_message(f"❌ You don't have enough coins for the **{self.wager:,}** coin wager!", ephemeral=True)
             
             # Escrow wager
@@ -730,6 +795,12 @@ class DraftBattleChallengeView(discord.ui.View):
 
         self.accepted = True
         self.stop()
+        for child in self.children:
+            child.disabled = True
+
+        # Extend lock for draft room phase (600s = 10 mins)
+        database.ACTIVE_MATCH_USERS.add(self.challenger.id, duration=600)
+        database.ACTIVE_MATCH_USERS.add(self.opponent.id, duration=600)
 
         ch_id = interaction.channel_id or self.channel_id
         room_view = DraftBattleRoomView(self.challenger, self.opponent, self.wager, self.bot, interaction.message, channel_id=ch_id, is_solo=False)
@@ -741,12 +812,16 @@ class DraftBattleChallengeView(discord.ui.View):
             return await interaction.response.send_message("❌ You are not part of this challenge.", ephemeral=True)
 
         self.stop()
+        database.ACTIVE_MATCH_USERS.discard(self.challenger.id)
+        database.ACTIVE_MATCH_USERS.discard(self.opponent.id)
+        for child in self.children:
+            child.disabled = True
         embed = discord.Embed(
             title="🚫 Draft Battle Cancelled",
             description=f"{interaction.user.mention} declined the draft battle challenge.",
             color=discord.Color.red()
         )
-        await interaction.response.edit_message(embed=embed, view=None)
+        await interaction.response.edit_message(embed=embed, view=self)
 
 
 # ================= Cog =================
@@ -774,6 +849,8 @@ class DraftBattleCog(commands.Cog):
     async def draft_challenge(self, interaction: discord.Interaction, user: discord.Member = None, wager: str = "0"):
         if isinstance(wager, str): wager = parse_number(wager)
         if user is None or user.id == interaction.user.id or user.bot:
+            if not database.ACTIVE_MATCH_USERS.acquire(interaction.user.id, duration=600):
+                return await interaction.response.send_message("❌ You already have an active match, draft battle, or shootout! Please finish it before starting another.", ephemeral=True)
             # Solo Draft Challenge vs AI
             ai_user = AIDraftUser()
             room_view = DraftBattleRoomView(interaction.user, ai_user, 0, self.bot, channel_id=interaction.channel_id, is_solo=True)
@@ -791,25 +868,40 @@ class DraftBattleCog(commands.Cog):
             return
 
         # PvP Draft Battle
-        if wager < 0:
-            return await interaction.response.send_message("❌ Wager cannot be negative.", ephemeral=True)
+        if not database.ACTIVE_MATCH_USERS.acquire_both(interaction.user.id, user.id, duration=75):
+            if interaction.user.id in database.ACTIVE_MATCH_USERS:
+                return await interaction.response.send_message("❌ You already have an active match, draft battle, or shootout! Please finish it before starting another.", ephemeral=True)
+            else:
+                return await interaction.response.send_message(f"❌ **{user.display_name}** is already in an active match, lobby, or draft battle! Please wait for them to finish.", ephemeral=True)
 
-        if wager > 0:
-            user_data = await database.get_user(interaction.user.id)
-            if user_data.get("coins", 0) < wager:
-                return await interaction.response.send_message(f"❌ You don't have enough coins for a **{wager:,}** coin wager! Your balance: **{user_data.get('coins', 0):,}**", ephemeral=True)
+        try:
+            if wager < 0:
+                database.ACTIVE_MATCH_USERS.discard(interaction.user.id)
+                database.ACTIVE_MATCH_USERS.discard(user.id)
+                return await interaction.response.send_message("❌ Wager cannot be negative.", ephemeral=True)
 
-        view = DraftBattleChallengeView(interaction.user, user, wager, self.bot, channel_id=interaction.channel_id)
-        wager_text = f"\n🪙 **Coin Wager:** `{wager:,}` Coins (Winner takes `{wager * 2:,}`)" if wager > 0 else ""
+            if wager > 0:
+                user_data = await database.get_user(interaction.user.id)
+                if user_data.get("coins", 0) < wager:
+                    database.ACTIVE_MATCH_USERS.discard(interaction.user.id)
+                    database.ACTIVE_MATCH_USERS.discard(user.id)
+                    return await interaction.response.send_message(f"❌ You don't have enough coins for a **{wager:,}** coin wager! Your balance: **{user_data.get('coins', 0):,}**", ephemeral=True)
 
-        embed = discord.Embed(
-            title="⚔️ DRAFT BATTLE CHALLENGE!",
-            description=f"{user.mention}, you have been challenged to an **FC Draft Battle 1v1** by **{interaction.user.mention}**!\n\n🎮 **Format:**\n• Pick Formations & 110+ OVR Superstars\n• Chemistry Synergy Boosts\n• Live Simulated Match with Highlights\n• ELO & Player Stats Tracking{wager_text}\n\n*Click Accept below within 60 seconds to enter the draft room:*",
-            color=discord.Color.gold()
-        )
-        embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        await interaction.response.send_message(content=user.mention, embed=embed, view=view)
-        view.message = await interaction.original_response()
+            view = DraftBattleChallengeView(interaction.user, user, wager, self.bot, channel_id=interaction.channel_id)
+            wager_text = f"\n🪙 **Coin Wager:** `{wager:,}` Coins (Winner takes `{wager * 2:,}`)" if wager > 0 else ""
+
+            embed = discord.Embed(
+                title="⚔️ DRAFT BATTLE CHALLENGE!",
+                description=f"{user.mention}, you have been challenged to an **FC Draft Battle 1v1** by **{interaction.user.mention}**!\n\n🎮 **Format:**\n• Pick Formations & 110+ OVR Superstars\n• Chemistry Synergy Boosts\n• Live Simulated Match with Highlights\n• ELO & Player Stats Tracking{wager_text}\n\n*Click Accept below within 60 seconds to enter the draft room:*",
+                color=discord.Color.gold()
+            )
+            embed.set_thumbnail(url=interaction.user.display_avatar.url)
+            await interaction.response.send_message(content=user.mention, embed=embed, view=view)
+            view.message = await interaction.original_response()
+        except Exception as e:
+            database.ACTIVE_MATCH_USERS.discard(interaction.user.id)
+            database.ACTIVE_MATCH_USERS.discard(user.id)
+            raise e
 
     @draftbattle_group.command(name="solo", description="Play a Solo Draft Battle against the DestiFC AI")
     async def solo_draft(self, interaction: discord.Interaction):

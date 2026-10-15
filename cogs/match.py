@@ -8,8 +8,8 @@ import database
 import ai_engine
 from maps import TACTICS
 
-# Global tracking set to ensure only 1 active H2H match / challenge at a time per user
-ACTIVE_MATCH_USERS = set()
+# Centralized tracking to ensure only 1 active H2H match, draft battle, or challenge at a time per user
+ACTIVE_MATCH_USERS = database.ACTIVE_MATCH_USERS
 
 def format_match_player_name(p_name: str) -> str:
     if not p_name:
@@ -260,10 +260,19 @@ class MatchRequestView(discord.ui.View):
             await interaction.response.send_message("Only the challenged player can accept!", ephemeral=True)
             return
             
+        if self.accepted:
+            await interaction.response.send_message("❌ This match challenge has already been accepted!", ephemeral=True)
+            return
+
         self.accepted = True
         self.stop()
         for child in self.children:
             child.disabled = True
+
+        # Extend lock for both players for the lobby phase (320 seconds)
+        ACTIVE_MATCH_USERS.add(self.challenger.id, duration=320)
+        ACTIVE_MATCH_USERS.add(self.opponent.id, duration=320)
+
         # Transition to Lobby
         lobby = MatchLobbyView(self.challenger, self.opponent, self.cog, self.squad_a, self.squad_b, self.fans_a, self.fans_b, self.ovr_a, self.ovr_b, self.message)
         await lobby.update_message(interaction)
@@ -372,6 +381,9 @@ class MatchLobbyView(discord.ui.View):
     @discord.ui.button(label="Ready", style=discord.ButtonStyle.success, row=2)
     async def ready_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id not in [self.challenger.id, self.opponent.id]: return
+        if self.series_started:
+            return await interaction.response.send_message("❌ Match series has already started!", ephemeral=True)
+
         self.ready[interaction.user.id] = True
         if self.ready[self.challenger.id] and self.ready[self.opponent.id]:
             self.series_started = True
@@ -379,6 +391,10 @@ class MatchLobbyView(discord.ui.View):
             for child in self.children: child.disabled = True
             await self.update_message(interaction)
             
+            # Lock both players for active match simulation (600s = 10 mins)
+            ACTIVE_MATCH_USERS.add(self.challenger.id, duration=600)
+            ACTIVE_MATCH_USERS.add(self.opponent.id, duration=600)
+
             # Start Series
             asyncio.create_task(self.cog.run_series(
                 interaction, self.challenger, self.opponent, 
@@ -387,6 +403,19 @@ class MatchLobbyView(discord.ui.View):
             ))
         else:
             await self.update_message(interaction)
+
+    @discord.ui.button(label="Cancel / Leave", style=discord.ButtonStyle.danger, row=2)
+    async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id not in [self.challenger.id, self.opponent.id]:
+            return await interaction.response.send_message("❌ You are not part of this match!", ephemeral=True)
+        if self.series_started:
+            return await interaction.response.send_message("❌ Match series has already started!", ephemeral=True)
+        self.stop()
+        ACTIVE_MATCH_USERS.discard(self.challenger.id)
+        ACTIVE_MATCH_USERS.discard(self.opponent.id)
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(content=f"❌ **{interaction.user.display_name}** cancelled the match lobby.", embed=None, view=self)
 
 class WagerCoinsModal(discord.ui.Modal, title="Wager Coins"):
     amount = discord.ui.TextInput(label="Coins to Wager (max 100B)", placeholder="e.g. 50000000", max_length=15)
@@ -536,104 +565,95 @@ class MatchCog(commands.Cog):
 
 
     async def run_series(self, interaction, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b, message, lobby):
-
-        
-        format_num = lobby.format
-        target_wins = (format_num // 2) + 1
-        wins_a = 0
-        wins_b = 0
-        
-        for match_idx in range(1, format_num + 1):
-            if wins_a >= target_wins or wins_b >= target_wins:
-                break
+        try:
+            format_num = lobby.format
+            target_wins = (format_num // 2) + 1
+            wins_a = 0
+            wins_b = 0
+            
+            for match_idx in range(1, format_num + 1):
+                if wins_a >= target_wins or wins_b >= target_wins:
+                    break
+                    
+                msg = await interaction.channel.send(f"🏆 **SERIES MATCH {match_idx}/{format_num}** | {player_a.display_name} [{wins_a} - {wins_b}] {player_b.display_name}")
                 
-            msg = await interaction.channel.send(f"🏆 **SERIES MATCH {match_idx}/{format_num}** | {player_a.display_name} [{wins_a} - {wins_b}] {player_b.display_name}")
-            
-            # Since simulate_live_match runs async, we wait for it.
-            # But wait, simulate_live_match does UI updates using `safe_update_ui` which falls back to `message.edit`
-            # We need to give it the new `msg` so it doesn't overwrite the lobby.
-            
-            # Pass series mode flags if needed. Currently simulate_live_match always gives rewards. 
-            # That's fine, each sub-match gives standard fans/coins.
-            
-            
-            class DummyInteraction:
-                def __init__(self, channel, user, msg):
-                    self.channel = channel
-                    self.user = user
-                    self.response = None
-                    self.msg = msg
-                async def edit_original_response(self, *args, **kwargs):
-                    if self.msg:
-                        # Convert edit_original_response kwargs to msg.edit kwargs
-                        return await self.msg.edit(**kwargs)
-                    raise Exception("Dummy interaction")
-                @property
-                def followup(self):
-                    class Followup:
-                        def __init__(self, msg):
-                            self.msg = msg
-                        async def send(self, *args, **kwargs):
-                            pass
-                    return Followup(self.msg)
-            
-            dummy_interaction = DummyInteraction(interaction.channel, player_a, msg)
-            score_a, score_b = await self.simulate_live_match(
-                dummy_interaction, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b, message=msg
-            )
-            ACTIVE_MATCH_USERS.add(player_a.id)
-            ACTIVE_MATCH_USERS.add(player_b.id)
-            
-            # Tiebreaker logic if Golden Goal
-            if score_a == score_b and lobby.tiebreaker == "Golden Goal":
-                await interaction.channel.send(f"⚖️ Match tied at {score_a}-{score_b}! Going to **Golden Goal**... (Simulated instantly)")
-                # A quick random flip for golden goal, weighted by OVR
-                import random
-                win_prob_a = ovr_a / (ovr_a + ovr_b)
-                if random.random() < win_prob_a:
-                    score_a += 1
-                else:
-                    score_b += 1
-                await interaction.channel.send(f"⚽ **GOLDEN GOAL!** {'⭐ ' + player_a.display_name if score_a > score_b else '⭐ ' + player_b.display_name} scored the winner! ({score_a}-{score_b})")
+                class DummyInteraction:
+                    def __init__(self, channel, user, msg):
+                        self.channel = channel
+                        self.user = user
+                        self.response = None
+                        self.msg = msg
+                    async def edit_original_response(self, *args, **kwargs):
+                        if self.msg:
+                            return await self.msg.edit(**kwargs)
+                        raise Exception("Dummy interaction")
+                    @property
+                    def followup(self):
+                        class Followup:
+                            def __init__(self, msg):
+                                self.msg = msg
+                            async def send(self, *args, **kwargs):
+                                pass
+                        return Followup(self.msg)
                 
-            if score_a > score_b: wins_a += 1
-            elif score_b > score_a: wins_b += 1
-            
-            if match_idx < format_num and (wins_a < target_wins and wins_b < target_wins):
-                await asyncio.sleep(5)
+                dummy_interaction = DummyInteraction(interaction.channel, player_a, msg)
+                score_a, score_b = await self.simulate_live_match(
+                    dummy_interaction, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b, message=msg, is_series_submatch=True
+                )
                 
-        winner = player_a if wins_a > wins_b else player_b if wins_b > wins_a else None
-        
-        # Resolve stakes
-        if winner:
-            loser = player_b if winner == player_a else player_a
-            
-            win_stakes = lobby.stakes[winner.id]
-            lose_stakes = lobby.stakes[loser.id]
-            
-            import database
-            conn = await database.get_db()
-            
-            embed = discord.Embed(title="🏆 SERIES CONCLUDED", color=discord.Color.gold())
-            embed.description = f"**{winner.display_name}** wins the series `{max(wins_a, wins_b)} - {min(wins_a, wins_b)}`!"
-            
-            # Transfer Coins
-            if lose_stakes['coins'] > 0:
-                await conn.execute("UPDATE users SET coins = coins - $1 WHERE user_id = $2", lose_stakes['coins'], loser.id)
-                await conn.execute("UPDATE users SET coins = coins + $1 WHERE user_id = $2", lose_stakes['coins'], winner.id)
-                embed.add_field(name="💰 Coins Won", value=f"{lose_stakes['coins']:,} coins from {loser.display_name}")
+                # Tiebreaker logic if Golden Goal
+                if score_a == score_b and lobby.tiebreaker == "Golden Goal":
+                    await interaction.channel.send(f"⚖️ Match tied at {score_a}-{score_b}! Going to **Golden Goal**... (Simulated instantly)")
+                    import random
+                    win_prob_a = ovr_a / (ovr_a + ovr_b)
+                    if random.random() < win_prob_a:
+                        score_a += 1
+                    else:
+                        score_b += 1
+                    await interaction.channel.send(f"⚽ **GOLDEN GOAL!** {'⭐ ' + player_a.display_name if score_a > score_b else '⭐ ' + player_b.display_name} scored the winner! ({score_a}-{score_b})")
+                    
+                if score_a > score_b: wins_a += 1
+                elif score_b > score_a: wins_b += 1
                 
-            # Transfer Cards
-            if lose_stakes['card_id']:
-                await conn.execute("UPDATE inventory SET user_id = $1 WHERE id = $2 AND user_id = $3", winner.id, lose_stakes['card_id'], loser.id)
-                embed.add_field(name="🃏 Card Won", value=f"{lose_stakes['card']} from {loser.display_name}")
-                
-            await interaction.channel.send(embed=embed)
-        else:
-            await interaction.channel.send("🤝 The series ended in a tie. No stakes were transferred.")
+                if match_idx < format_num and (wins_a < target_wins and wins_b < target_wins):
+                    await asyncio.sleep(5)
+                    
+            winner = player_a if wins_a > wins_b else player_b if wins_b > wins_a else None
             
-        ACTIVE_MATCH_USERS.discard(player_a.id)
-        ACTIVE_MATCH_USERS.discard(player_b.id)
+            # Resolve stakes
+            if winner:
+                loser = player_b if winner == player_a else player_a
+                
+                win_stakes = lobby.stakes[winner.id]
+                lose_stakes = lobby.stakes[loser.id]
+                
+                import database
+                conn = await database.get_db()
+                
+                embed = discord.Embed(title="🏆 SERIES CONCLUDED", color=discord.Color.gold())
+                embed.description = f"**{winner.display_name}** wins the series `{max(wins_a, wins_b)} - {min(wins_a, wins_b)}`!"
+                
+                # Transfer Coins
+                if lose_stakes['coins'] > 0:
+                    await conn.execute("UPDATE users SET coins = coins - $1 WHERE user_id = $2", lose_stakes['coins'], loser.id)
+                    await conn.execute("UPDATE users SET coins = coins + $1 WHERE user_id = $2", lose_stakes['coins'], winner.id)
+                    embed.add_field(name="💰 Coins Won", value=f"{lose_stakes['coins']:,} coins from {loser.display_name}")
+                    
+                # Transfer Cards
+                if lose_stakes['card_id']:
+                    await conn.execute("UPDATE inventory SET user_id = $1 WHERE id = $2 AND user_id = $3", winner.id, lose_stakes['card_id'], loser.id)
+                    embed.add_field(name="🃏 Card Won", value=f"{lose_stakes['card']} from {loser.display_name}")
+                    
+                await interaction.channel.send(embed=embed)
+            else:
+                await interaction.channel.send("🤝 The series ended in a tie. No stakes were transferred.")
+        except Exception as e:
+            print(f"[Match Series Error] {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            ACTIVE_MATCH_USERS.discard(player_a.id)
+            ACTIVE_MATCH_USERS.discard(player_b.id)
 
 
     @commands.Cog.listener()
@@ -791,6 +811,9 @@ class MatchCog(commands.Cog):
             ovr_a = self.calculate_ovr(squad_a)
             ovr_b = self.calculate_ovr(squad_b)
             
+            ACTIVE_MATCH_USERS.add(player_a.id, duration=300)
+            ACTIVE_MATCH_USERS.add(player_b.id, duration=300)
+            
             msg = await channel.send(f"📢 **TOURNAMENT MATCH STARTING!**\n{player_a.mention} vs {player_b.mention}")
         
             class DummyInteraction:
@@ -816,56 +839,72 @@ class MatchCog(commands.Cog):
         if opponent.id == interaction.user.id:
             return await interaction.response.send_message("❌ You can't play against yourself!", ephemeral=True)
 
-        if interaction.user.id in ACTIVE_MATCH_USERS:
-            return await interaction.response.send_message("❌ You already have an active match or pending challenge! Please finish it before starting another.", ephemeral=True)
-            
-        if opponent.id in ACTIVE_MATCH_USERS:
-            return await interaction.response.send_message(f"❌ **{opponent.display_name}** is already in an active match or pending challenge! Please wait for them to finish.", ephemeral=True)
-            
-        await interaction.response.defer()
+        # 1. ATOMIC LOCK ACQUISITION: Lock BOTH players synchronously before ANY async operations!
+        if not ACTIVE_MATCH_USERS.acquire_both(interaction.user.id, opponent.id, duration=90):
+            if interaction.user.id in ACTIVE_MATCH_USERS:
+                return await interaction.response.send_message("❌ You already have an active match, lobby, or pending challenge! Please finish it before starting another.", ephemeral=True)
+            else:
+                return await interaction.response.send_message(f"❌ **{opponent.display_name}** is already in an active match, lobby, or pending challenge! Please wait for them to finish.", ephemeral=True)
 
-        gp_cfg = await database.get_gameplay_config()
-        cooldown_mins = int(gp_cfg.get('match_cooldown_mins', 0))
-        if cooldown_mins > 0:
-            import time
-            now = int(time.time())
-            cooldown_secs = cooldown_mins * 60
-            p = await database.get_db()
-            last_match_a = await p.fetchval('SELECT last_match_time FROM users WHERE user_id = $1', interaction.user.id) or 0
-            if now - last_match_a < cooldown_secs:
-                rem = cooldown_secs - (now - last_match_a)
-                return await interaction.followup.send(f"⏳ Match cooldown active! You can challenge again in **{int(rem // 60)}m {int(rem % 60)}s**.")
-        
-        squad_a = await database.get_squad(interaction.user.id)
-        squad_b = await database.get_squad(opponent.id)
-        
-        ovr_a = self.calculate_ovr(squad_a)
-        ovr_b = self.calculate_ovr(squad_b)
-        
-        if ovr_a == 0:
-            return await interaction.followup.send(f"❌ Your starting XI is incomplete! Use `/squad set` or `/squad autobuild` to fill all 11 positions.")
-        if ovr_b == 0:
-            return await interaction.followup.send(f"❌ {opponent.display_name}'s starting XI is incomplete! They must fill all 11 positions.")
-            
-        user_a = await database.get_user(interaction.user.id)
-        user_b = await database.get_user(opponent.id)
-        fans_a, fans_b = user_a.get('fans', 0), user_b.get('fans', 0)
-        
-        # Lock both users in active match pool
-        ACTIVE_MATCH_USERS.add(interaction.user.id)
-        ACTIVE_MATCH_USERS.add(opponent.id)
-        
-        timeout_secs = int(gp_cfg.get('match_challenge_timeout_secs', 60))
-        view = MatchRequestView(interaction.user, opponent, self, squad_a, squad_b, fans_a, fans_b, ovr_a, ovr_b, timeout_secs=timeout_secs)
-        
-        msg = await interaction.followup.send(
-            f"⚔️ **DIVISION RIVALS CHALLENGE!** ⚔️\n\n**{interaction.user.display_name} ({ovr_a})** [{self.get_division(fans_a, gp_cfg)}]\n🆚\n**{opponent.display_name} ({ovr_b})** [{self.get_division(fans_b, gp_cfg)}]\n\nHey {opponent.mention}, you have been challenged! Do you accept? *(Expires in {timeout_secs}s)*",
-            view=view
-        )
-        view.message = msg
-
-    async def simulate_live_match(self, interaction, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b, message=None):
         try:
+            await interaction.response.defer()
+
+            gp_cfg = await database.get_gameplay_config()
+            cooldown_mins = int(gp_cfg.get('match_cooldown_mins', 0))
+            if cooldown_mins > 0:
+                import time
+                now = int(time.time())
+                cooldown_secs = cooldown_mins * 60
+                p = await database.get_db()
+                last_match_a = await p.fetchval('SELECT last_match_time FROM users WHERE user_id = $1', interaction.user.id) or 0
+                if now - last_match_a < cooldown_secs:
+                    rem = cooldown_secs - (now - last_match_a)
+                    ACTIVE_MATCH_USERS.discard(interaction.user.id)
+                    ACTIVE_MATCH_USERS.discard(opponent.id)
+                    return await interaction.followup.send(f"⏳ Match cooldown active! You can challenge again in **{int(rem // 60)}m {int(rem % 60)}s**.")
+            
+            squad_a = await database.get_squad(interaction.user.id)
+            squad_b = await database.get_squad(opponent.id)
+            
+            ovr_a = self.calculate_ovr(squad_a)
+            ovr_b = self.calculate_ovr(squad_b)
+            
+            if ovr_a == 0:
+                ACTIVE_MATCH_USERS.discard(interaction.user.id)
+                ACTIVE_MATCH_USERS.discard(opponent.id)
+                return await interaction.followup.send(f"❌ Your starting XI is incomplete! Use `/squad set` or `/squad autobuild` to fill all 11 positions.")
+            if ovr_b == 0:
+                ACTIVE_MATCH_USERS.discard(interaction.user.id)
+                ACTIVE_MATCH_USERS.discard(opponent.id)
+                return await interaction.followup.send(f"❌ {opponent.display_name}'s starting XI is incomplete! They must fill all 11 positions.")
+                
+            user_a = await database.get_user(interaction.user.id)
+            user_b = await database.get_user(opponent.id)
+            fans_a, fans_b = user_a.get('fans', 0), user_b.get('fans', 0)
+            
+            timeout_secs = int(gp_cfg.get('match_challenge_timeout_secs', 60))
+            # Refresh lock for challenge window
+            ACTIVE_MATCH_USERS.add(interaction.user.id, duration=timeout_secs + 15)
+            ACTIVE_MATCH_USERS.add(opponent.id, duration=timeout_secs + 15)
+
+            view = MatchRequestView(interaction.user, opponent, self, squad_a, squad_b, fans_a, fans_b, ovr_a, ovr_b, timeout_secs=timeout_secs)
+            
+            msg = await interaction.followup.send(
+                f"⚔️ **DIVISION RIVALS CHALLENGE!** ⚔️\n\n**{interaction.user.display_name} ({ovr_a})** [{self.get_division(fans_a, gp_cfg)}]\n🆚\n**{opponent.display_name} ({ovr_b})** [{self.get_division(fans_b, gp_cfg)}]\n\nHey {opponent.mention}, you have been challenged! Do you accept? *(Expires in {timeout_secs}s)*",
+                view=view
+            )
+            view.message = msg
+        except Exception as e:
+            ACTIVE_MATCH_USERS.discard(interaction.user.id)
+            ACTIVE_MATCH_USERS.discard(opponent.id)
+            raise e
+
+    async def simulate_live_match(self, interaction, player_a, player_b, ovr_a, ovr_b, squad_a, squad_b, message=None, is_series_submatch: bool = False):
+        try:
+            # Refresh match lock for active simulation (240s)
+            ACTIVE_MATCH_USERS.add(player_a.id, duration=240)
+            ACTIVE_MATCH_USERS.add(player_b.id, duration=240)
+
             # 1. Extract players, positions, and sectoral power ratings
             inv_a = await database.get_inventory(player_a.id) or []
             inv_b = await database.get_inventory(player_b.id) or []
@@ -1881,8 +1920,9 @@ class MatchCog(commands.Cog):
             except Exception:
                 pass
         finally:
-            ACTIVE_MATCH_USERS.discard(player_a.id)
-            ACTIVE_MATCH_USERS.discard(player_b.id)
+            if not is_series_submatch:
+                ACTIVE_MATCH_USERS.discard(player_a.id)
+                ACTIVE_MATCH_USERS.discard(player_b.id)
 
     @app_commands.command(name="leaderboard", description="View Global Leaderboards (Fans, Coins, or Vouchers)")
     @app_commands.choices(category=[

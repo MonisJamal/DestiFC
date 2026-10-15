@@ -22,6 +22,97 @@ _USER_INVENTORY_LIGHT_CACHE = {}  # {user_id: {"data": light_list, "exp": timest
 _USER_SQUAD_CACHE = {}          # {user_id: {"data": dict, "exp": timestamp}}
 _USER_CACHE = {}                # {user_id: {"data": dict, "exp": timestamp}}
 
+class ActiveMatchTracker:
+    """
+    Centralized, thread-safe, and auto-expiring tracker for players actively in a match,
+    draft battle, shootout, or pending challenge across the entire DestiFC bot.
+    """
+    def __init__(self, default_timeout_secs: int = 360):
+        self._locks = {}  # user_id -> expiration_timestamp
+        self.default_timeout_secs = default_timeout_secs
+
+    def _cleanup(self):
+        now = time.time()
+        expired = [uid for uid, exp in self._locks.items() if now > exp]
+        for uid in expired:
+            self._locks.pop(uid, None)
+
+    def __contains__(self, user_id) -> bool:
+        self._cleanup()
+        try:
+            return int(user_id) in self._locks
+        except (ValueError, TypeError):
+            return False
+
+    def is_active(self, user_id) -> bool:
+        self._cleanup()
+        try:
+            return int(user_id) in self._locks
+        except (ValueError, TypeError):
+            return False
+
+    def add(self, user_id, duration: int = None):
+        self._cleanup()
+        try:
+            dur = duration if duration is not None else self.default_timeout_secs
+            self._locks[int(user_id)] = time.time() + dur
+        except (ValueError, TypeError):
+            pass
+
+    def discard(self, user_id):
+        try:
+            self._locks.pop(int(user_id), None)
+        except (ValueError, TypeError):
+            pass
+
+    def remove(self, user_id):
+        self.discard(user_id)
+
+    def acquire(self, user_id, duration: int = None) -> bool:
+        """
+        Atomically checks and locks a single user if not already in an active match.
+        Returns True if acquired, False if user was already busy.
+        """
+        self._cleanup()
+        try:
+            uid = int(user_id)
+        except (ValueError, TypeError):
+            return False
+        if uid in self._locks:
+            return False
+        dur = duration if duration is not None else self.default_timeout_secs
+        self._locks[uid] = time.time() + dur
+        return True
+
+    def acquire_both(self, user_a_id, user_b_id, duration: int = None) -> bool:
+        """
+        Atomically checks and locks two players if neither is already in an active match.
+        Returns True if acquired, False if either user was already busy.
+        """
+        self._cleanup()
+        try:
+            ua = int(user_a_id)
+            ub = int(user_b_id)
+        except (ValueError, TypeError):
+            return False
+        if ua in self._locks or ub in self._locks:
+            return False
+        dur = duration if duration is not None else self.default_timeout_secs
+        exp = time.time() + dur
+        self._locks[ua] = exp
+        self._locks[ub] = exp
+        return True
+
+    def release(self, *user_ids):
+        for uid in user_ids:
+            if uid is not None:
+                self.discard(uid)
+
+    def clear(self):
+        self._locks.clear()
+
+ACTIVE_MATCH_USERS = ActiveMatchTracker()
+
 import asyncio
 
 # --- Cache Garbage Collection Task ---
@@ -57,6 +148,7 @@ def flush_all_caches():
     _USER_INVENTORY_LIGHT_CACHE.clear()
     _USER_SQUAD_CACHE.clear()
     _USER_CACHE.clear()
+    ACTIVE_MATCH_USERS.clear()
     try:
         _BOT_CONFIG_CACHE = None  # noqa: F841 – reset handled via global
         _BOT_CONFIG_CACHE_EXP = 0
