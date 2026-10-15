@@ -77,21 +77,29 @@ async def player_card_autocomplete(interaction: discord.Interaction, current: st
         if not cards:
             return []
             
-        choices = []
+        target_pos_raw = getattr(interaction.namespace, 'position', '') or ''
+        clean_target = ''.join([c for c in str(target_pos_raw) if not c.isdigit()]).strip().upper() if target_pos_raw else ''
+        
+        enriched_choices = []
         for p in cards:
-            try:
-                pos = extract_pos(p)
-            except Exception:
-                pos = "ST"
             p_name = p.get('player_name', 'Player')
             ovr = p.get('ovr', 100)
             pid = p.get('id', 0)
+            main_p, alts = get_player_official_positions(p)
             
-            label = f"{p_name} ({pos}) — {ovr} OVR [ID:{pid}]"
-            choices.append(app_commands.Choice(name=label[:100], value=str(pid)))
-            if len(choices) >= 25:
-                break
-        return choices
+            is_main_match = bool(clean_target and clean_target == main_p)
+            is_alt_match = bool(clean_target and clean_target in alts)
+            
+            alt_txt = f" | Alt: {', '.join(alts[:2])}" if alts else ""
+            prefix = "⭐ " if is_main_match else ("🔄 " if is_alt_match else "")
+            label = f"{prefix}{p_name} ({main_p}{alt_txt}) — {ovr} OVR [ID:{pid}]"
+            
+            # Sort score: main match first (0), alt match second (1), other (2), then OVR descending
+            score = 0 if is_main_match else (1 if is_alt_match else 2)
+            enriched_choices.append((score, -ovr, app_commands.Choice(name=label[:100], value=str(pid))))
+            
+        enriched_choices.sort(key=lambda x: (x[0], x[1]))
+        return [item[2] for item in enriched_choices[:25]]
     except Exception as e:
         print("Error in player_card_autocomplete:", e)
         return []
@@ -399,13 +407,12 @@ class SquadCog(commands.Cog):
             else:
                 new_players[new_pos] = None
                 
-        # For remaining old players, try to find an empty slot that matches their position loosely
+        # For remaining old players, try to find an empty slot that matches their position or alternate positions
         for old_pos, p_data in old_players.items():
             if p_data:
                 for new_pos in positions:
                     if not new_players[new_pos]:
-                        # Basic position match (e.g. CB1 and CB2)
-                        if old_pos[:2] == new_pos[:2]:
+                        if is_position_compatible(old_pos, new_pos) or old_pos[:2] == new_pos[:2]:
                             new_players[new_pos] = p_data
                             kept_count += 1
                             break
@@ -530,13 +537,17 @@ class SquadCog(commands.Cog):
                     candidates.append(p)
 
             if candidates:
+                # Prioritize candidates that are eligible for the target slot
+                eligible_candidates = [p for p in candidates if check_player_position_eligibility(p, target_pos)[0]]
+                candidates_to_pick = eligible_candidates if eligible_candidates else candidates
+
                 if target_ovr:
-                    exact_ovr = [p for p in candidates if p.get('ovr') == target_ovr]
+                    exact_ovr = [p for p in candidates_to_pick if p.get('ovr') == target_ovr]
                     if exact_ovr:
                         player_row = exact_ovr[0]
                 if not player_row:
-                    candidates.sort(key=lambda x: x.get('ovr', 0), reverse=True)
-                    player_row = candidates[0]
+                    candidates_to_pick.sort(key=lambda x: x.get('ovr', 0), reverse=True)
+                    player_row = candidates_to_pick[0]
                 
         if not player_row:
             return await interaction.followup.send(f"❌ Could not find a card matching '**{player}**' in your inventory.\nPlease check your `/club` or select from the autocomplete menu.", ephemeral=True)
@@ -551,11 +562,11 @@ class SquadCog(commands.Cog):
         clean_target = ''.join([c for c in str(target_pos) if not c.isdigit()]).strip().upper()
         
         if not is_eligible:
-            alt_str = ", ".join(alt_ps) if alt_ps else "None"
+            eligible_list = [main_p] + [a for a in alt_ps if a != main_p]
             return await interaction.followup.send(
                 f"❌ **Position Incompatible!** **{new_name}** cannot play as a **{clean_target}**.\n"
                 f"• Main Position: `{main_p}`\n"
-                f"• Eligible Positions: `{', '.join([main_p] + alt_ps)}`",
+                f"• Eligible Positions: `{', '.join(eligible_list)}`",
                 ephemeral=True
             )
 
@@ -654,7 +665,7 @@ class SquadCog(commands.Cog):
             for p in enriched:
                 if p['id'] in used_ids or p['player_name'] in used_names:
                     continue
-                if clean_slot in p['alt_positions']:
+                if clean_slot in p['alt_positions'] or check_player_position_eligibility(p, slot)[0]:
                     new_players[slot] = {
                         "inv_id": p['id'],
                         "name": p['player_name'],

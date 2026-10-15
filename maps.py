@@ -251,6 +251,7 @@ def get_club_display(player_data: dict) -> str:
 
 
 import json
+import re
 
 FAMOUS_PLAYER_POSITIONS = {
     # Defenders (CB / LB / RB / LWB / RWB)
@@ -385,20 +386,22 @@ def extract_pos(item) -> str:
 # Players play with 100% full OVR at their primary position, official potentialPositions, or natural alternate positions
 
 NATURAL_ALT_POSITIONS = {
-    "ST": ["CF"],
-    "LW": ["LM"],
-    "RW": ["RM"],
-    "LM": ["LW"],
-    "RM": ["RW"],
-    "LB": ["LWB"],
-    "RB": ["RWB"],
-    "CF": [],
-    "CAM": [],
-    "CM": [],
-    "CDM": [],
-    "CB": [],
-    "LWB": [],
-    "RWB": [],
+    "ST": ["CF", "LF", "RF"],
+    "CF": ["ST", "CAM", "LF", "RF"],
+    "LW": ["LM", "RW", "LF"],
+    "RW": ["RM", "LW", "RF"],
+    "LM": ["LW", "RM"],
+    "RM": ["RW", "LM"],
+    "CAM": ["CM", "CF"],
+    "CM": ["CAM", "CDM"],
+    "CDM": ["CM", "CB"],
+    "CB": ["CDM"],
+    "LB": ["LWB", "LM"],
+    "RB": ["RWB", "RM"],
+    "LWB": ["LB", "LM"],
+    "RWB": ["RB", "RM"],
+    "LF": ["LW", "CF", "ST", "CAM"],
+    "RF": ["RW", "CF", "ST", "CAM"],
     "GK": []
 }
 
@@ -436,17 +439,35 @@ def get_player_official_positions(player_item) -> tuple[str, list[str]]:
         or player_item.get('alternatePositions')
         or []
     )
-    if isinstance(alt_raw, str):
-        try: alt_raw = json.loads(alt_raw)
-        except Exception: alt_raw = [alt_raw]
     
+    raw_tokens = []
+    if isinstance(alt_raw, str):
+        try:
+            parsed = json.loads(alt_raw)
+            if isinstance(parsed, (list, tuple)):
+                raw_tokens.extend(parsed)
+            elif isinstance(parsed, str):
+                raw_tokens.extend(re.split(r'[,;/\s]+', parsed))
+            else:
+                raw_tokens.append(str(parsed))
+        except Exception:
+            raw_tokens.extend(re.split(r'[,;/\s]+', alt_raw))
+    elif isinstance(alt_raw, (list, tuple, set)):
+        for item in alt_raw:
+            if isinstance(item, str) and any(sep in item for sep in (',', ';', '/', ' ')):
+                raw_tokens.extend(re.split(r'[,;/\s]+', item))
+            else:
+                raw_tokens.append(item)
+    elif alt_raw:
+        raw_tokens.append(str(alt_raw))
+
     clean_alts = []
-    if isinstance(alt_raw, (list, tuple)):
-        for ap in alt_raw:
-            if ap:
-                clean_ap = ''.join([c for c in str(ap) if not c.isdigit()]).strip().upper()
-                if clean_ap and clean_ap != main_pos and clean_ap not in clean_alts:
-                    clean_alts.append(clean_ap)
+    for ap in raw_tokens:
+        if not ap:
+            continue
+        clean_ap = ''.join([c for c in str(ap) if c.isalpha()]).strip().upper()
+        if clean_ap and clean_ap != main_pos and clean_ap not in clean_alts:
+            clean_alts.append(clean_ap)
                     
     # 2. Append Natural Alternate Positions if not already included
     for nat_ap in NATURAL_ALT_POSITIONS.get(main_pos, []):
@@ -470,6 +491,13 @@ def check_player_position_eligibility(player_item, slot_pos: str) -> tuple[bool,
         return True, True
     if clean_slot in alts:
         return True, False
+
+    # Forward flex compatibility for 3-4-2-1 LF and RF slots
+    if clean_slot == "LF" and (main_pos in ("LW", "CF", "ST") or any(a in ("LW", "CF", "ST") for a in alts)):
+        return True, False
+    if clean_slot == "RF" and (main_pos in ("RW", "CF", "ST") or any(a in ("RW", "CF", "ST") for a in alts)):
+        return True, False
+
     return False, False
 
 def is_position_compatible(player_item_or_pos, slot_pos: str) -> bool:
@@ -484,7 +512,9 @@ def is_position_compatible(player_item_or_pos, slot_pos: str) -> bool:
     # String fallback
     clean_slot = ''.join([c for c in str(slot_pos) if not c.isdigit()]).strip().upper()
     clean_nat = ''.join([c for c in str(player_item_or_pos) if not c.isdigit()]).strip().upper()
-    return clean_nat == clean_slot
+    if clean_nat == clean_slot:
+        return True
+    return clean_slot in NATURAL_ALT_POSITIONS.get(clean_nat, [])
 
 # ================= Tactics & Formations Synergy =================
 TACTICS = {

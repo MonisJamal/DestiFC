@@ -17,9 +17,10 @@ _DRAFTS_CACHE = None
 _DRAFTS_CACHE_EXP = 0
 _LAYOUTS_CACHE = None
 _LAYOUTS_CACHE_EXP = 0
-_USER_INVENTORY_CACHE = {}  # {user_id: {"data": list, "exp": timestamp}}
-_USER_SQUAD_CACHE = {}      # {user_id: {"data": dict, "exp": timestamp}}
-_USER_CACHE = {}            # {user_id: {"data": dict, "exp": timestamp}}
+_USER_INVENTORY_CACHE = {}        # {user_id: {"data": full_list, "exp": timestamp}}
+_USER_INVENTORY_LIGHT_CACHE = {}  # {user_id: {"data": light_list, "exp": timestamp}}
+_USER_SQUAD_CACHE = {}          # {user_id: {"data": dict, "exp": timestamp}}
+_USER_CACHE = {}                # {user_id: {"data": dict, "exp": timestamp}}
 
 import asyncio
 
@@ -38,6 +39,8 @@ async def cache_eviction_loop():
             
         expired_inv = [uid for uid, data in _USER_INVENTORY_CACHE.items() if now - data['exp'] > 120]
         for uid in expired_inv: del _USER_INVENTORY_CACHE[uid]
+        expired_light = [uid for uid, data in _USER_INVENTORY_LIGHT_CACHE.items() if now - data['exp'] > 120]
+        for uid in expired_light: del _USER_INVENTORY_LIGHT_CACHE[uid]
         
         print(f"[Memory] Garbage Collected Caches: Removed {len(expired_users)} users, {len(expired_squads)} squads, {len(expired_inv)} inventories.")
 
@@ -51,6 +54,7 @@ def flush_all_caches():
     _LAYOUTS_CACHE = None
     _LAYOUTS_CACHE_EXP = 0
     _USER_INVENTORY_CACHE.clear()
+    _USER_INVENTORY_LIGHT_CACHE.clear()
     _USER_SQUAD_CACHE.clear()
     _USER_CACHE.clear()
     try:
@@ -72,6 +76,7 @@ def flush_all_caches():
 def invalidate_user_cache(user_id: int):
     """Evicts in-memory cached inventory, squad, and user balances for a user."""
     _USER_INVENTORY_CACHE.pop(user_id, None)
+    _USER_INVENTORY_LIGHT_CACHE.pop(user_id, None)
     _USER_SQUAD_CACHE.pop(user_id, None)
     _USER_CACHE.pop(user_id, None)
 
@@ -268,6 +273,7 @@ async def get_user_rank(user_id: int) -> dict:
 async def reset_user(user_id: int):
     """Completely wipes all data for a specific user across all tables and clears RAM caches."""
     _USER_INVENTORY_CACHE.pop(user_id, None)
+    _USER_INVENTORY_LIGHT_CACHE.pop(user_id, None)
     _USER_SQUAD_CACHE.pop(user_id, None)
     _USER_CACHE.pop(user_id, None)
     p = await get_db()
@@ -289,6 +295,7 @@ async def add_players_to_inventory_batch(user_id: int, player_list: list):
     if not player_list:
         return
     _USER_INVENTORY_CACHE.pop(user_id, None)
+    _USER_INVENTORY_LIGHT_CACHE.pop(user_id, None)
     p = await get_db()
     records = []
     for player_data in player_list:
@@ -309,13 +316,22 @@ async def add_players_to_inventory_batch(user_id: int, player_list: list):
         print(f"[Inventory] Error enforcing limit for {user_id}: {e}")
 
 
-def _cache_inventory(user_id: int, inv: list, now: float):
-    if len(_USER_INVENTORY_CACHE) >= 50:
-        try:
-            _USER_INVENTORY_CACHE.pop(next(iter(_USER_INVENTORY_CACHE)), None)
-        except Exception:
-            pass
-    _USER_INVENTORY_CACHE[user_id] = {"data": inv, "exp": now}
+def _cache_inventory(user_id: int, inv: list, now: float, is_light: bool = False):
+    if is_light:
+        if len(_USER_INVENTORY_LIGHT_CACHE) >= 50:
+            try:
+                _USER_INVENTORY_LIGHT_CACHE.pop(next(iter(_USER_INVENTORY_LIGHT_CACHE)), None)
+            except Exception:
+                pass
+        _USER_INVENTORY_LIGHT_CACHE[user_id] = {"data": inv, "exp": now}
+    else:
+        if len(_USER_INVENTORY_CACHE) >= 50:
+            try:
+                _USER_INVENTORY_CACHE.pop(next(iter(_USER_INVENTORY_CACHE)), None)
+            except Exception:
+                pass
+        _USER_INVENTORY_CACHE[user_id] = {"data": inv, "exp": now}
+        _USER_INVENTORY_LIGHT_CACHE[user_id] = {"data": inv, "exp": now}
 
 async def get_inventory_light(user_id: int) -> list:
     """Ultra fast inventory query without transferring heavy player_data JSON."""
@@ -324,13 +340,17 @@ async def get_inventory_light(user_id: int) -> list:
         cached = _USER_INVENTORY_CACHE[user_id]
         if now - cached['exp'] < 300:
             return cached['data']
+    if user_id in _USER_INVENTORY_LIGHT_CACHE:
+        cached = _USER_INVENTORY_LIGHT_CACHE[user_id]
+        if now - cached['exp'] < 300:
+            return cached['data']
     p = await get_db()
     rows = await p.fetch(
         'SELECT id, user_id, player_id, player_name, ovr, position, locked FROM inventory WHERE user_id = $1 ORDER BY ovr DESC, id DESC',
         user_id
     )
     inv = [dict(r) for r in rows]
-    _cache_inventory(user_id, inv, now)
+    _cache_inventory(user_id, inv, now, is_light=True)
     return inv
 
 async def get_inventory(user_id: int, full: bool = True) -> list:
@@ -338,14 +358,17 @@ async def get_inventory(user_id: int, full: bool = True) -> list:
     if user_id in _USER_INVENTORY_CACHE:
         cached = _USER_INVENTORY_CACHE[user_id]
         if now - cached['exp'] < 120:
-            return cached['data']
+            data = cached['data']
+            # Guarantee player_data is present if full data is requested
+            if not full or not data or 'player_data' in data[0]:
+                return data
     p = await get_db()
     rows = await p.fetch(
         'SELECT id, user_id, player_id, player_name, ovr, position, locked, player_data FROM inventory WHERE user_id = $1 ORDER BY ovr DESC, id DESC',
         user_id
     )
     inv = [dict(r) for r in rows]
-    _cache_inventory(user_id, inv, now)
+    _cache_inventory(user_id, inv, now, is_light=False)
     return inv
 
 async def get_inventory_autocomplete(user_id: int, search: str = "") -> list:
@@ -355,40 +378,42 @@ async def get_inventory_autocomplete(user_id: int, search: str = "") -> list:
     # Check in-memory inventory cache first for 0ms instantaneous autocomplete response
     if user_id in _USER_INVENTORY_CACHE:
         cached = _USER_INVENTORY_CACHE[user_id]
-        if now - cached['exp'] < 20:
+        if now - cached['exp'] < 120:
             inv = cached['data']
-            if clean_search:
-                results = [
-                    p for p in inv 
-                    if clean_search in str(p.get('player_name', '')).lower() 
-                    or clean_search in str(p.get('id', ''))
-                ]
-            else:
-                results = inv
-            return results[:25]
+            if not inv or 'player_data' in inv[0]:
+                if clean_search:
+                    results = [
+                        p for p in inv 
+                        if clean_search in str(p.get('player_name', '')).lower() 
+                        or clean_search in str(p.get('id', ''))
+                    ]
+                else:
+                    results = inv
+                return results[:25]
 
     p = await get_db()
     try:
         if clean_search:
             rows = await asyncio.wait_for(p.fetch(
-                '''SELECT id, player_name, ovr, player_data, locked 
+                '''SELECT id, player_name, ovr, position, player_data, locked 
                    FROM inventory 
                    WHERE user_id = $1 AND (player_name ILIKE $2 OR id::text LIKE $2) 
                    ORDER BY ovr DESC, id DESC 
                    LIMIT 25''',
                 user_id, f"%{clean_search}%"
-            ), timeout=1.8)
+            ), timeout=2.5)
         else:
             rows = await asyncio.wait_for(p.fetch(
-                '''SELECT id, player_name, ovr, player_data, locked 
+                '''SELECT id, player_name, ovr, position, player_data, locked 
                    FROM inventory 
                    WHERE user_id = $1 
                    ORDER BY ovr DESC, id DESC 
                    LIMIT 25''',
                 user_id
-            ), timeout=1.8)
+            ), timeout=2.5)
         return [dict(r) for r in rows]
-    except Exception:
+    except Exception as e:
+        print(f"[Autocomplete] Warning fetching inventory for {user_id}: {e}")
         return []
 
 async def get_inventory_size(user_id: int) -> int:
@@ -400,6 +425,7 @@ async def remove_players_from_inventory(user_id: int, inventory_ids: list):
     if not inventory_ids:
         return
     _USER_INVENTORY_CACHE.pop(user_id, None)
+    _USER_INVENTORY_LIGHT_CACHE.pop(user_id, None)
     p = await get_db()
     int_ids = [int(x) for x in inventory_ids]
     await p.execute(
@@ -536,11 +562,13 @@ async def get_player_by_inv_id(user_id: int, inv_id: int):
 
 async def lock_player(user_id: int, inv_id: int):
     _USER_INVENTORY_CACHE.pop(user_id, None)
+    _USER_INVENTORY_LIGHT_CACHE.pop(user_id, None)
     p = await get_db()
     await p.execute('UPDATE inventory SET locked = 1 WHERE id = $1 AND user_id = $2', int(inv_id), user_id)
 
 async def unlock_player(user_id: int, inv_id: int):
     _USER_INVENTORY_CACHE.pop(user_id, None)
+    _USER_INVENTORY_LIGHT_CACHE.pop(user_id, None)
     p = await get_db()
     await p.execute('UPDATE inventory SET locked = 0 WHERE id = $1 AND user_id = $2', int(inv_id), user_id)
 
