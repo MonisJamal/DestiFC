@@ -1035,7 +1035,11 @@ class MatchCog(commands.Cog):
                     return {
                         "is_gk": True,
                         "div": div, "pos_stat": pos_stat, "han": han, "ref": ref, "kic": kic, "phy": phy,
+                        "gkd": int(st.get('gkd') or div),
+                        "gkp": int(st.get('gkp') or pos_stat),
+                        "ref_detail": int(st.get('ref') or ref),
                         "pac": kic, "sho": 30, "pas": kic, "dri": 40, "def_stat": 30,
+                        "fin": 10, "spd": kic, "spa": kic, "mrk": 10, "stt": 10,
                         "stat_rating": stat_rating
                     }
                 else:
@@ -1090,6 +1094,11 @@ class MatchCog(commands.Cog):
                     return {
                         "is_gk": False,
                         "pac": pac, "sho": sho, "pas": pas, "dri": dri, "def_stat": def_stat, "phy": phy,
+                        "fin": int(st.get('fin') or sho),
+                        "spd": int(st.get('spd') or pac),
+                        "spa": int(st.get('spa') or pas),
+                        "mrk": int(st.get('mrk') or def_stat),
+                        "stt": int(st.get('stt') or def_stat),
                         "stat_rating": stat_rating
                     }
 
@@ -1195,6 +1204,9 @@ class MatchCog(commands.Cog):
                         "dri": p_stats["dri"],
                         "def_stat": p_stats["def_stat"],
                         "phy": p_stats["phy"],
+                        "fin": p_stats.get("fin", p_stats["sho"]),
+                        "spd": p_stats.get("spd", p_stats["pac"]),
+                        "spa": p_stats.get("spa", p_stats["pas"]),
                         "is_custom": is_custom,
                         "boost_val": boost_val,
                         "perks": card_perks
@@ -1530,7 +1542,7 @@ class MatchCog(commands.Cog):
                         cands, ptype = (s_a["atk"] or outfield_a), "atk"
                     cands = [p for p in cands if p.get('pos') != 'GK'] or outfield_a
                     # Weight directly by RenderZ shooting & finishing attributes
-                    weights = [max(1.0, (float(p.get('sho', p.get('ovr', 100))) / 50.0) ** 3.0) for p in cands]
+                    weights = [max(1.0, (float(p.get('fin', p.get('sho', p.get('ovr', 100)))) / 50.0) ** 3.0) for p in cands]
                     scorer_obj = random.choices(cands, weights=weights, k=1)[0]
                 
                 # Strict absolute guard: GKs never score
@@ -1546,7 +1558,7 @@ class MatchCog(commands.Cog):
                     a_cands = [p for p in assists_pool_a if p != scorer_obj["name"]]
                     if a_cands:
                         cand_objs = [p for p in starters_a if p['name'] in a_cands and p.get('pos') != 'GK'] or starters_a
-                        a_weights = [max(1.0, (float(p.get('pas', p.get('ovr', 100))) / 50.0) ** 2.5) for p in cand_objs]
+                        a_weights = [max(1.0, (float(p.get('spa', p.get('pas', p.get('ovr', 100)))) / 50.0) ** 2.5) for p in cand_objs]
                         for w_i, ap in enumerate(cand_objs):
                             if ap.get('perks', {}).get('enabled') and ap.get('perks', {}).get('playmaker'):
                                 a_weights[w_i] *= 2.5
@@ -1585,7 +1597,7 @@ class MatchCog(commands.Cog):
                         cands, ptype = (s_b["atk"] or outfield_b), "atk"
                     cands = [p for p in cands if p.get('pos') != 'GK'] or outfield_b
                     # Weight directly by RenderZ shooting & finishing attributes
-                    weights = [max(1.0, (float(p.get('sho', p.get('ovr', 100))) / 50.0) ** 3.0) for p in cands]
+                    weights = [max(1.0, (float(p.get('fin', p.get('sho', p.get('ovr', 100)))) / 50.0) ** 3.0) for p in cands]
                     scorer_obj = random.choices(cands, weights=weights, k=1)[0]
                 
                 # Strict absolute guard: GKs never score
@@ -1600,7 +1612,7 @@ class MatchCog(commands.Cog):
                     b_cands = [p for p in assists_pool_b if p != scorer_obj["name"]]
                     if b_cands:
                         cand_objs = [p for p in starters_b if p['name'] in b_cands and p.get('pos') != 'GK'] or starters_b
-                        b_weights = [max(1.0, (float(p.get('pas', p.get('ovr', 100))) / 50.0) ** 2.5) for p in cand_objs]
+                        b_weights = [max(1.0, (float(p.get('spa', p.get('pas', p.get('ovr', 100)))) / 50.0) ** 2.5) for p in cand_objs]
                         for w_i, bp in enumerate(cand_objs):
                             if bp.get('perks', {}).get('enabled') and bp.get('perks', {}).get('playmaker'):
                                 b_weights[w_i] *= 2.5
