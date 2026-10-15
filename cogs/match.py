@@ -933,6 +933,87 @@ class MatchCog(commands.Cog):
             gp_cfg = await database.get_gameplay_config()
             default_custom_boost = float(gp_cfg.get('custom_card_match_boost', 1.15))
 
+            def extract_player_stats(pd_dict, p_pos, eff_ovr):
+                """Extract authentic RenderZ stats (avgStats and detailed stats) for H2H match engine."""
+                p_pos = (p_pos or 'ST').upper()
+                is_gk = (p_pos == 'GK')
+                
+                avg = pd_dict.get('avgStats') or {} if isinstance(pd_dict, dict) else {}
+                st = pd_dict.get('stats') or {} if isinstance(pd_dict, dict) else {}
+                
+                a1 = avg.get('avg1')
+                a2 = avg.get('avg2')
+                a3 = avg.get('avg3')
+                a4 = avg.get('avg4')
+                a5 = avg.get('avg5')
+                a6 = avg.get('avg6')
+                
+                if is_gk:
+                    div = int(a1 or st.get('gkd') or (eff_ovr + 4))
+                    pos_stat = int(a2 or st.get('gkp') or (eff_ovr + 3))
+                    han = int(a3 or st.get('han') or (eff_ovr + 2))
+                    ref = int(a4 or st.get('ref') or (eff_ovr + 5))
+                    kic = int(a5 or st.get('gkk') or max(50, eff_ovr - 4))
+                    phy = int(a6 or st.get('str') or st.get('phy') or (eff_ovr + 1))
+                    
+                    # Goalkeeper sector power: heavy emphasis on Reflexes & Diving
+                    stat_rating = (ref * 0.40) + (div * 0.30) + (pos_stat * 0.20) + (han * 0.10)
+                    return {
+                        "is_gk": True,
+                        "div": div, "pos_stat": pos_stat, "han": han, "ref": ref, "kic": kic, "phy": phy,
+                        "pac": kic, "sho": 30, "pas": kic, "dri": 40, "def_stat": 30,
+                        "stat_rating": stat_rating
+                    }
+                else:
+                    if p_pos in ['ST', 'CF']:
+                        d1, d2, d3, d4, d5, d6 = 2, 5, -8, 2, -45, 1
+                    elif p_pos in ['LW', 'RW', 'LF', 'RF']:
+                        d1, d2, d3, d4, d5, d6 = 6, 2, -2, 6, -45, -6
+                    elif p_pos == 'CAM':
+                        d1, d2, d3, d4, d5, d6 = -1, 2, 5, 5, -35, -4
+                    elif p_pos == 'CM':
+                        d1, d2, d3, d4, d5, d6 = -2, 0, 4, 2, -1, 1
+                    elif p_pos in ['LM', 'RM']:
+                        d1, d2, d3, d4, d5, d6 = 5, -1, 3, 5, -20, -3
+                    elif p_pos == 'CDM':
+                        d1, d2, d3, d4, d5, d6 = -4, -12, 2, 0, 5, 5
+                    elif p_pos == 'CB':
+                        d1, d2, d3, d4, d5, d6 = -4, -50, -14, -10, 6, 6
+                    elif p_pos in ['LB', 'RB', 'LWB', 'RWB']:
+                        d1, d2, d3, d4, d5, d6 = 5, -25, 0, 1, 3, 2
+                    else:
+                        d1, d2, d3, d4, d5, d6 = 0, 0, 0, 0, 0, 0
+
+                    pac = int(a1 or st.get('spd') or st.get('pac') or max(40, eff_ovr + d1))
+                    sho = int(a2 or st.get('sho') or st.get('fin') or max(40, eff_ovr + d2))
+                    pas = int(a3 or st.get('spa') or st.get('pas') or max(40, eff_ovr + d3))
+                    dri = int(a4 or st.get('dri') or st.get('agi') or max(40, eff_ovr + d4))
+                    def_stat = int(a5 or st.get('mrk') or st.get('stt') or st.get('def') or max(30, eff_ovr + d5))
+                    phy = int(a6 or st.get('str') or st.get('phy') or max(40, eff_ovr + d6))
+
+                    if p_pos in ['ST', 'CF', 'LF', 'RF']:
+                        stat_rating = (sho * 0.45) + (pac * 0.30) + (dri * 0.15) + (phy * 0.10)
+                    elif p_pos in ['LW', 'RW']:
+                        stat_rating = (pac * 0.40) + (dri * 0.25) + (sho * 0.25) + (pas * 0.10)
+                    elif p_pos == 'CAM':
+                        stat_rating = (pas * 0.35) + (dri * 0.30) + (sho * 0.20) + (pac * 0.15)
+                    elif p_pos == 'CDM':
+                        stat_rating = (def_stat * 0.35) + (phy * 0.30) + (pas * 0.20) + (pac * 0.15)
+                    elif p_pos in ['CM', 'LM', 'RM']:
+                        stat_rating = (pas * 0.30) + (dri * 0.25) + (pac * 0.20) + (def_stat * 0.15) + (phy * 0.10)
+                    elif p_pos == 'CB':
+                        stat_rating = (def_stat * 0.45) + (phy * 0.35) + (pac * 0.10) + (pas * 0.10)
+                    elif p_pos in ['LB', 'RB', 'LWB', 'RWB']:
+                        stat_rating = (def_stat * 0.35) + (pac * 0.30) + (phy * 0.15) + (pas * 0.10) + (dri * 0.10)
+                    else:
+                        stat_rating = eff_ovr
+
+                    return {
+                        "is_gk": False,
+                        "pac": pac, "sho": sho, "pas": pas, "dri": dri, "def_stat": def_stat, "phy": phy,
+                        "stat_rating": stat_rating
+                    }
+
             def get_team_sectors(squad, team_avg_ovr):
                 atk, mid, defn, gk = [], [], [], []
                 starters = []
@@ -983,6 +1064,8 @@ class MatchCog(commands.Cog):
                             # Inherit buffed_ovr and perks from live catalog if missing or updated
                             if not pd.get('buffed_ovr') and cat_pd.get('buffed_ovr'):
                                 pd['buffed_ovr'] = cat_pd.get('buffed_ovr')
+                            if not pd.get('avgStats') and cat_pd.get('avgStats'):
+                                pd['avgStats'] = cat_pd.get('avgStats')
                             if cat_pd.get('perks'):
                                 pd['perks'] = cat_pd.get('perks')
 
@@ -1014,14 +1097,25 @@ class MatchCog(commands.Cog):
                         elif isinstance(raw_perks, dict):
                             card_perks = raw_perks
 
+                    # Extract authentic RenderZ stats & role ratings
+                    p_stats = extract_player_stats(pd, pos, effective_ovr)
+
                     # Store clean base_ovr for stats, records, and displays;
-                    # use effective_ovr strictly for match engine physics calculations
+                    # use authentic RenderZ stat_rating and stats for match physics
                     entry = {
                         "name": name,
                         "pos": pos,
                         "raw_pos": pos_raw,
                         "ovr": base_ovr,
                         "effective_ovr": effective_ovr,
+                        "stat_rating": p_stats["stat_rating"],
+                        "stats": p_stats,
+                        "pac": p_stats["pac"],
+                        "sho": p_stats["sho"],
+                        "pas": p_stats["pas"],
+                        "dri": p_stats["dri"],
+                        "def_stat": p_stats["def_stat"],
+                        "phy": p_stats["phy"],
                         "is_custom": is_custom,
                         "boost_val": boost_val,
                         "perks": card_perks
@@ -1038,13 +1132,13 @@ class MatchCog(commands.Cog):
                     else:
                         mid.append(entry)
                 
-                # Sector powers calculated directly from individual players using effective_ovr
-                atk_p = sum(p.get('effective_ovr', p['ovr']) for p in atk) / len(atk) if atk else team_avg_ovr
-                mid_p = sum(p.get('effective_ovr', p['ovr']) for p in mid) / len(mid) if mid else team_avg_ovr
-                def_p = sum(p.get('effective_ovr', p['ovr']) for p in defn) / len(defn) if defn else team_avg_ovr
+                # Sector powers calculated directly from individual players using their RenderZ stat ratings
+                atk_p = sum(p.get('stat_rating', p['effective_ovr']) for p in atk) / len(atk) if atk else team_avg_ovr
+                mid_p = sum(p.get('stat_rating', p['effective_ovr']) for p in mid) / len(mid) if mid else team_avg_ovr
+                def_p = sum(p.get('stat_rating', p['effective_ovr']) for p in defn) / len(defn) if defn else team_avg_ovr
                 
-                # Goalkeeper power directly from keeper
-                gk_p = gk[0].get('effective_ovr', gk[0]['ovr']) if gk else team_avg_ovr
+                # Goalkeeper power directly from keeper's RenderZ reflexes & diving
+                gk_p = gk[0].get('stat_rating', gk[0]['effective_ovr']) if gk else team_avg_ovr
 
                 # Dynamic Custom Perks applied in real time from panel configuration
                 for p_entry in starters:
@@ -1240,6 +1334,9 @@ class MatchCog(commands.Cog):
                     assists = team_assists.get(p_name, 0)
                     
                     base = 6.8 + random.uniform(-0.2, 0.3)
+                    stat_r = float(s.get('stat_rating', s.get('effective_ovr', s['ovr'])))
+                    base += (stat_r - 100.0) * 0.015
+
                     if is_winning_team: base += 0.7
                     elif is_draw_match: base += 0.2
                     else: base -= 0.5
@@ -1264,20 +1361,24 @@ class MatchCog(commands.Cog):
             threat_a = (s_a["atk_p"] * 0.60 + s_a["mid_p"] * 0.40) - (s_b["def_p"] * 0.60 + s_b["gk_p"] * 0.40)
             threat_b = (s_b["atk_p"] * 0.60 + s_b["mid_p"] * 0.40) - (s_a["def_p"] * 0.60 + s_a["gk_p"] * 0.40)
 
+            # Goalkeeper resistance factor based on opponent keeper's RenderZ reflexes & diving
+            gk_resist_b = max(-0.08, min(0.08, (s_b["gk_p"] - s_a["atk_p"]) * 0.004))
+            gk_resist_a = max(-0.08, min(0.08, (s_a["gk_p"] - s_b["atk_p"]) * 0.004))
+
             # Balanced exciting chances (5 to 8 chances per team)
             chances_a = max(4, int(5 + (threat_a * 0.15) + random.randint(0, 2)))
             chances_b = max(4, int(5 + (threat_b * 0.15) + random.randint(0, 2)))
 
             goals_a = 0
             for _ in range(chances_a):
-                p_score = 0.38 + (threat_a * 0.015) + random.uniform(-0.04, 0.04)
-                if random.random() < max(0.18, min(0.58, p_score)):
+                p_score = 0.38 + (threat_a * 0.015) - gk_resist_b + random.uniform(-0.03, 0.03)
+                if random.random() < max(0.16, min(0.60, p_score)):
                     goals_a += 1
 
             goals_b = 0
             for _ in range(chances_b):
-                p_score = 0.38 + (threat_b * 0.015) + random.uniform(-0.04, 0.04)
-                if random.random() < max(0.18, min(0.58, p_score)):
+                p_score = 0.38 + (threat_b * 0.015) - gk_resist_a + random.uniform(-0.03, 0.03)
+                if random.random() < max(0.16, min(0.60, p_score)):
                     goals_b += 1
 
             # Realistic exciting scoreline cap: 5 goals max (allowing thrillers like 4-3, 5-4, 5-3, 3-2)
@@ -1349,7 +1450,9 @@ class MatchCog(commands.Cog):
                     else:
                         cands, ptype = (s_a["atk"] or outfield_a), "atk"
                     cands = [p for p in cands if p.get('pos') != 'GK'] or outfield_a
-                    scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
+                    # Weight directly by RenderZ shooting & finishing attributes
+                    weights = [max(1.0, (float(p.get('sho', p.get('ovr', 100))) / 50.0) ** 3.0) for p in cands]
+                    scorer_obj = random.choices(cands, weights=weights, k=1)[0]
                 
                 # Strict absolute guard: GKs never score
                 if scorer_obj.get("pos") == "GK":
@@ -1358,12 +1461,18 @@ class MatchCog(commands.Cog):
                 # If late drama, push the last goal to 88-90'
                 min_g = random.randint(87, 90) if (late_drama and idx == goals_a - 1) else random.randint(7, 86)
                 
-                # Assign assister (70% probability if candidates exist)
+                # Assign assister (75% probability if candidates exist, weighted by RenderZ passing stats)
                 assister = None
                 if random.random() < 0.75:
                     a_cands = [p for p in assists_pool_a if p != scorer_obj["name"]]
                     if a_cands:
-                        assister = random.choice(a_cands)
+                        cand_objs = [p for p in starters_a if p['name'] in a_cands and p.get('pos') != 'GK'] or starters_a
+                        a_weights = [max(1.0, (float(p.get('pas', p.get('ovr', 100))) / 50.0) ** 2.5) for p in cand_objs]
+                        for w_i, ap in enumerate(cand_objs):
+                            if ap.get('perks', {}).get('enabled') and ap.get('perks', {}).get('playmaker'):
+                                a_weights[w_i] *= 2.5
+                        chosen_assister = random.choices(cand_objs, weights=a_weights, k=1)[0]
+                        assister = chosen_assister['name']
                         team_a_assists[assister] = team_a_assists.get(assister, 0) + 1
 
                 all_goals.append((player_a, min_g, scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype, assister))
@@ -1396,7 +1505,9 @@ class MatchCog(commands.Cog):
                     else:
                         cands, ptype = (s_b["atk"] or outfield_b), "atk"
                     cands = [p for p in cands if p.get('pos') != 'GK'] or outfield_b
-                    scorer_obj = max(random.sample(cands, min(3, len(cands))), key=lambda x: x["ovr"] + random.randint(-2, 3))
+                    # Weight directly by RenderZ shooting & finishing attributes
+                    weights = [max(1.0, (float(p.get('sho', p.get('ovr', 100))) / 50.0) ** 3.0) for p in cands]
+                    scorer_obj = random.choices(cands, weights=weights, k=1)[0]
                 
                 # Strict absolute guard: GKs never score
                 if scorer_obj.get("pos") == "GK":
@@ -1404,12 +1515,18 @@ class MatchCog(commands.Cog):
 
                 min_g = random.randint(87, 90) if (late_drama and idx == goals_b - 1) else random.randint(7, 86)
                 
-                # Assign assister (70% probability if candidates exist)
+                # Assign assister (75% probability if candidates exist, weighted by RenderZ passing stats)
                 assister = None
                 if random.random() < 0.75:
                     b_cands = [p for p in assists_pool_b if p != scorer_obj["name"]]
                     if b_cands:
-                        assister = random.choice(b_cands)
+                        cand_objs = [p for p in starters_b if p['name'] in b_cands and p.get('pos') != 'GK'] or starters_b
+                        b_weights = [max(1.0, (float(p.get('pas', p.get('ovr', 100))) / 50.0) ** 2.5) for p in cand_objs]
+                        for w_i, bp in enumerate(cand_objs):
+                            if bp.get('perks', {}).get('enabled') and bp.get('perks', {}).get('playmaker'):
+                                b_weights[w_i] *= 2.5
+                        chosen_assister = random.choices(cand_objs, weights=b_weights, k=1)[0]
+                        assister = chosen_assister['name']
                         team_b_assists[assister] = team_b_assists.get(assister, 0) + 1
 
                 all_goals.append((player_b, min_g, scorer_obj["name"], scorer_obj.get("pos", "ST"), ptype, assister))

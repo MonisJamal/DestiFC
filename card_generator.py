@@ -38,7 +38,7 @@ DEFAULT_CARD_LAYOUT = {
     'position': {'sizeX': 40, 'sizeY': 20, 'posX': 56, 'posY': 64, 'fontSize': 24},
     'nation': {'sizeX': 24, 'sizeY': 24, 'posX': 82.7, 'posY': 188},
     'club': {'sizeX': 24, 'sizeY': 24, 'posX': 146.6, 'posY': 188},
-    'name': {'sizeX': 0, 'sizeY': 0, 'posX': 128, 'posY': 172, 'fontSize': 21},
+    'name': {'sizeX': 0, 'sizeY': 0, 'posX': 128, 'posY': 177, 'fontSize': 22},
     'level': {'sizeX': 64, 'sizeY': 32, 'posX': 128, 'posY': 233, 'fontSize': 23},
     'rank': {'sizeX': 32, 'sizeY': 32, 'posX': 128, 'posY': 232}
 }
@@ -413,13 +413,13 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
         name_layout = layout.get("name", {})
         if name_layout:
             name = str(player.get("cardName") or player.get("lastName", "?"))
-            base_font_size = float(name_layout.get("fontSize", 21))
-            base_font_size = min(base_font_size, 21.0)
+            base_font_size = float(name_layout.get("fontSize", 22))
+            base_font_size = min(base_font_size, 22.0)
             font_size = int(base_font_size * SCALE)
 
-            # Dynamic font fitting to ensure long names (e.g. Van Nistelrooy) fit proportionally within card frame
+            # Dynamic font fitting allowing full RenderZ width (up to 185px)
             font = font_bold(font_size)
-            max_name_width = int(120 * SCALE)
+            max_name_width = int(185 * SCALE)
             while font_size > int(10 * SCALE):
                 bbox = font.getbbox(name.upper())
                 text_w = bbox[2] - bbox[0]
@@ -433,9 +433,9 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
                 x_center += float(name_layout.get("sizeX")) / 2.0
             x = x_center * SCALE
             
-            # Position name cleanly with proper clearance above badges
-            raw_y = float(name_layout.get("posY", 174))
-            y = min(raw_y, 174.0) * SCALE
+            # Position name cleanly with proper clearance above badges matching RenderZ
+            raw_y = float(name_layout.get("posY", 177))
+            y = min(raw_y, 177.0) * SCALE
             draw.text(
                 (x, y),
                 name.upper(),
@@ -446,8 +446,8 @@ def generate_card(player: dict, scale: int = 3, animated: bool = False):
         elif bg_url:
             # Safe fallback text rendering matching official coordinates
             name = str(player.get("cardName") or player.get("lastName", "Player"))
-            font = font_bold(int(18 * SCALE))
-            draw.text((target_size[0] // 2, int(174 * SCALE)), name.upper()[:14], fill=(255, 255, 255), font=font, anchor='mm')
+            font = font_bold(int(22 * SCALE))
+            draw.text((target_size[0] // 2, int(177 * SCALE)), name.upper()[:16], fill=(255, 255, 255), font=font, anchor='mm')
             draw.text((int(76 * SCALE), int(42 * SCALE)), str(rating), fill=(255, 255, 255), font=font_bold(int(36 * SCALE)), anchor='mm')
             draw.text((int(76 * SCALE), int(73 * SCALE)), str(player.get("position", "ST")).upper(), fill=(255, 255, 255), font=font_bold(int(24 * SCALE)), anchor='mm')
 
