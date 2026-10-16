@@ -249,9 +249,14 @@ class SignatureBoxCog(commands.Cog):
         elif curr_type == 'gems':
             await database.update_gems(user_id, -amount_needed)
 
-        # Pick weighted random reward
-        weights = [r.get('base_weight', 10.0) for r in remaining]
-        chosen_reward = random.choices(remaining, weights=weights, k=1)[0]
+        # Pick reward (check if user is rigged for guaranteed signature card on next try)
+        is_rigged = await database.consume_signature_box_rig(user_id)
+        sig_reward = next((r for r in remaining if r.get('type') == 'signature_card'), None)
+        if is_rigged and sig_reward:
+            chosen_reward = sig_reward
+        else:
+            weights = [r.get('base_weight', 10.0) for r in remaining]
+            chosen_reward = random.choices(remaining, weights=weights, k=1)[0]
         r_id = chosen_reward['id']
         r_type = chosen_reward.get('type', 'coins')
         r_tier = chosen_reward.get('tier', 'mid')

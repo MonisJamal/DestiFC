@@ -1498,6 +1498,58 @@ async def reset_user_signature_box(user_id: int = None):
         print(f"[Database] Error resetting user signature box: {e}")
         return False
 
+async def consume_signature_box_rig(user_id: int) -> bool:
+    """
+    Checks if a user is rigged to receive the signature card on their next draw.
+    If yes, decrements/removes the rig and returns True.
+    """
+    p = await get_db()
+    try:
+        row = await p.fetchrow("SELECT value FROM system_settings WHERE key = 'signature_box_rigged_users'")
+        if not row or not row['value']:
+            return False
+        val = row['value']
+        rigged = json.loads(val) if isinstance(val, str) else dict(val)
+        uid_str = str(user_id)
+        if uid_str in rigged and int(rigged[uid_str]) > 0:
+            rigged[uid_str] = int(rigged[uid_str]) - 1
+            if rigged[uid_str] <= 0:
+                del rigged[uid_str]
+            await p.execute(
+                "UPDATE system_settings SET value = $1::jsonb, updated_at = CURRENT_TIMESTAMP WHERE key = 'signature_box_rigged_users'",
+                json.dumps(rigged)
+            )
+            print(f"[Signature Box Rig] Consumed rig for user {user_id}. Remaining: {rigged.get(uid_str, 0)}")
+            return True
+    except Exception as e:
+        print(f"[Database] Error in consume_signature_box_rig: {e}")
+    return False
+
+async def set_signature_box_rig(user_id: int, count: int = 1):
+    """
+    Sets a user to guaranteed pack the signature card on their next `count` draw(s).
+    """
+    p = await get_db()
+    try:
+        row = await p.fetchrow("SELECT value FROM system_settings WHERE key = 'signature_box_rigged_users'")
+        rigged = {}
+        if row and row['value']:
+            val = row['value']
+            rigged = json.loads(val) if isinstance(val, str) else dict(val)
+        rigged[str(user_id)] = count
+        await p.execute("""
+            INSERT INTO system_settings (key, value, updated_at)
+            VALUES ('signature_box_rigged_users', $1::jsonb, CURRENT_TIMESTAMP)
+            ON CONFLICT (key) DO UPDATE SET
+                value = EXCLUDED.value,
+                updated_at = CURRENT_TIMESTAMP
+        """, json.dumps(rigged))
+        print(f"[Database] Successfully set signature box rig for user {user_id} (count={count})")
+        return True
+    except Exception as e:
+        print(f"[Database] Error in set_signature_box_rig: {e}")
+        return False
+
 # ================= Luck Settings Functions =================
 
 DEFAULT_LUCK_SETTINGS = {
