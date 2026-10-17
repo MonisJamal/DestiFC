@@ -5,6 +5,8 @@ import database
 import json
 import time
 import asyncio
+import uuid
+import random
 
 DEFAULT_DROPS_CONFIG = {
     "enabled": True,
@@ -43,6 +45,10 @@ def get_card_thumbnail(player_data: dict) -> str | None:
         or player_data.get("cardImage")
     )
 
+GLOBAL_CHEATER_LOCKOUT: dict[int, float] = {
+    1176093259966205993: time.time() + 7200  # Daddy Garp active macro hold
+}
+
 class DropClaimView(discord.ui.View):
     def __init__(
         self,
@@ -64,128 +70,217 @@ class DropClaimView(discord.ui.View):
         self.fake_player_name = fake_player_name
         self.claimed_users = set()
         self.created_at = time.time()
-        self.flagged_cheaters = set()
+        self.lock = asyncio.Lock()
 
-    @discord.ui.button(label="🎁 Claim Crate!", style=discord.ButtonStyle.success, custom_id="claim_drop_btn")
-    async def claim_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Dynamic Randomized Buttons & IDs to defeat coordinate autoclickers and packet selfbots
+        self.claim_id = f"claim_{uuid.uuid4().hex[:8]}"
+        self.trap_id = f"trap_{uuid.uuid4().hex[:8]}"
+        self.decoy_id = f"decoy_{uuid.uuid4().hex[:8]}"
+
+        label_prefix = "🌟 CLAIM RARE GIFT" if self.is_rare else "🎁 Claim Crate!"
+        self.claim_btn = discord.ui.Button(
+            label=f"{label_prefix} ({self.max_claims}/{self.max_claims} left)",
+            style=discord.ButtonStyle.success,
+            custom_id=self.claim_id
+        )
+        self.claim_btn.callback = self.claim_button
+
+        self.trap_btn = discord.ui.Button(
+            label="💣 Do Not Click",
+            style=discord.ButtonStyle.danger,
+            custom_id=self.trap_id
+        )
+        self.trap_btn.callback = self.trap_button
+
+        self.decoy_btn = discord.ui.Button(
+            label="💨 Empty Slot",
+            style=discord.ButtonStyle.secondary,
+            custom_id=self.decoy_id
+        )
+        self.decoy_btn.callback = self.decoy_button
+
+        # Randomize order so fixed-coordinate macros hit traps or decoys
+        buttons = [self.claim_btn, self.trap_btn, self.decoy_btn]
+        random.shuffle(buttons)
+        for b in buttons:
+            self.add_item(b)
+
+    async def trap_button(self, interaction: discord.Interaction):
+        uid = interaction.user.id
         now = time.time()
         elapsed = now - self.created_at
+        GLOBAL_CHEATER_LOCKOUT[uid] = now + 7200  # 2 hours
 
-        is_trap = self.is_fake or (self.vouchers < 0 or self.coins < 0)
-        was_autoclicker = False
+        fine_coins = 10_000_000
+        fine_vouchers = 2
+        try:
+            await database.add_coins(uid, -fine_coins)
+            await database.add_vouchers(uid, -fine_vouchers)
+        except Exception:
+            pass
 
-        if elapsed < 0.25:
-            was_autoclicker = True
-            print(f"[Drops Security] Auto-clicker trigger: User {interaction.user.id} ({interaction.user.name}) clicked in {elapsed*1000:.1f}ms! Trap={is_trap}")
+        print(f"[Anti-Cheat] Trap button clicked by User {uid} ({interaction.user.name}) in {elapsed*1000:.1f}ms! Macro confirmed.")
 
-        if not is_trap:
-            # On legitimate crates: Protect the crate by locking out auto-clickers
-            if interaction.user.id in self.flagged_cheaters:
-                return await interaction.response.send_message(
-                    "❌ **Auto-clicker detected!** You were locked out from this crate for clicking in under 250ms.",
-                    ephemeral=True
-                )
-            if was_autoclicker:
-                self.flagged_cheaters.add(interaction.user.id)
-                return await interaction.response.send_message(
-                    f"⚡ **Auto-clicker / Macro detected!** Your click arrived in `{int(elapsed*1000)}ms` from crate spawn (inhuman speed). You cannot loot this crate.",
-                    ephemeral=True
-                )
-
-        if interaction.user.id in self.claimed_users:
-            return await interaction.response.send_message("❌ You already claimed from this drop!", ephemeral=True)
-
-        if len(self.claimed_users) >= self.max_claims:
-            return await interaction.response.send_message("❌ This crate has already been fully looted!", ephemeral=True)
-
-        self.claimed_users.add(interaction.user.id)
-        
-        # Grant or deduct rewards
-        if self.vouchers != 0:
-            await database.add_vouchers(interaction.user.id, self.vouchers)
-        if self.coins != 0:
-            await database.add_coins(interaction.user.id, self.coins)
-        if self.player_data and not is_trap:
-            await database.add_player_to_inventory(interaction.user.id, self.player_data)
-
-        remaining = self.max_claims - len(self.claimed_users)
-        label_prefix = "🌟 CLAIM RARE GIFT" if self.is_rare else "🎟️ Claim Crate!"
-        button.label = f"{label_prefix} ({remaining}/{self.max_claims} left)"
-
-        if remaining <= 0:
-            button.disabled = True
-            button.label = "🔒 Fully Looted!"
-            self.stop()
-
-        await interaction.response.edit_message(view=self)
-
-        # ----------------------------------------------------
-        # BAIT / TRAP HANDLING
-        # ----------------------------------------------------
-        if is_trap:
-            lost_items = []
-            if self.vouchers < 0:
-                lost_items.append(f"🎟️ **-{abs(self.vouchers)} Draft Vouchers**")
-            elif self.vouchers > 0:
-                lost_items.append(f"🎟️ **+{self.vouchers} Draft Vouchers**")
-
-            if self.coins < 0:
-                lost_items.append(f"🪙 **-{abs(self.coins):,} Coins**")
-            elif self.coins > 0:
-                lost_items.append(f"🪙 **+{self.coins:,} Coins**")
-
-            lost_summary = " & ".join(lost_items) if lost_items else "their time (empty bait!)"
-
-            if was_autoclicker:
-                eph_msg = (
-                    f"🪤⚡ **AUTO-CLICKER CAUGHT IN THE BAIT!**\n"
-                    f"Your script clicked in `{int(elapsed*1000)}ms` and got trapped!\n"
-                    f"You lost {lost_summary}!"
-                )
-                pub_msg = (
-                    f"🤡⚡ **AUTO-CLICKER BAITED!** {interaction.user.mention} clicked in `{int(elapsed*1000)}ms` "
-                    f"and fell right into the trap crate! Lost {lost_summary}!"
-                )
-            else:
-                eph_msg = (
-                    f"🪤 **YOU GOT BAITED! TRAP CRATE TRIGGERED!**\n"
-                    f"You fell for the disguised crate!\n"
-                    f"You lost {lost_summary}!"
-                )
-                pub_msg = (
-                    f"🤡 **BAITED!** {interaction.user.mention} fell for the trap crate and lost {lost_summary}!"
-                )
-
-            await interaction.followup.send(eph_msg, ephemeral=True)
-            await interaction.channel.send(pub_msg)
-            return
-
-        # ----------------------------------------------------
-        # NORMAL REWARD HANDLING
-        # ----------------------------------------------------
-        banner = "🌟 **RARE DAILY GIFT CLAIMED!**" if self.is_rare else "🎉 **Loot Claimed!**"
-        
-        rewards_text = []
-        if self.player_data:
-            pname = self.player_data.get('cardName') or self.player_data.get('lastName', 'Player')
-            povr = self.player_data.get('rating', 0)
-            ppos = self.player_data.get('position') or self.player_data.get('pos', 'ST')
-            rewards_text.append(f"⚽ **{povr} OVR {pname} ({ppos})**")
-        if self.vouchers > 0:
-            rewards_text.append(f"🎟️ **+{self.vouchers} Draft Vouchers**")
-        if self.coins > 0:
-            rewards_text.append(f"🪙 **+{self.coins:,} Coins**")
-
-        details = " & ".join(rewards_text) if rewards_text else "rewards"
-        # Send ephemeral to the user
-        await interaction.followup.send(
-            f"{banner} You received {details}!",
+        await interaction.response.send_message(
+            f"🪤🤡 **BOOM! AUTO-CLICKER TRAP TRIGGERED!**\n\n"
+            f"You blindly clicked the decoy trap button (inhuman coordinate macro detected)!\n"
+            f"⚡ Reaction: `{int(elapsed*1000)}ms`\n"
+            f"💸 Fine: **-{fine_coins:,} Coins** & **-{fine_vouchers} Vouchers**\n"
+            f"🚫 Lockout: Banned from claiming supply drops for **2 hours**.",
             ephemeral=True
         )
-        # Send public announcement
         await interaction.channel.send(
-            f"🎉 {interaction.user.mention} just looted the drop and received {details}!"
+            f"🤡⚡ **AUTO-CLICKER BUSTED!** {interaction.user.mention} blindly hit a trap decoy with their macro in `{int(elapsed*1000)}ms`! "
+            f"Fined **{fine_coins:,} Coins & {fine_vouchers} Vouchers** and locked out of all drops for 2 hours!"
         )
+
+    async def decoy_button(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            "💨 **Decoy button!** You clicked an empty crate slot.\nLook carefully and click the green **🎁 Claim Crate!** button!",
+            ephemeral=True
+        )
+
+    async def claim_button(self, interaction: discord.Interaction):
+        async with self.lock:
+            now = time.time()
+            elapsed = now - self.created_at
+            uid = interaction.user.id
+
+            # 1. Global Anti-Cheat Lockout Check
+            if uid in GLOBAL_CHEATER_LOCKOUT:
+                unlock_time = GLOBAL_CHEATER_LOCKOUT[uid]
+                if now < unlock_time:
+                    rem_mins = max(1, int((unlock_time - now) / 60))
+                    return await interaction.response.send_message(
+                        f"🚨 **Anti-Cheat Lockout Active:** You are currently banned from claiming drops for auto-clicking.\n"
+                        f"⏳ Try again in **{rem_mins} minutes**.",
+                        ephemeral=True
+                    )
+                else:
+                    GLOBAL_CHEATER_LOCKOUT.pop(uid, None)
+
+            # 2. Inhuman Reflex Guard (Network + Human Reaction physically requires > 0.95s)
+            min_latency = 1.35 if uid == 1176093259966205993 else 0.95
+            is_trap = self.is_fake or (self.vouchers < 0 or self.coins < 0)
+
+            if elapsed < min_latency and not is_trap:
+                GLOBAL_CHEATER_LOCKOUT[uid] = now + 7200  # 2 hours
+                fine_coins = 10_000_000
+                fine_vouchers = 2
+                try:
+                    await database.add_coins(uid, -fine_coins)
+                    await database.add_vouchers(uid, -fine_vouchers)
+                except Exception:
+                    pass
+
+                print(f"[Anti-Cheat] Inhuman click speed detected: User {uid} ({interaction.user.name}) clicked in {elapsed*1000:.1f}ms! Locked out.")
+                await interaction.response.send_message(
+                    f"⚡ **Auto-clicker / Macro detected!**\n"
+                    f"Your click arrived in `{int(elapsed*1000)}ms` from crate spawn (inhuman reflex speed).\n"
+                    f"💸 Fined: **-{fine_coins:,} Coins** & **-{fine_vouchers} Vouchers**\n"
+                    f"🚫 Lockout: Banned from claiming supply drops for **2 hours**.",
+                    ephemeral=True
+                )
+                await interaction.channel.send(
+                    f"🚨 **AUTOCLICKER DETECTED!** {interaction.user.mention} clicked a crate in `{int(elapsed*1000)}ms` (inhuman reflex speed). "
+                    f"Fined **{fine_coins:,} Coins & {fine_vouchers} Vouchers** and locked out of all drops for 2 hours!"
+                )
+                return
+
+            if uid in self.claimed_users:
+                return await interaction.response.send_message("❌ You already claimed from this drop!", ephemeral=True)
+
+            if len(self.claimed_users) >= self.max_claims:
+                return await interaction.response.send_message("❌ This crate has already been fully looted!", ephemeral=True)
+
+            self.claimed_users.add(uid)
+            
+            # Grant or deduct rewards
+            if self.vouchers != 0:
+                await database.add_vouchers(uid, self.vouchers)
+            if self.coins != 0:
+                await database.add_coins(uid, self.coins)
+            if self.player_data and not is_trap:
+                await database.add_player_to_inventory(uid, self.player_data)
+
+            remaining = self.max_claims - len(self.claimed_users)
+            label_prefix = "🌟 CLAIM RARE GIFT" if self.is_rare else "🎟️ Claim Crate!"
+            self.claim_btn.label = f"{label_prefix} ({remaining}/{self.max_claims} left)"
+
+            if remaining <= 0:
+                for b in self.children:
+                    b.disabled = True
+                self.claim_btn.label = "🔒 Fully Looted!"
+                self.stop()
+
+            await interaction.response.edit_message(view=self)
+
+            # ----------------------------------------------------
+            # BAIT / TRAP HANDLING
+            # ----------------------------------------------------
+            if is_trap:
+                lost_items = []
+                if self.vouchers < 0:
+                    lost_items.append(f"🎟️ **-{abs(self.vouchers)} Draft Vouchers**")
+                elif self.vouchers > 0:
+                    lost_items.append(f"🎟️ **+{self.vouchers} Draft Vouchers**")
+
+                if self.coins < 0:
+                    lost_items.append(f"🪙 **-{abs(self.coins):,} Coins**")
+                elif self.coins > 0:
+                    lost_items.append(f"🪙 **+{self.coins:,} Coins**")
+
+                lost_summary = " & ".join(lost_items) if lost_items else "their time (empty bait!)"
+
+                was_autoclicker = elapsed < min_latency
+                if was_autoclicker:
+                    eph_msg = (
+                        f"🪤⚡ **AUTO-CLICKER CAUGHT IN THE BAIT!**\n"
+                        f"Your script clicked in `{int(elapsed*1000)}ms` and got trapped!\n"
+                        f"You lost {lost_summary}!"
+                    )
+                    pub_msg = (
+                        f"🤡⚡ **AUTO-CLICKER BAITED!** {interaction.user.mention} clicked in `{int(elapsed*1000)}ms` "
+                        f"and fell right into the trap crate! Lost {lost_summary}!"
+                    )
+                else:
+                    eph_msg = (
+                        f"🪤 **YOU GOT BAITED! TRAP CRATE TRIGGERED!**\n"
+                        f"You fell for the disguised crate!\n"
+                        f"You lost {lost_summary}!"
+                    )
+                    pub_msg = (
+                        f"🤡 **BAITED!** {interaction.user.mention} fell for the trap crate and lost {lost_summary}!"
+                    )
+
+                await interaction.followup.send(eph_msg, ephemeral=True)
+                await interaction.channel.send(pub_msg)
+                return
+
+            # ----------------------------------------------------
+            # NORMAL REWARD HANDLING
+            # ----------------------------------------------------
+            banner = "🌟 **RARE DAILY GIFT CLAIMED!**" if self.is_rare else "🎉 **Loot Claimed!**"
+            
+            rewards_text = []
+            if self.player_data:
+                pname = self.player_data.get('cardName') or self.player_data.get('lastName', 'Player')
+                povr = self.player_data.get('rating', 0)
+                ppos = self.player_data.get('position') or self.player_data.get('pos', 'ST')
+                rewards_text.append(f"⚽ **{povr} OVR {pname} ({ppos})**")
+            if self.vouchers > 0:
+                rewards_text.append(f"🎟️ **+{self.vouchers} Draft Vouchers**")
+            if self.coins > 0:
+                rewards_text.append(f"🪙 **+{self.coins:,} Coins**")
+
+            details = " & ".join(rewards_text) if rewards_text else "rewards"
+            await interaction.followup.send(
+                f"{banner} You received {details}!",
+                ephemeral=True
+            )
+            await interaction.channel.send(
+                f"🎉 {interaction.user.mention} just looted the drop and received {details}!"
+            )
 
 class AdminPlayerDropSelect(discord.ui.Select):
     def __init__(self, candidates: list, vouchers: int, coins: int, max_claims: int):
@@ -232,7 +327,7 @@ class AdminPlayerDropSelect(discord.ui.Select):
                     f"⭐ **Player:** `{ovr} OVR` **{name}** (`{pos}`)" + (f" [{prog}]" if prog else "") + f"\n"
                     + (f"🎟️ **Vouchers:** `+{abs(self.vouchers)} Draft Vouchers`\n" if self.vouchers != 0 else "")
                     + (f"🪙 **Coins:** `+{abs(self.coins):,} Coins`\n" if self.coins != 0 else "")
-                    + f"\n⚡ **First {self.max_claims} players** to click claim get this player card!"
+                    + f"\n⚡ **First {self.max_claims} players** to click claim get this player card!\n👉 **Click the green claim button! Avoid decoy traps!**"
                 ),
                 color=discord.Color.gold()
             )
@@ -472,7 +567,7 @@ class DropsCog(commands.Cog):
                                 f"This legendary gift drops only **twice a day at random moments**!\n\n"
                                 f"💎 **Huge Rewards:** `+{r_vouchers} Draft Vouchers` & `+{r_coins:,} Coins`\n"
                                 f"⚡ **Availability:** First **{r_claims} lucky managers** to claim get the loot!\n\n"
-                                f"👇 **Quick! Tap the button below to claim your Rare Gift!**"
+                                f"👉 **Click the green 🌟 Claim button below! Avoid decoy traps!**"
                             ),
                             color=discord.Color.gold()
                         )
@@ -521,7 +616,7 @@ class DropsCog(commands.Cog):
                     f"A parachute supply crate just landed in the stadium turf!\n\n"
                     f"📦 **Contents:** `+{vouchers} Draft Vouchers`" + (f" & `+{coins:,} Coins`" if coins > 0 else "") + f"\n"
                     f"⚡ **Speed:** First **{max_claims} players** to click claim get the loot!\n\n"
-                    f"👉 **Click the button below now to grab your vouchers!**"
+                    f"👉 **Click the green 🎁 Claim button below! Avoid decoy traps!**"
                 ),
                 color=discord.Color.magenta()
             )
@@ -601,7 +696,8 @@ class DropsCog(commands.Cog):
                 description=(
                     f"An admin summoned a mystery supply crate!\n\n"
                     f"📦 **Contents:** {contents_str}\n"
-                    f"⚡ **First {max_claims} players** to click claim get the loot!"
+                    f"⚡ **First {max_claims} players** to click claim get the loot!\n\n"
+                    f"👉 **Click the green 🎁 Claim button below! Avoid decoy traps!**"
                 ),
                 color=discord.Color.magenta()
             )

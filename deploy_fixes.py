@@ -16,7 +16,8 @@ FILES_TO_UPLOAD = [
     "main.py",
     "cogs/admin.py",
     "cogs/draft.py",
-    "cogs/black_market.py"
+    "cogs/black_market.py",
+    "cogs/drops.py"
 ]
 
 def deploy():
