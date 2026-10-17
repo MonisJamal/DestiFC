@@ -70,10 +70,8 @@ class DropClaimView(discord.ui.View):
         self.created_at = time.time()
         self.lock = asyncio.Lock()
 
-        # Dynamic Randomized Buttons & IDs to defeat coordinate autoclickers and packet selfbots
+        # Dynamic Randomized custom_id to prevent packet selfbots
         self.claim_id = f"claim_{uuid.uuid4().hex[:8]}"
-        self.trap_id = f"trap_{uuid.uuid4().hex[:8]}"
-        self.decoy_id = f"decoy_{uuid.uuid4().hex[:8]}"
 
         label_prefix = "🌟 CLAIM RARE GIFT" if self.is_rare else "🎁 Claim Crate!"
         self.claim_btn = discord.ui.Button(
@@ -83,60 +81,21 @@ class DropClaimView(discord.ui.View):
         )
         self.claim_btn.callback = self.claim_button
 
-        self.trap_btn = discord.ui.Button(
-            label="💣 Do Not Click",
-            style=discord.ButtonStyle.danger,
-            custom_id=self.trap_id
-        )
-        self.trap_btn.callback = self.trap_button
+        # Randomize horizontal slot position across 3 slots (Left, Middle, Right)
+        # Empty slots are filled with invisible disabled spacers so coordinate autoclickers miss
+        total_slots = 3
+        active_slot = random.randint(0, total_slots - 1)
 
-        self.decoy_btn = discord.ui.Button(
-            label="💨 Empty Slot",
-            style=discord.ButtonStyle.secondary,
-            custom_id=self.decoy_id
-        )
-        self.decoy_btn.callback = self.decoy_button
-
-        # Randomize order so fixed-coordinate macros hit traps or decoys
-        buttons = [self.claim_btn, self.trap_btn, self.decoy_btn]
-        random.shuffle(buttons)
-        for b in buttons:
-            self.add_item(b)
-
-    async def trap_button(self, interaction: discord.Interaction):
-        uid = interaction.user.id
-        now = time.time()
-        elapsed = now - self.created_at
-        GLOBAL_CHEATER_LOCKOUT[uid] = now + 7200  # 2 hours
-
-        fine_coins = 10_000_000
-        fine_vouchers = 2
-        try:
-            await database.add_coins(uid, -fine_coins)
-            await database.add_vouchers(uid, -fine_vouchers)
-        except Exception:
-            pass
-
-        print(f"[Anti-Cheat] Trap button clicked by User {uid} ({interaction.user.name}) in {elapsed*1000:.1f}ms! Macro confirmed.")
-
-        await interaction.response.send_message(
-            f"🪤🤡 **BOOM! AUTO-CLICKER TRAP TRIGGERED!**\n\n"
-            f"You blindly clicked the decoy trap button (inhuman coordinate macro detected)!\n"
-            f"⚡ Reaction: `{int(elapsed*1000)}ms`\n"
-            f"💸 Fine: **-{fine_coins:,} Coins** & **-{fine_vouchers} Vouchers**\n"
-            f"🚫 Lockout: Banned from claiming supply drops for **2 hours**.",
-            ephemeral=True
-        )
-        await interaction.channel.send(
-            f"🤡⚡ **AUTO-CLICKER BUSTED!** {interaction.user.mention} blindly hit a trap decoy with their macro in `{int(elapsed*1000)}ms`! "
-            f"Fined **{fine_coins:,} Coins & {fine_vouchers} Vouchers** and locked out of all drops for 2 hours!"
-        )
-
-    async def decoy_button(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            "💨 **Decoy button!** You clicked an empty crate slot.\nLook carefully and click the green **🎁 Claim Crate!** button!",
-            ephemeral=True
-        )
+        for slot_idx in range(total_slots):
+            if slot_idx == active_slot:
+                self.add_item(self.claim_btn)
+            else:
+                spacer = discord.ui.Button(
+                    label="\u2800\u2800\u2800\u2800",
+                    style=discord.ButtonStyle.secondary,
+                    disabled=True
+                )
+                self.add_item(spacer)
 
     async def claim_button(self, interaction: discord.Interaction):
         async with self.lock:
@@ -325,7 +284,7 @@ class AdminPlayerDropSelect(discord.ui.Select):
                     f"⭐ **Player:** `{ovr} OVR` **{name}** (`{pos}`)" + (f" [{prog}]" if prog else "") + f"\n"
                     + (f"🎟️ **Vouchers:** `+{abs(self.vouchers)} Draft Vouchers`\n" if self.vouchers != 0 else "")
                     + (f"🪙 **Coins:** `+{abs(self.coins):,} Coins`\n" if self.coins != 0 else "")
-                    + f"\n⚡ **First {self.max_claims} players** to click claim get this player card!\n👉 **Click the green claim button! Avoid decoy traps!**"
+                    + f"\n⚡ **First {self.max_claims} players** to click claim get this player card!\n👉 **Tap the green Claim button below!**"
                 ),
                 color=discord.Color.gold()
             )
@@ -565,7 +524,7 @@ class DropsCog(commands.Cog):
                                 f"This legendary gift drops only **twice a day at random moments**!\n\n"
                                 f"💎 **Huge Rewards:** `+{r_vouchers} Draft Vouchers` & `+{r_coins:,} Coins`\n"
                                 f"⚡ **Availability:** First **{r_claims} lucky managers** to claim get the loot!\n\n"
-                                f"👉 **Click the green 🌟 Claim button below! Avoid decoy traps!**"
+                                f"👉 **Tap the green 🌟 Claim button below!**"
                             ),
                             color=discord.Color.gold()
                         )
@@ -614,7 +573,7 @@ class DropsCog(commands.Cog):
                     f"A parachute supply crate just landed in the stadium turf!\n\n"
                     f"📦 **Contents:** `+{vouchers} Draft Vouchers`" + (f" & `+{coins:,} Coins`" if coins > 0 else "") + f"\n"
                     f"⚡ **Speed:** First **{max_claims} players** to click claim get the loot!\n\n"
-                    f"👉 **Click the green 🎁 Claim button below! Avoid decoy traps!**"
+                    f"👉 **Tap the green 🎁 Claim button below!**"
                 ),
                 color=discord.Color.magenta()
             )
@@ -695,7 +654,7 @@ class DropsCog(commands.Cog):
                     f"An admin summoned a mystery supply crate!\n\n"
                     f"📦 **Contents:** {contents_str}\n"
                     f"⚡ **First {max_claims} players** to click claim get the loot!\n\n"
-                    f"👉 **Click the green 🎁 Claim button below! Avoid decoy traps!**"
+                    f"👉 **Tap the green 🎁 Claim button below!**"
                 ),
                 color=discord.Color.magenta()
             )
