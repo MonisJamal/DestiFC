@@ -45,9 +45,7 @@ def get_card_thumbnail(player_data: dict) -> str | None:
         or player_data.get("cardImage")
     )
 
-GLOBAL_CHEATER_LOCKOUT: dict[int, float] = {
-    1176093259966205993: time.time() + 7200  # Daddy Garp active macro hold
-}
+GLOBAL_CHEATER_LOCKOUT: dict[int, float] = {}
 
 class DropClaimView(discord.ui.View):
     def __init__(
@@ -159,8 +157,8 @@ class DropClaimView(discord.ui.View):
                 else:
                     GLOBAL_CHEATER_LOCKOUT.pop(uid, None)
 
-            # 2. Inhuman Reflex Guard (Network + Human Reaction physically requires > 0.95s)
-            min_latency = 1.35 if uid == 1176093259966205993 else 0.95
+            # 2. Inhuman Reflex Guard (Network transit + human visual reaction physically requires > 0.65s)
+            min_latency = 0.65
             is_trap = self.is_fake or (self.vouchers < 0 or self.coins < 0)
 
             if elapsed < min_latency and not is_trap:
