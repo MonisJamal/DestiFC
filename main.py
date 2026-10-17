@@ -23,7 +23,8 @@ class DestiFC(commands.AutoShardedBot):
         )
         self.last_presence_state = None
         self.user_command_cooldowns = {}   # user_id -> timestamp of last command
-        self.active_user_commands = set()     # set of user_ids currently running a command
+        self.active_user_commands = {}     # user_id -> start_timestamp (with auto-expiry)
+        self.role_synced_users = set()     # set of user_ids whose auto-roles have already been verified
 
     async def setup_hook(self):
         await database.setup()
@@ -105,36 +106,46 @@ class DestiFC(commands.AutoShardedBot):
                 # Rate Limiting & Concurrency Guard for application commands (slash commands)
                 if interaction.type == discord.InteractionType.application_command:
                     uid = interaction.user.id
-
-                    # 1. Concurrency Guard: prevent running another command while one is still in progress
-                    if uid in self.active_user_commands:
-                        if not interaction.response.is_done():
-                            await interaction.response.send_message(
-                                "⏳ **Please wait!** You already have another command running. Please let it finish before running a new one.",
-                                ephemeral=True
-                            )
-                        return False
-
-                    # 2. Command Slowdown Rate Limit: 6 seconds cooldown between commands
                     import time
                     now = time.time()
-                    last_cmd_time = self.user_command_cooldowns.get(uid, 0)
-                    cooldown_duration = 6.0
 
-                    if now - last_cmd_time < cooldown_duration:
-                        rem = round(cooldown_duration - (now - last_cmd_time), 1)
-                        if not interaction.response.is_done():
-                            await interaction.response.send_message(
-                                f"⏳ **Slow down!** You can use another command in **{rem}s**.",
-                                ephemeral=True
-                            )
-                        return False
+                    # 1. Concurrency Guard: prevent running another command while one is still in progress (with 30s auto-expiry)
+                    if uid in self.active_user_commands:
+                        cmd_start = self.active_user_commands[uid]
+                        if now - cmd_start < 30.0:
+                            if not interaction.response.is_done():
+                                await interaction.response.send_message(
+                                    "⏳ **Please wait!** You already have another command running. Please let it finish before running a new one.",
+                                    ephemeral=True
+                                )
+                            return False
+                        else:
+                            # Auto-clear stuck command lock older than 30s
+                            self.active_user_commands.pop(uid, None)
 
-                    # Mark user as currently running a command
-                    self.active_user_commands.add(uid)
+                    # 2. Command Slowdown Rate Limit: 1.5s cooldown between non-instant commands
+                    FAST_COMMANDS = {
+                        'balance', 'bal', 'coins', 'vouchers', 'profile', 'p', 'help', 
+                        'ping', 'stats', 'inventory', 'inv', 'squad', 'lineup', 'leaderboard', 'lb'
+                    }
+                    if cmd_name not in FAST_COMMANDS and root_name not in FAST_COMMANDS:
+                        last_cmd_time = self.user_command_cooldowns.get(uid, 0)
+                        cooldown_duration = 1.5
 
-                # Auto-Role Grant for any registered user executing a command
-                if bot_cfg.get('auto_role_enabled'):
+                        if now - last_cmd_time < cooldown_duration:
+                            rem = round(cooldown_duration - (now - last_cmd_time), 1)
+                            if not interaction.response.is_done():
+                                await interaction.response.send_message(
+                                    f"⏳ **Slow down!** You can use another command in **{rem}s**.",
+                                    ephemeral=True
+                                )
+                            return False
+
+                    # Mark user as currently running a command with timestamp
+                    self.active_user_commands[uid] = now
+
+                # Auto-Role Grant for registered users (cached per session to prevent Discord API 429 rate limits)
+                if bot_cfg.get('auto_role_enabled') and uid not in self.role_synced_users:
                     async def _assign_role():
                         try:
                             # 1. Assign in the interaction guild if configured
@@ -144,11 +155,8 @@ class DestiFC(commands.AutoShardedBot):
                                     role_id = int(str(role_id_str).strip())
                                     role = interaction.guild.get_role(role_id)
                                     member = interaction.user
-                                    if not isinstance(member, discord.Member) or member.guild.id != interaction.guild.id:
-                                        try:
-                                            member = await interaction.guild.fetch_member(interaction.user.id)
-                                        except Exception:
-                                            member = interaction.guild.get_member(interaction.user.id)
+                                    if not isinstance(member, discord.Member):
+                                        member = interaction.guild.get_member(uid)
                                     if member and role and role not in member.roles:
                                         await member.add_roles(role, reason="DestiFC Auto-Role: Registered player command")
                                 except Exception as e:
@@ -157,24 +165,23 @@ class DestiFC(commands.AutoShardedBot):
                             # 2. Specifically ensure BeastlyFC player role is granted to all registered players
                             beastly_id = 1222195412295745536
                             beastly_role_id = 1557010712013045860
-                            beastly_guild = self.get_guild(beastly_id)
-                            if not beastly_guild:
-                                try:
-                                    beastly_guild = await self.fetch_guild(beastly_id)
-                                except Exception:
-                                    pass
-                            if beastly_guild:
-                                beastly_role = beastly_guild.get_role(beastly_role_id)
-                                if beastly_role:
-                                    b_member = beastly_guild.get_member(interaction.user.id)
-                                    if not b_member:
-                                        try:
-                                            b_member = await beastly_guild.fetch_member(interaction.user.id)
-                                        except Exception:
-                                            pass
-                                    if b_member and beastly_role not in b_member.roles:
+                            if interaction.guild and interaction.guild.id == beastly_id and isinstance(interaction.user, discord.Member):
+                                b_member = interaction.user
+                                beastly_role = interaction.guild.get_role(beastly_role_id)
+                                if beastly_role and beastly_role not in b_member.roles:
+                                    await b_member.add_roles(beastly_role, reason="DestiFC Auto-Role: Registered player in BeastlyFC")
+                                    print(f"[Auto-Role] Granted BeastlyFC player role to {b_member.display_name} ({b_member.id})")
+                            else:
+                                beastly_guild = self.get_guild(beastly_id)
+                                if beastly_guild:
+                                    beastly_role = beastly_guild.get_role(beastly_role_id)
+                                    b_member = beastly_guild.get_member(uid)
+                                    if b_member and beastly_role and beastly_role not in b_member.roles:
                                         await b_member.add_roles(beastly_role, reason="DestiFC Auto-Role: Registered player in BeastlyFC")
                                         print(f"[Auto-Role] Granted BeastlyFC player role to {b_member.display_name} ({b_member.id})")
+
+                            # Cache so we don't query Discord REST API on every interaction for this user
+                            self.role_synced_users.add(uid)
                         except Exception as e:
                             print(f"[Auto-Role Exception] Failed to assign role: {e}")
 
@@ -190,7 +197,7 @@ class DestiFC(commands.AutoShardedBot):
             import traceback
             import time
             uid = interaction.user.id
-            self.active_user_commands.discard(uid)
+            self.active_user_commands.pop(uid, None)
             # Only set cooldown if it wasn't a check failure (e.g. cooldown/concurrency checks themselves)
             if not isinstance(error, app_commands.CheckFailure):
                 self.user_command_cooldowns[uid] = time.time()
@@ -234,15 +241,25 @@ class DestiFC(commands.AutoShardedBot):
         self.memory_hygiene_loop.start()
         self.scheduled_renderz_sync_loop.start()
 
-    @tasks.loop(minutes=5)
+    @tasks.loop(minutes=10)
     async def memory_hygiene_loop(self):
         """Periodically cleans up memory caches and triggers garbage collection to keep container RAM minimal."""
         try:
-            import gc, card_generator
-            card_generator._MEMORY_IMAGE_CACHE.clear()
-            card_generator._MEMORY_CARD_CACHE.clear()
-            card_generator._MEMORY_CARD_BYTES_CACHE.clear()
-            database.flush_all_caches(silent=True)
+            import gc, card_generator, time
+            now = time.time()
+            # Prune command cooldowns older than 10 minutes to prevent dict growth
+            self.user_command_cooldowns = {uid: t for uid, t in self.user_command_cooldowns.items() if now - t < 600}
+            # Prune stuck active user commands older than 30s
+            self.active_user_commands = {uid: t for uid, t in self.active_user_commands.items() if now - t < 30.0}
+
+            # Only prune card image caches if they grow excessively large (keeping hot cards warm)
+            if len(card_generator._MEMORY_IMAGE_CACHE) > 50:
+                card_generator._MEMORY_IMAGE_CACHE.clear()
+            if len(card_generator._MEMORY_CARD_CACHE) > 50:
+                card_generator._MEMORY_CARD_CACHE.clear()
+            if len(card_generator._MEMORY_CARD_BYTES_CACHE) > 100:
+                card_generator._MEMORY_CARD_BYTES_CACHE.clear()
+
             gc.collect()
         except Exception as e:
             print(f"[Memory Hygiene Error] {e}")
@@ -653,8 +670,14 @@ class DestiFC(commands.AutoShardedBot):
     async def on_app_command_completion(self, interaction: discord.Interaction, command: discord.app_commands.Command):
         import time
         uid = interaction.user.id
-        self.active_user_commands.discard(uid)
-        self.user_command_cooldowns[uid] = time.time()
+        self.active_user_commands.pop(uid, None)
+        cmd_name = (command.name if command else "").lower()
+        FAST_COMMANDS = {
+            'balance', 'bal', 'coins', 'vouchers', 'profile', 'p', 'help', 
+            'ping', 'stats', 'inventory', 'inv', 'squad', 'lineup', 'leaderboard', 'lb'
+        }
+        if cmd_name not in FAST_COMMANDS:
+            self.user_command_cooldowns[uid] = time.time()
 
     async def on_ready(self):
         print(f'Logged in as {self.user} (ID: {self.user.id})')
