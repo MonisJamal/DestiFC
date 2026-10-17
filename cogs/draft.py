@@ -81,8 +81,8 @@ class DraftCog(commands.Cog):
                 ev_a2, ic_a2 = split_promo_icons(pool_a2)
                 ev_a3, ic_a3 = split_promo_icons(pool_a3)
                 
-                pool_b = await database.get_official_cards_by_rating(min_b, max_b, 200)
-                pool_c = await database.get_official_cards_by_rating(min_c, max_c, 500)
+                pool_b = await database.get_official_cards_by_rating(min_b, max_b, 50)
+                pool_c = await database.get_official_cards_by_rating(min_c, max_c, 100)
                 
                 if not pool_a1 and not pool_a2 and not pool_a3:
                     print(f"[Draft] Not enough {ovr_a3}+ players fetched, skipping rotation.")
@@ -100,13 +100,21 @@ class DraftCog(commands.Cog):
                 for i in range(1, 4):
                     def pick_unique(candidates, fallback_pool):
                         pool_to_use = candidates if candidates else fallback_pool
-                        avail = [p for p in pool_to_use if p.get('assetId') not in used_featured_ids]
-                        if not avail: avail = pool_to_use
+                        if not pool_to_use:
+                            pool_to_use = pool_a3 or pool_a2 or pool_a1 or pool_b or pool_c or []
+                        if not pool_to_use:
+                            return None
+                        avail = [p for p in pool_to_use if p.get('assetId') and p.get('assetId') not in used_featured_ids]
+                        if not avail:
+                            avail = pool_to_use
+                        if not avail:
+                            return None
                         chosen = random.choice(avail)
-                        used_featured_ids.add(chosen.get('assetId'))
+                        if chosen and chosen.get('assetId'):
+                            used_featured_ids.add(chosen.get('assetId'))
                         return chosen
 
-                    featured_a = [
+                    raw_featured = [
                         pick_unique(ev_a1, pool_a1),
                         pick_unique(ic_a1, pool_a1),
                         pick_unique(ev_a2, pool_a2),
@@ -114,6 +122,7 @@ class DraftCog(commands.Cog):
                         pick_unique(ev_a3, pool_a3),
                         pick_unique(ic_a3, pool_a3),
                     ]
+                    featured_a = [p for p in raw_featured if p is not None]
                     new_drafts[i] = {
                         "pool_a": featured_a,
                         "pool_b": pool_b,
@@ -133,7 +142,8 @@ class DraftCog(commands.Cog):
                                 pass
                 # asyncio.create_task(_prewarm_cards())
         except Exception as e:
-            print(f"[Draft] Error in draft rotator: {e}")
+            import traceback
+            print(f"[Draft] Error in draft rotator: {type(e).__name__}: {e}\n{traceback.format_exc()}")
 
     async def refresh_single_draft(self, draft_num: int):
         """
@@ -186,8 +196,8 @@ class DraftCog(commands.Cog):
             ev_a2, ic_a2 = split_promo_icons(pool_a2)
             ev_a3, ic_a3 = split_promo_icons(pool_a3)
             
-            pool_b = await database.get_official_cards_by_rating(min_b, max_b, 200)
-            pool_c = await database.get_official_cards_by_rating(min_c, max_c, 500)
+            pool_b = await database.get_official_cards_by_rating(min_b, max_b, 50)
+            pool_c = await database.get_official_cards_by_rating(min_c, max_c, 100)
             if not pool_b: pool_b = pool_a3
             if not pool_c: pool_c = pool_b
 
@@ -200,13 +210,21 @@ class DraftCog(commands.Cog):
 
             def pick_unique(candidates, fallback_pool):
                 pool_to_use = candidates if candidates else fallback_pool
+                if not pool_to_use:
+                    pool_to_use = pool_a3 or pool_a2 or pool_a1 or pool_b or pool_c or []
+                if not pool_to_use:
+                    return None
                 avail = [p for p in pool_to_use if (p.get('assetId') or p.get('id')) not in used_featured_ids]
-                if not avail: avail = pool_to_use
+                if not avail:
+                    avail = pool_to_use
+                if not avail:
+                    return None
                 chosen = random.choice(avail)
-                used_featured_ids.add(chosen.get('assetId') or chosen.get('id'))
+                if chosen and (chosen.get('assetId') or chosen.get('id')):
+                    used_featured_ids.add(chosen.get('assetId') or chosen.get('id'))
                 return chosen
 
-            featured_a = [
+            raw_featured = [
                 pick_unique(ev_a1, pool_a1),
                 pick_unique(ic_a1, pool_a1),
                 pick_unique(ev_a2, pool_a2),
@@ -214,6 +232,7 @@ class DraftCog(commands.Cog):
                 pick_unique(ev_a3, pool_a3),
                 pick_unique(ic_a3, pool_a3),
             ]
+            featured_a = [p for p in raw_featured if p is not None]
 
             refreshed_draft = {
                 "pool_a": featured_a,

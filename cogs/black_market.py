@@ -494,9 +494,17 @@ class BlackMarketCog(commands.Cog):
         cfg = await database.get_special_market_config()
         now = datetime.datetime.now(datetime.timezone.utc)
         
-        mins = duration_minutes
+        mins = None
+        if duration_minutes is not None:
+            try:
+                mins = int(duration_minutes)
+            except (ValueError, TypeError):
+                mins = None
         if mins is None:
-            mins = int(cfg.get("duration_minutes") or 60)
+            try:
+                mins = int(cfg.get("duration_minutes") or 60)
+            except (ValueError, TypeError):
+                mins = 60
         mins = max(1, min(1440, mins))  # between 1 min and 24 hours
 
         closes_at = now + datetime.timedelta(minutes=mins)
@@ -570,10 +578,18 @@ class BlackMarketCog(commands.Cog):
         if not channels:
             # Last resort fallback: first writable channel in connected guilds
             for g in self.bot.guilds:
+                me = g.me or g.get_member(self.bot.user.id)
+                if not me:
+                    continue
                 for c in g.text_channels:
-                    if c.permissions_for(g.me).send_messages:
-                        channels.append(c)
-                        break
+                    try:
+                        if c.permissions_for(me).send_messages:
+                            channels.append(c)
+                            break
+                    except Exception:
+                        pass
+                if channels:
+                    break
 
         ping_type = str(cfg.get("ping_type") or "none").lower()
         role_id = str(cfg.get("role_id") or "").strip()
@@ -665,10 +681,12 @@ class SpecialMarketView(discord.ui.View):
         for idx, r in enumerate(rewards[:25]):
             cost = int(r.get("cost_coins", 0))
             r_id = str(r.get('id') or idx)
+            desc = str(r.get('description') or '')[:50]
+            desc_text = f"Cost: {cost:,} coins" + (f" • {desc}" if desc else "")
             options.append(discord.SelectOption(
                 label=f"👑 {r.get('title', 'Deal')[:60]}",
                 value=f"deal_{idx}_{r_id}",
-                description=f"Cost: {cost:,} coins • {r.get('description', '')[:50]}"
+                description=desc_text[:100]
             ))
 
         if options:

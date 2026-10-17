@@ -59,10 +59,13 @@ class AdminCog(commands.Cog):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if not await is_team_admin_or_owner(self.bot, interaction.user):
-            if not interaction.response.is_done():
-                await interaction.response.send_message("❌ **Access Denied:** This command is strictly restricted to members of the Discord Application Team.", ephemeral=True)
-            else:
-                await interaction.followup.send("❌ **Access Denied:** This command is strictly restricted to members of the Discord Application Team.", ephemeral=True)
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ **Access Denied:** This command is strictly restricted to members of the Discord Application Team.", ephemeral=True)
+                else:
+                    await interaction.followup.send("❌ **Access Denied:** This command is strictly restricted to members of the Discord Application Team.", ephemeral=True)
+            except (discord.NotFound, discord.HTTPException):
+                pass
             return False
         return True
 

@@ -135,7 +135,7 @@ async def cache_eviction_loop():
         
         print(f"[Memory] Garbage Collected Caches: Removed {len(expired_users)} users, {len(expired_squads)} squads, {len(expired_inv)} inventories.")
 
-def flush_all_caches():
+def flush_all_caches(silent: bool = False):
     """Flush every in-memory cache. Call after SIGNAL_RELOAD_COGS or panel auto-fix."""
     global _DRAFTS_CACHE, _DRAFTS_CACHE_EXP, _LAYOUTS_CACHE, _LAYOUTS_CACHE_EXP
     global _BOT_CONFIG_CACHE, _BOT_CONFIG_CACHE_EXP, _GAMEPLAY_CACHE, _GAMEPLAY_CACHE_EXP
@@ -163,7 +163,8 @@ def flush_all_caches():
         _CUSTOM_DRAFT_CARDS_CACHE = None
     except Exception:
         pass
-    print("[Database] All in-memory caches flushed!")
+    if not silent:
+        print("[Database] All in-memory caches flushed!")
 
 def invalidate_user_cache(user_id: int):
     """Evicts in-memory cached inventory, squad, and user balances for a user."""
@@ -724,13 +725,22 @@ async def get_active_drafts():
 async def set_active_drafts(drafts_dict):
     global _DRAFTS_CACHE
     p = await get_db()
+    seen_dnums = set()
     async with p.acquire() as conn:
         async with conn.transaction():
             for d_num, data in drafts_dict.items():
+                try:
+                    num = int(d_num)
+                except (ValueError, TypeError):
+                    continue
+                if num in seen_dnums:
+                    continue
+                seen_dnums.add(num)
                 exp = _parse_timestamp(data.get("expires_at"))
                 pool_a_json = json.dumps(data.get("pool_a", []))
                 pool_b_json = json.dumps(data.get("pool_b", []))
                 pool_c_json = json.dumps(data.get("pool_c", []))
+                summary_data = json.dumps({"expires_at": data.get("expires_at")})
                 await conn.execute("""
                     INSERT INTO global_drafts (draft_number, draft_data, pool_a, pool_b, pool_c, expires_at)
                     VALUES ($1, $2, $3, $4, $5, $6)
@@ -740,8 +750,16 @@ async def set_active_drafts(drafts_dict):
                         pool_b = EXCLUDED.pool_b,
                         pool_c = EXCLUDED.pool_c,
                         expires_at = EXCLUDED.expires_at
-                """, int(d_num), json.dumps(data), pool_a_json, pool_b_json, pool_c_json, exp)
-    _DRAFTS_CACHE = drafts_dict
+                """, num, summary_data, pool_a_json, pool_b_json, pool_c_json, exp)
+    # Populate both int and str keys in cache for uniform lookups
+    cached = {}
+    for k, v in drafts_dict.items():
+        try:
+            cached[int(k)] = v
+            cached[str(k)] = v
+        except Exception:
+            cached[k] = v
+    _DRAFTS_CACHE = cached
 
 async def get_store_player_shop():
     p = await get_db()
@@ -816,6 +834,7 @@ async def update_single_draft(draft_number: int, draft_data: dict):
     pool_a_json = json.dumps(draft_data.get("pool_a", []))
     pool_b_json = json.dumps(draft_data.get("pool_b", []))
     pool_c_json = json.dumps(draft_data.get("pool_c", []))
+    summary_data = json.dumps({"expires_at": draft_data.get("expires_at")})
     
     await p.execute('''
         INSERT INTO global_drafts (draft_number, draft_data, pool_a, pool_b, pool_c, expires_at)
@@ -826,7 +845,7 @@ async def update_single_draft(draft_number: int, draft_data: dict):
             pool_b = $4,
             pool_c = $5,
             expires_at = $6
-    ''', int(draft_number), json.dumps(draft_data), pool_a_json, pool_b_json, pool_c_json, exp)
+    ''', int(draft_number), summary_data, pool_a_json, pool_b_json, pool_c_json, exp)
     
     if _DRAFTS_CACHE is not None:
         _DRAFTS_CACHE[int(draft_number)] = draft_data

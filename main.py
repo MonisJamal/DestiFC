@@ -196,8 +196,11 @@ class DestiFC(commands.AutoShardedBot):
                 self.user_command_cooldowns[uid] = time.time()
 
             cmd_name = interaction.command.name if interaction.command else "command"
-            print(f"[AppCommandError] Command '/{cmd_name}' failed for user {interaction.user.id} ({interaction.user.display_name}): {error}")
-            traceback.print_exception(type(error), error, error.__traceback__)
+            if isinstance(error, (app_commands.CheckFailure, app_commands.CommandOnCooldown)):
+                print(f"[AppCommand] Command '/{cmd_name}' blocked for user {interaction.user.id} ({interaction.user.display_name}): {error}")
+            else:
+                print(f"[AppCommandError] Command '/{cmd_name}' failed for user {interaction.user.id} ({interaction.user.display_name}): {error}")
+                traceback.print_exception(type(error), error, error.__traceback__)
 
             msg = f"❌ An unexpected error occurred while executing `/{cmd_name}`. Please try again in a moment."
             if isinstance(error, app_commands.CommandOnCooldown):
@@ -206,10 +209,10 @@ class DestiFC(commands.AutoShardedBot):
                 msg = "❌ You do not have permission to execute this command."
 
             try:
-                if interaction.response.is_done():
-                    await interaction.followup.send(msg, ephemeral=True)
-                else:
+                if not interaction.response.is_done():
                     await interaction.response.send_message(msg, ephemeral=True)
+                elif not isinstance(error, app_commands.CheckFailure):
+                    await interaction.followup.send(msg, ephemeral=True)
             except Exception:
                 pass
 
@@ -239,7 +242,7 @@ class DestiFC(commands.AutoShardedBot):
             card_generator._MEMORY_IMAGE_CACHE.clear()
             card_generator._MEMORY_CARD_CACHE.clear()
             card_generator._MEMORY_CARD_BYTES_CACHE.clear()
-            database.flush_all_caches()
+            database.flush_all_caches(silent=True)
             gc.collect()
         except Exception as e:
             print(f"[Memory Hygiene Error] {e}")
@@ -527,8 +530,10 @@ class DestiFC(commands.AutoShardedBot):
                             print("[Remote Control] BlackMarketCog not loaded!")
                             await database.execute("UPDATE portal_jobs SET status = 'failed', result = 'BlackMarketCog not loaded' WHERE id = $1", job_id)
                     except Exception as bm_err:
-                        print(f"[Remote Control] Error triggering Black Market opening: {bm_err}")
-                        await database.execute("UPDATE portal_jobs SET status = 'failed', result = $2 WHERE id = $1", job_id, str(bm_err))
+                        import traceback
+                        err_str = f"{type(bm_err).__name__}: {bm_err}"
+                        print(f"[Remote Control] Error triggering Black Market opening: {err_str}\n{traceback.format_exc()}")
+                        await database.execute("UPDATE portal_jobs SET status = 'failed', result = $2 WHERE id = $1", job_id, err_str or "Unknown error")
 
                 elif job_type == 'open_special_market':
                     print("[Remote Control] Received open_special_market signal from Admin Panel! Triggering VIP market...")
@@ -540,7 +545,7 @@ class DestiFC(commands.AutoShardedBot):
                                 p_data = json.loads(job['payload']) if isinstance(job['payload'], str) else job['payload']
                             except Exception:
                                 pass
-                        dur = p_data.get('duration_minutes')
+                        dur = p_data.get('duration_minutes') if isinstance(p_data, dict) else None
                         bm_cog = self.get_cog('BlackMarketCog')
                         if bm_cog:
                             await bm_cog.trigger_special_market_opening(duration_minutes=dur)
@@ -550,8 +555,10 @@ class DestiFC(commands.AutoShardedBot):
                             print("[Remote Control] BlackMarketCog not loaded!")
                             await database.execute("UPDATE portal_jobs SET status = 'failed', result = 'BlackMarketCog not loaded' WHERE id = $1", job_id)
                     except Exception as bm_err:
-                        print(f"[Remote Control] Error triggering VIP Special Market opening: {bm_err}")
-                        await database.execute("UPDATE portal_jobs SET status = 'failed', result = $2 WHERE id = $1", job_id, str(bm_err))
+                        import traceback
+                        err_str = f"{type(bm_err).__name__}: {bm_err}"
+                        print(f"[Remote Control] Error triggering VIP Special Market opening: {err_str}\n{traceback.format_exc()}")
+                        await database.execute("UPDATE portal_jobs SET status = 'failed', result = $2 WHERE id = $1", job_id, err_str or "Unknown error")
 
                 elif job_type == 'SIGNAL_FLUSH_CACHES':
                     print("[Remote Control] Flushing all in-memory caches...")
