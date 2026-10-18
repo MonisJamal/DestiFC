@@ -13,13 +13,13 @@ DEFAULT_DROPS_CONFIG = {
     "channel_id": None,           # Legacy single channel ID
     "channels": [],               # Multi-channel list: ["123", "456", "789"] across multiple servers
     "interval_mins": 60,
-    "vouchers_per_drop": 3,
-    "coins_per_drop": 5_000_000,
+    "vouchers_per_drop": 50,
+    "coins_per_drop": 500_000_000,
     "max_claims": 3,
     # Rare Gift Drop (Dropped at 2 random times in a day, editable from panel)
     "rare_drop_enabled": True,
-    "rare_drop_vouchers": 25,
-    "rare_drop_coins": 150_000_000,
+    "rare_drop_vouchers": 125,
+    "rare_drop_coins": 750_000_000,
     "rare_drop_max_claims": 5,
     "ping_everyone": False,       # Toggle @everyone ping for rare drops
     "rare_drop_role_id": "",      # Specific Discord Role ID to ping (e.g. "123456789")
@@ -82,7 +82,6 @@ class DropClaimView(discord.ui.View):
         self.claim_btn.callback = self.claim_button
 
         # Randomize horizontal slot position across 3 slots (Left, Middle, Right)
-        # Empty slots are filled with invisible disabled spacers so coordinate autoclickers miss
         total_slots = 3
         active_slot = random.randint(0, total_slots - 1)
 
@@ -91,13 +90,31 @@ class DropClaimView(discord.ui.View):
                 self.add_item(self.claim_btn)
             else:
                 spacer = discord.ui.Button(
-                    label="\u2800\u2800\u2800\u2800",
+                    label="💨 Empty",
                     style=discord.ButtonStyle.secondary,
-                    disabled=True
+                    custom_id=f"empty_{uuid.uuid4().hex[:6]}"
                 )
+                spacer.callback = self.empty_slot_click
                 self.add_item(spacer)
 
+    async def empty_slot_click(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            "💨 **Empty slot!** You clicked an empty crate slot.\nLook carefully and tap the green **Claim** button!",
+            ephemeral=True
+        )
+
+    async def on_timeout(self):
+        for b in self.children:
+            b.disabled = True
+        self.claim_btn.label = "🔒 Expired"
+
     async def claim_button(self, interaction: discord.Interaction):
+        # Immediate acknowledgement - prevents Discord 3-second interaction timeout (404 Unknown interaction)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:
+            pass
+
         async with self.lock:
             now = time.time()
             elapsed = now - self.created_at
@@ -108,7 +125,7 @@ class DropClaimView(discord.ui.View):
                 unlock_time = GLOBAL_CHEATER_LOCKOUT[uid]
                 if now < unlock_time:
                     rem_mins = max(1, int((unlock_time - now) / 60))
-                    return await interaction.response.send_message(
+                    return await interaction.followup.send(
                         f"🚨 **Anti-Cheat Lockout Active:** You are currently banned from claiming drops for auto-clicking.\n"
                         f"⏳ Try again in **{rem_mins} minutes**.",
                         ephemeral=True
@@ -116,12 +133,12 @@ class DropClaimView(discord.ui.View):
                 else:
                     GLOBAL_CHEATER_LOCKOUT.pop(uid, None)
 
-            # 2. Inhuman Reflex Guard (Network transit + human visual reaction physically requires > 0.65s)
-            min_latency = 0.65
+            # 2. Inhuman Reflex Guard (Network transit + human visual reaction physically requires > 0.20s)
+            min_latency = 0.20
             is_trap = self.is_fake or (self.vouchers < 0 or self.coins < 0)
 
             if elapsed < min_latency and not is_trap:
-                GLOBAL_CHEATER_LOCKOUT[uid] = now + 7200  # 2 hours
+                GLOBAL_CHEATER_LOCKOUT[uid] = now + 1800  # 30 mins
                 fine_coins = 10_000_000
                 fine_vouchers = 2
                 try:
@@ -131,24 +148,24 @@ class DropClaimView(discord.ui.View):
                     pass
 
                 print(f"[Anti-Cheat] Inhuman click speed detected: User {uid} ({interaction.user.name}) clicked in {elapsed*1000:.1f}ms! Locked out.")
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     f"⚡ **Auto-clicker / Macro detected!**\n"
                     f"Your click arrived in `{int(elapsed*1000)}ms` from crate spawn (inhuman reflex speed).\n"
                     f"💸 Fined: **-{fine_coins:,} Coins** & **-{fine_vouchers} Vouchers**\n"
-                    f"🚫 Lockout: Banned from claiming supply drops for **2 hours**.",
+                    f"🚫 Lockout: Banned from claiming supply drops for **30 minutes**.",
                     ephemeral=True
                 )
                 await interaction.channel.send(
                     f"🚨 **AUTOCLICKER DETECTED!** {interaction.user.mention} clicked a crate in `{int(elapsed*1000)}ms` (inhuman reflex speed). "
-                    f"Fined **{fine_coins:,} Coins & {fine_vouchers} Vouchers** and locked out of all drops for 2 hours!"
+                    f"Fined **{fine_coins:,} Coins & {fine_vouchers} Vouchers** and locked out of all drops for 30 minutes!"
                 )
                 return
 
             if uid in self.claimed_users:
-                return await interaction.response.send_message("❌ You already claimed from this drop!", ephemeral=True)
+                return await interaction.followup.send("❌ You already claimed from this drop!", ephemeral=True)
 
             if len(self.claimed_users) >= self.max_claims:
-                return await interaction.response.send_message("❌ This crate has already been fully looted!", ephemeral=True)
+                return await interaction.followup.send("❌ This crate has already been fully looted!", ephemeral=True)
 
             self.claimed_users.add(uid)
             
@@ -170,7 +187,10 @@ class DropClaimView(discord.ui.View):
                 self.claim_btn.label = "🔒 Fully Looted!"
                 self.stop()
 
-            await interaction.response.edit_message(view=self)
+            try:
+                await interaction.message.edit(view=self)
+            except Exception as e:
+                print(f"[Drops] Error editing drop message view: {e}")
 
             # ----------------------------------------------------
             # BAIT / TRAP HANDLING
@@ -563,8 +583,8 @@ class DropsCog(commands.Cog):
 
             await self.update_last_drop_time(now)
 
-            vouchers = int(cfg.get("vouchers_per_drop", 3))
-            coins = int(cfg.get("coins_per_drop", 5_000_000))
+            vouchers = int(cfg.get("vouchers_per_drop", 50))
+            coins = int(cfg.get("coins_per_drop", 500_000_000))
             max_claims = int(cfg.get("max_claims", 3))
 
             embed = discord.Embed(
@@ -637,8 +657,8 @@ class DropsCog(commands.Cog):
 
             # Otherwise, drop standard voucher/coin crate
             if vouchers == 0 and coins == 0:
-                vouchers = 3
-                coins = 5_000_000
+                vouchers = 50
+                coins = 500_000_000
 
             # Disguise negative values as positive rewards so players/auto-clickers take the bait
             desc_parts = []
