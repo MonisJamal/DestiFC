@@ -6,7 +6,19 @@ import database
 from auth import is_team_admin_or_owner
 import random
 import time
+import datetime
+import json
 import ai_engine
+from trivia_bank import FOOTBALL_TRIVIA_BANK
+import asyncio
+
+# --- Per-User Concurrency Locks to prevent race condition exploit ---
+_USER_QUEST_LOCKS = {}
+
+def _get_quest_lock(user_id: int) -> asyncio.Lock:
+    if user_id not in _USER_QUEST_LOCKS:
+        _USER_QUEST_LOCKS[user_id] = asyncio.Lock()
+    return _USER_QUEST_LOCKS[user_id]
 
 # --- Interactive Views for Skill Games ---
 
@@ -14,11 +26,16 @@ class PenaltyView(discord.ui.View):
     def __init__(self, user_id):
         super().__init__(timeout=30)
         self.user_id = user_id
+        self._claimed = False
 
     async def handle_shot(self, interaction: discord.Interaction, direction: str):
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("❌ This is not your skill game!", ephemeral=True)
             return
+
+        if self._claimed:
+            return await interaction.response.send_message("❌ Action already completed!", ephemeral=True)
+        self._claimed = True
 
         for child in self.children:
             child.disabled = True
@@ -64,10 +81,15 @@ class FreeKickView(discord.ui.View):
     def __init__(self, user_id):
         super().__init__(timeout=30)
         self.user_id = user_id
+        self._claimed = False
 
     async def handle_shot(self, interaction: discord.Interaction, technique: str):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("❌ This is not your skill game!", ephemeral=True)
+
+        if self._claimed:
+            return await interaction.response.send_message("❌ Action already completed!", ephemeral=True)
+        self._claimed = True
 
         for child in self.children:
             child.disabled = True
@@ -115,10 +137,15 @@ class DribbleView(discord.ui.View):
     def __init__(self, user_id):
         super().__init__(timeout=30)
         self.user_id = user_id
+        self._claimed = False
 
     async def handle_move(self, interaction: discord.Interaction, move: str):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("❌ This is not your skill game!", ephemeral=True)
+
+        if self._claimed:
+            return await interaction.response.send_message("❌ Action already completed!", ephemeral=True)
+        self._claimed = True
 
         for child in self.children:
             child.disabled = True
@@ -165,10 +192,15 @@ class GKHeroView(discord.ui.View):
     def __init__(self, user_id):
         super().__init__(timeout=30)
         self.user_id = user_id
+        self._claimed = False
 
     async def handle_dive(self, interaction: discord.Interaction, dive: str):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("❌ This is not your skill game!", ephemeral=True)
+
+        if self._claimed:
+            return await interaction.response.send_message("❌ Action already completed!", ephemeral=True)
+        self._claimed = True
 
         for child in self.children:
             child.disabled = True
@@ -214,10 +246,15 @@ class VolleyView(discord.ui.View):
     def __init__(self, user_id):
         super().__init__(timeout=30)
         self.user_id = user_id
+        self._claimed = False
 
     async def handle_strike(self, interaction: discord.Interaction, strike: str):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("❌ This is not your skill game!", ephemeral=True)
+
+        if self._claimed:
+            return await interaction.response.send_message("❌ Action already completed!", ephemeral=True)
+        self._claimed = True
 
         for child in self.children:
             child.disabled = True
@@ -259,64 +296,49 @@ class VolleyView(discord.ui.View):
         await self.handle_strike(interaction, "Scorpion Kick")
 
 
-TRIVIA_QUESTIONS = [
-    {
-        "q": "Which country won the 2022 FIFA World Cup in Qatar?",
-        "options": ["Argentina", "France", "Croatia", "Brazil"],
-        "answer": "Argentina"
-    },
-    {
-        "q": "Who has won the most Ballon d'Or awards in football history?",
-        "options": ["Lionel Messi", "Cristiano Ronaldo", "Johan Cruyff", "Michel Platini"],
-        "answer": "Lionel Messi"
-    },
-    {
-        "q": "Which club has won the most UEFA Champions League titles?",
-        "options": ["Real Madrid", "AC Milan", "Bayern Munich", "Liverpool"],
-        "answer": "Real Madrid"
-    },
-    {
-        "q": "Who scored the famous 'Hand of God' goal in the 1986 World Cup?",
-        "options": ["Diego Maradona", "Pelé", "Zico", "Mario Kempes"],
-        "answer": "Diego Maradona"
-    },
-    {
-        "q": "Which player is known as 'El Fenomeno'?",
-        "options": ["Ronaldo Nazário", "Cristiano Ronaldo", "Ronaldinho", "Romário"],
-        "answer": "Ronaldo Nazário"
-    },
-    {
-        "q": "Which manager achieved 'The Invincibles' Premier League season with Arsenal in 2003-04?",
-        "options": ["Arsène Wenger", "Alex Ferguson", "José Mourinho", "Pep Guardiola"],
-        "answer": "Arsène Wenger"
-    },
-    {
-        "q": "Who scored the winning volley goal for Real Madrid in the 2002 UCL Final against Leverkusen?",
-        "options": ["Zinedine Zidane", "Raúl", "Luís Figo", "Roberto Carlos"],
-        "answer": "Zinedine Zidane"
-    },
-    {
-        "q": "Which country won the UEFA Euro 2004 in one of football's biggest upsets?",
-        "options": ["Greece", "Portugal", "Czech Republic", "Netherlands"],
-        "answer": "Greece"
-    },
-    {
-        "q": "Which legendary goalkeeper played 648 Serie A matches for Juventus?",
-        "options": ["Gianluigi Buffon", "Dino Zoff", "Iker Casillas", "Manuel Neuer"],
-        "answer": "Gianluigi Buffon"
-    },
-    {
-        "q": "Who is the all-time top scorer in UEFA Champions League history?",
-        "options": ["Cristiano Ronaldo", "Lionel Messi", "Robert Lewandowski", "Karim Benzema"],
-        "answer": "Cristiano Ronaldo"
-    }
-]
+TRIVIA_QUESTIONS = FOOTBALL_TRIVIA_BANK
+
+async def get_daily_trivia_question() -> dict:
+    """
+    Returns today's designated football trivia question.
+    Ensures every day features a fresh, unique question across the entire community,
+    persisting it to `daily_trivia` in PostgreSQL so all players get the exact same daily challenge.
+    """
+    today = datetime.date.today()
+    try:
+        p = await database.get_db()
+        row = await p.fetchrow("SELECT question, options, answer FROM daily_trivia WHERE trivia_date = $1", today)
+        if row:
+            opts = row["options"]
+            if isinstance(opts, str):
+                try: opts = json.loads(opts)
+                except Exception: pass
+            return {"q": row["question"], "options": opts, "answer": row["answer"]}
+
+        # Deterministically select today's question based on day ordinal
+        day_index = today.toordinal() % len(FOOTBALL_TRIVIA_BANK)
+        chosen = FOOTBALL_TRIVIA_BANK[day_index]
+
+        await p.execute(
+            """
+            INSERT INTO daily_trivia (trivia_date, question, options, answer)
+            VALUES ($1, $2, $3::jsonb, $4)
+            ON CONFLICT (trivia_date) DO NOTHING
+            """,
+            today, chosen["q"], json.dumps(chosen["options"]), chosen["answer"]
+        )
+        return chosen
+    except Exception as e:
+        print(f"[Economy] Error getting daily trivia: {e}")
+        day_index = today.toordinal() % len(FOOTBALL_TRIVIA_BANK)
+        return FOOTBALL_TRIVIA_BANK[day_index]
 
 class TriviaView(discord.ui.View):
     def __init__(self, user_id: int, question_data: dict):
         super().__init__(timeout=25)
         self.user_id = user_id
         self.question_data = question_data
+        self._claimed = False
 
         shuffled_options = list(question_data["options"])
         random.shuffle(shuffled_options)
@@ -330,6 +352,10 @@ class TriviaView(discord.ui.View):
         async def callback(interaction: discord.Interaction):
             if interaction.user.id != self.user_id:
                 return await interaction.response.send_message("❌ This is not your trivia game!", ephemeral=True)
+
+            if self._claimed:
+                return await interaction.response.send_message("❌ Action already completed!", ephemeral=True)
+            self._claimed = True
 
             for child in self.children:
                 child.disabled = True
@@ -369,175 +395,237 @@ class EconomyCog(commands.Cog):
     async def quest_daily(self, interaction: discord.Interaction):
         await interaction.response.defer()
         user_id = interaction.user.id
-        current_time = int(time.time())
-        eco_cfg = await database.get_economy_config()
-        cooldown = int(eco_cfg.get('daily_cooldown_hours', 24)) * 3600
+        async with _get_quest_lock(user_id):
+            current_time = int(time.time())
+            eco_cfg = await database.get_economy_config()
+            cooldown = int(eco_cfg.get('daily_cooldown_hours', 24)) * 3600
 
-        p = await database.get_db()
-        last_daily = await p.fetchval('SELECT last_quest_daily FROM users WHERE user_id = $1', user_id) or 0
+            p = await database.get_db()
+            await p.execute("INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", user_id)
+            last_daily = await p.fetchval('SELECT last_quest_daily FROM users WHERE user_id = $1', user_id) or 0
 
-        if cooldown > 0 and (current_time - last_daily < cooldown):
-            remaining = cooldown - (current_time - last_daily)
-            hours, rem = divmod(remaining, 3600)
-            mins, _ = divmod(rem, 60)
-            return await interaction.followup.send(f"⏳ You already claimed your daily reward! Come back in **{int(hours)}h {int(mins)}m**.")
+            if cooldown > 0 and (current_time - last_daily < cooldown):
+                remaining = cooldown - (current_time - last_daily)
+                hours, rem = divmod(remaining, 3600)
+                mins, _ = divmod(rem, 60)
+                return await interaction.followup.send(f"⏳ You already claimed your daily reward! Come back in **{int(hours)}h {int(mins)}m**.")
 
-        daily_vouchers = int(eco_cfg.get('daily_vouchers', 2))
-        min_coins = int(eco_cfg.get('daily_coins_min', 5_000_000))
-        max_coins = int(eco_cfg.get('daily_coins_max', 20_000_000))
-        daily_coins = random.randint(min(min_coins, max_coins), max(min_coins, max_coins)) if max_coins > 0 else 0
+            daily_vouchers = int(eco_cfg.get('daily_vouchers', 2))
+            min_coins = int(eco_cfg.get('daily_coins_min', 5_000_000))
+            max_coins = int(eco_cfg.get('daily_coins_max', 20_000_000))
+            daily_coins = random.randint(min(min_coins, max_coins), max(min_coins, max_coins)) if max_coins > 0 else 0
 
-        await p.execute('UPDATE users SET vouchers = vouchers + $1, coins = coins + $2, last_quest_daily = $3 WHERE user_id = $4', daily_vouchers, daily_coins, current_time, user_id)
+            res = await p.execute(
+                """
+                UPDATE users 
+                SET vouchers = vouchers + $1, coins = coins + $2, last_quest_daily = $3 
+                WHERE user_id = $4 AND ($3 - COALESCE(last_quest_daily, 0) >= $5)
+                """,
+                daily_vouchers, daily_coins, current_time, user_id, cooldown
+            )
+            if res == 'UPDATE 0':
+                return await interaction.followup.send("⏳ You have already claimed your daily reward! Please wait for cooldown.")
 
-        await interaction.followup.send(f"🎁 **Daily Reward Claimed!** You received **{daily_vouchers}x Draft Vouchers 🎫** and **+{daily_coins:,} Coins 💰**!")
+            database._USER_CACHE.pop(user_id, None)
+            await interaction.followup.send(f"🎁 **Daily Reward Claimed!** You received **{daily_vouchers}x Draft Vouchers 🎫** and **+{daily_coins:,} Coins 💰**!")
 
     @app_commands.command(name="quest_skill_game", description="Play a Penalty Shootout skill game for vouchers and coins")
     async def quest_skill_game(self, interaction: discord.Interaction):
         user_id = interaction.user.id
-        current_time = int(time.time())
-        eco_cfg = await database.get_economy_config()
-        cooldown = int(eco_cfg.get('penalty_cooldown_mins', 60)) * 60
+        async with _get_quest_lock(user_id):
+            current_time = int(time.time())
+            eco_cfg = await database.get_economy_config()
+            cooldown = int(eco_cfg.get('penalty_cooldown_mins', 60)) * 60
 
-        p = await database.get_db()
-        last_skill = await p.fetchval('SELECT last_quest_skill FROM users WHERE user_id = $1', user_id) or 0
+            p = await database.get_db()
+            await p.execute("INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", user_id)
+            last_skill = await p.fetchval('SELECT last_quest_skill FROM users WHERE user_id = $1', user_id) or 0
 
-        if cooldown > 0 and (current_time - last_skill < cooldown):
-            remaining = cooldown - (current_time - last_skill)
-            mins, secs = divmod(remaining, 60)
-            return await interaction.response.send_message(f"⏳ Penalty Shootout is on cooldown! Come back in **{int(mins)}m {int(secs)}s**.", ephemeral=True)
+            if cooldown > 0 and (current_time - last_skill < cooldown):
+                remaining = cooldown - (current_time - last_skill)
+                mins, secs = divmod(remaining, 60)
+                return await interaction.response.send_message(f"⏳ Penalty Shootout is on cooldown! Come back in **{int(mins)}m {int(secs)}s**.", ephemeral=True)
 
-        await p.execute('UPDATE users SET last_quest_skill = $1 WHERE user_id = $2', current_time, user_id)
+            res = await p.execute(
+                "UPDATE users SET last_quest_skill = $1 WHERE user_id = $2 AND ($1 - COALESCE(last_quest_skill, 0) >= $3)",
+                current_time, user_id, cooldown
+            )
+            if res == 'UPDATE 0':
+                return await interaction.response.send_message("⏳ Penalty Shootout is currently on cooldown!", ephemeral=True)
 
-        view = PenaltyView(interaction.user.id)
-        await interaction.response.send_message("🥅 **Penalty Shootout!**\nWhere are you going to shoot? Choose quickly!", view=view)
+            view = PenaltyView(interaction.user.id)
+            await interaction.response.send_message("🥅 **Penalty Shootout!**\nWhere are you going to shoot? Choose quickly!", view=view)
 
     @app_commands.command(name="quest_freekick", description="Take a high-stakes Free Kick past the wall and goalkeeper")
     async def quest_freekick(self, interaction: discord.Interaction):
         user_id = interaction.user.id
-        current_time = int(time.time())
-        eco_cfg = await database.get_economy_config()
-        cooldown = int(eco_cfg.get('freekick_cooldown_mins', 90)) * 60
+        async with _get_quest_lock(user_id):
+            current_time = int(time.time())
+            eco_cfg = await database.get_economy_config()
+            cooldown = int(eco_cfg.get('freekick_cooldown_mins', 90)) * 60
 
-        p = await database.get_db()
-        last_fk = await p.fetchval('SELECT last_quest_freekick FROM users WHERE user_id = $1', user_id) or 0
+            p = await database.get_db()
+            await p.execute("INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", user_id)
+            last_fk = await p.fetchval('SELECT last_quest_freekick FROM users WHERE user_id = $1', user_id) or 0
 
-        if cooldown > 0 and (current_time - last_fk < cooldown):
-            remaining = cooldown - (current_time - last_fk)
-            hours, rem = divmod(remaining, 3600)
-            mins, _ = divmod(rem, 60)
-            time_str = f"{int(hours)}h {int(mins)}m" if hours > 0 else f"{int(mins)}m"
-            return await interaction.response.send_message(f"⏳ Free Kick Master is on cooldown! Come back in **{time_str}**.", ephemeral=True)
+            if cooldown > 0 and (current_time - last_fk < cooldown):
+                remaining = cooldown - (current_time - last_fk)
+                hours, rem = divmod(remaining, 3600)
+                mins, _ = divmod(rem, 60)
+                time_str = f"{int(hours)}h {int(mins)}m" if hours > 0 else f"{int(mins)}m"
+                return await interaction.response.send_message(f"⏳ Free Kick Master is on cooldown! Come back in **{time_str}**.", ephemeral=True)
 
-        await p.execute('UPDATE users SET last_quest_freekick = $1 WHERE user_id = $2', current_time, user_id)
+            res = await p.execute(
+                "UPDATE users SET last_quest_freekick = $1 WHERE user_id = $2 AND ($1 - COALESCE(last_quest_freekick, 0) >= $3)",
+                current_time, user_id, cooldown
+            )
+            if res == 'UPDATE 0':
+                return await interaction.response.send_message("⏳ Free Kick Master is currently on cooldown!", ephemeral=True)
 
-        view = FreeKickView(interaction.user.id)
-        await interaction.response.send_message("🎯 **Free Kick Master!**\nBall is placed 25 yards out. Choose your shooting technique:", view=view)
+            view = FreeKickView(interaction.user.id)
+            await interaction.response.send_message("🎯 **Free Kick Master!**\nBall is placed 25 yards out. Choose your shooting technique:", view=view)
 
     @app_commands.command(name="quest_dribble", description="Take on defenders in the Dribbling Gauntlet")
     async def quest_dribble(self, interaction: discord.Interaction):
         user_id = interaction.user.id
-        current_time = int(time.time())
-        eco_cfg = await database.get_economy_config()
-        cooldown = int(eco_cfg.get('dribble_cooldown_mins', 120)) * 60
+        async with _get_quest_lock(user_id):
+            current_time = int(time.time())
+            eco_cfg = await database.get_economy_config()
+            cooldown = int(eco_cfg.get('dribble_cooldown_mins', 120)) * 60
 
-        p = await database.get_db()
-        last_dr = await p.fetchval('SELECT last_quest_dribble FROM users WHERE user_id = $1', user_id) or 0
+            p = await database.get_db()
+            await p.execute("INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", user_id)
+            last_dr = await p.fetchval('SELECT last_quest_dribble FROM users WHERE user_id = $1', user_id) or 0
 
-        if cooldown > 0 and (current_time - last_dr < cooldown):
-            remaining = cooldown - (current_time - last_dr)
-            hours, rem = divmod(remaining, 3600)
-            mins, _ = divmod(rem, 60)
-            return await interaction.response.send_message(f"⏳ Dribbling Gauntlet is on cooldown! Come back in **{int(hours)}h {int(mins)}m**.", ephemeral=True)
+            if cooldown > 0 and (current_time - last_dr < cooldown):
+                remaining = cooldown - (current_time - last_dr)
+                hours, rem = divmod(remaining, 3600)
+                mins, _ = divmod(rem, 60)
+                return await interaction.response.send_message(f"⏳ Dribbling Gauntlet is on cooldown! Come back in **{int(hours)}h {int(mins)}m**.", ephemeral=True)
 
-        await p.execute('UPDATE users SET last_quest_dribble = $1 WHERE user_id = $2', current_time, user_id)
+            res = await p.execute(
+                "UPDATE users SET last_quest_dribble = $1 WHERE user_id = $2 AND ($1 - COALESCE(last_quest_dribble, 0) >= $3)",
+                current_time, user_id, cooldown
+            )
+            if res == 'UPDATE 0':
+                return await interaction.response.send_message("⏳ Dribbling Gauntlet is currently on cooldown!", ephemeral=True)
 
-        view = DribbleView(interaction.user.id)
-        await interaction.response.send_message("⚡ **Dribbling Gauntlet!**\nTwo defenders are closing in on you! Pick your skill move to burst through:", view=view)
+            view = DribbleView(interaction.user.id)
+            await interaction.response.send_message("⚡ **Dribbling Gauntlet!**\nTwo defenders are closing in on you! Pick your skill move to burst through:", view=view)
 
     @app_commands.command(name="quest_trivia", description="Test your Football IQ in a 4-choice trivia challenge")
     async def quest_trivia(self, interaction: discord.Interaction):
         user_id = interaction.user.id
-        current_time = int(time.time())
-        eco_cfg = await database.get_economy_config()
-        cooldown = int(eco_cfg.get('trivia_cooldown_mins', 60)) * 60
+        async with _get_quest_lock(user_id):
+            current_time = int(time.time())
+            eco_cfg = await database.get_economy_config()
+            cooldown = int(eco_cfg.get('trivia_cooldown_mins', 60)) * 60
 
-        p = await database.get_db()
-        last_tr = await p.fetchval('SELECT last_quest_trivia FROM users WHERE user_id = $1', user_id) or 0
+            p = await database.get_db()
+            await p.execute("INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", user_id)
+            last_tr = await p.fetchval('SELECT last_quest_trivia FROM users WHERE user_id = $1', user_id) or 0
 
-        if cooldown > 0 and (current_time - last_tr < cooldown):
-            remaining = cooldown - (current_time - last_tr)
-            mins, secs = divmod(remaining, 60)
-            return await interaction.response.send_message(f"⏳ Football Trivia is on cooldown! Come back in **{int(mins)}m {int(secs)}s**.", ephemeral=True)
+            if cooldown > 0 and (current_time - last_tr < cooldown):
+                remaining = cooldown - (current_time - last_tr)
+                mins, secs = divmod(remaining, 60)
+                return await interaction.response.send_message(f"⏳ Football Trivia is on cooldown! Come back in **{int(mins)}m {int(secs)}s**.", ephemeral=True)
 
-        await p.execute('UPDATE users SET last_quest_trivia = $1 WHERE user_id = $2', current_time, user_id)
+            res = await p.execute(
+                "UPDATE users SET last_quest_trivia = $1 WHERE user_id = $2 AND ($1 - COALESCE(last_quest_trivia, 0) >= $3)",
+                current_time, user_id, cooldown
+            )
+            if res == 'UPDATE 0':
+                return await interaction.response.send_message("⏳ Football Trivia is currently on cooldown!", ephemeral=True)
 
-        q_data = random.choice(TRIVIA_QUESTIONS)
-        view = TriviaView(interaction.user.id, q_data)
-        await interaction.response.send_message(f"🧠 **Football IQ Trivia Challenge!**\n\n**Question:** {q_data['q']}\n*You have 25 seconds to answer:*", view=view)
+            q_data = await get_daily_trivia_question()
+            view = TriviaView(interaction.user.id, q_data)
+            today_str = datetime.date.today().strftime("%B %d, %Y")
+            await interaction.response.send_message(f"🧠 **Daily Football IQ Trivia Challenge!** ({today_str})\n\n**Question:** {q_data['q']}\n*You have 25 seconds to answer:*", view=view)
 
     @app_commands.command(name="quest_gk", description="Play as the Goalkeeper and make a match-winning 1v1 save")
     async def quest_gk(self, interaction: discord.Interaction):
         user_id = interaction.user.id
-        current_time = int(time.time())
-        eco_cfg = await database.get_economy_config()
-        cooldown = int(eco_cfg.get('gk_cooldown_mins', 90)) * 60
+        async with _get_quest_lock(user_id):
+            current_time = int(time.time())
+            eco_cfg = await database.get_economy_config()
+            cooldown = int(eco_cfg.get('gk_cooldown_mins', 90)) * 60
 
-        p = await database.get_db()
-        last_gk = await p.fetchval('SELECT last_quest_gk FROM users WHERE user_id = $1', user_id) or 0
+            p = await database.get_db()
+            await p.execute("INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", user_id)
+            last_gk = await p.fetchval('SELECT last_quest_gk FROM users WHERE user_id = $1', user_id) or 0
 
-        if cooldown > 0 and (current_time - last_gk < cooldown):
-            remaining = cooldown - (current_time - last_gk)
-            hours, rem = divmod(remaining, 3600)
-            mins, _ = divmod(rem, 60)
-            time_str = f"{int(hours)}h {int(mins)}m" if hours > 0 else f"{int(mins)}m"
-            return await interaction.response.send_message(f"⏳ Goalkeeper Hero is on cooldown! Come back in **{time_str}**.", ephemeral=True)
+            if cooldown > 0 and (current_time - last_gk < cooldown):
+                remaining = cooldown - (current_time - last_gk)
+                hours, rem = divmod(remaining, 3600)
+                mins, _ = divmod(rem, 60)
+                time_str = f"{int(hours)}h {int(mins)}m" if hours > 0 else f"{int(mins)}m"
+                return await interaction.response.send_message(f"⏳ Goalkeeper Hero is on cooldown! Come back in **{time_str}**.", ephemeral=True)
 
-        await p.execute('UPDATE users SET last_quest_gk = $1 WHERE user_id = $2', current_time, user_id)
+            res = await p.execute(
+                "UPDATE users SET last_quest_gk = $1 WHERE user_id = $2 AND ($1 - COALESCE(last_quest_gk, 0) >= $3)",
+                current_time, user_id, cooldown
+            )
+            if res == 'UPDATE 0':
+                return await interaction.response.send_message("⏳ Goalkeeper Hero is currently on cooldown!", ephemeral=True)
 
-        view = GKHeroView(interaction.user.id)
-        await interaction.response.send_message("🧤 **Goalkeeper Hero!**\nA striker is bearing down 1v1 on goal in the 90th minute! Make your move:", view=view)
+            view = GKHeroView(interaction.user.id)
+            await interaction.response.send_message("🧤 **Goalkeeper Hero!**\nA striker is bearing down 1v1 on goal in the 90th minute! Make your move:", view=view)
 
     @app_commands.command(name="quest_volley", description="Finish a whipped cross with a spectacular volley")
     async def quest_volley(self, interaction: discord.Interaction):
         user_id = interaction.user.id
-        current_time = int(time.time())
-        eco_cfg = await database.get_economy_config()
-        cooldown = int(eco_cfg.get('volley_cooldown_mins', 90)) * 60
+        async with _get_quest_lock(user_id):
+            current_time = int(time.time())
+            eco_cfg = await database.get_economy_config()
+            cooldown = int(eco_cfg.get('volley_cooldown_mins', 90)) * 60
 
-        p = await database.get_db()
-        last_vl = await p.fetchval('SELECT last_quest_volley FROM users WHERE user_id = $1', user_id) or 0
+            p = await database.get_db()
+            await p.execute("INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", user_id)
+            last_vl = await p.fetchval('SELECT last_quest_volley FROM users WHERE user_id = $1', user_id) or 0
 
-        if cooldown > 0 and (current_time - last_vl < cooldown):
-            remaining = cooldown - (current_time - last_vl)
-            hours, rem = divmod(remaining, 3600)
-            mins, _ = divmod(rem, 60)
-            time_str = f"{int(hours)}h {int(mins)}m" if hours > 0 else f"{int(mins)}m"
-            return await interaction.response.send_message(f"⏳ Cross & Volley is on cooldown! Come back in **{time_str}**.", ephemeral=True)
+            if cooldown > 0 and (current_time - last_vl < cooldown):
+                remaining = cooldown - (current_time - last_vl)
+                hours, rem = divmod(remaining, 3600)
+                mins, _ = divmod(rem, 60)
+                time_str = f"{int(hours)}h {int(mins)}m" if hours > 0 else f"{int(mins)}m"
+                return await interaction.response.send_message(f"⏳ Cross & Volley is on cooldown! Come back in **{time_str}**.", ephemeral=True)
 
-        await p.execute('UPDATE users SET last_quest_volley = $1 WHERE user_id = $2', current_time, user_id)
+            res = await p.execute(
+                "UPDATE users SET last_quest_volley = $1 WHERE user_id = $2 AND ($1 - COALESCE(last_quest_volley, 0) >= $3)",
+                current_time, user_id, cooldown
+            )
+            if res == 'UPDATE 0':
+                return await interaction.response.send_message("⏳ Cross & Volley is currently on cooldown!", ephemeral=True)
 
-        view = VolleyView(interaction.user.id)
-        await interaction.response.send_message("🎯 **Cross & Volley Challenge!**\nA pinpoint cross is whipped towards the back post! Choose your finish:", view=view)
+            view = VolleyView(interaction.user.id)
+            await interaction.response.send_message("🎯 **Cross & Volley Challenge!**\nA pinpoint cross is whipped towards the back post! Choose your finish:", view=view)
 
     @app_commands.command(name="quest_h2h", description="Play a quick Head to Head match against AI")
     async def quest_h2h(self, interaction: discord.Interaction):
         user_id = interaction.user.id
-        current_time = int(time.time())
-        eco_cfg = await database.get_economy_config()
-        cooldown = int(eco_cfg.get('h2h_ai_cooldown_mins', 120)) * 60
+        async with _get_quest_lock(user_id):
+            current_time = int(time.time())
+            eco_cfg = await database.get_economy_config()
+            cooldown = int(eco_cfg.get('h2h_ai_cooldown_mins', 120)) * 60
 
-        p = await database.get_db()
-        last_h2h = await p.fetchval('SELECT last_quest_h2h FROM users WHERE user_id = $1', user_id) or 0
+            p = await database.get_db()
+            await p.execute("INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", user_id)
+            last_h2h = await p.fetchval('SELECT last_quest_h2h FROM users WHERE user_id = $1', user_id) or 0
 
-        if cooldown > 0 and (current_time - last_h2h < cooldown):
-            remaining = cooldown - (current_time - last_h2h)
-            hours, rem = divmod(remaining, 3600)
-            mins, _ = divmod(rem, 60)
-            return await interaction.response.send_message(f"⏳ AI H2H match is on cooldown! Come back in **{int(hours)}h {int(mins)}m**.", ephemeral=True)
+            if cooldown > 0 and (current_time - last_h2h < cooldown):
+                remaining = cooldown - (current_time - last_h2h)
+                hours, rem = divmod(remaining, 3600)
+                mins, _ = divmod(rem, 60)
+                return await interaction.response.send_message(f"⏳ AI H2H match is on cooldown! Come back in **{int(hours)}h {int(mins)}m**.", ephemeral=True)
 
-        await interaction.response.defer()
+            res = await p.execute(
+                "UPDATE users SET last_quest_h2h = $1 WHERE user_id = $2 AND ($1 - COALESCE(last_quest_h2h, 0) >= $3)",
+                current_time, user_id, cooldown
+            )
+            if res == 'UPDATE 0':
+                return await interaction.response.send_message("⏳ AI H2H match is currently on cooldown!", ephemeral=True)
 
-        await p.execute('UPDATE users SET last_quest_h2h = $1 WHERE user_id = $2', current_time, user_id)
+            await interaction.response.defer()
 
         is_win = random.random() < 0.50
         user_name = interaction.user.display_name
@@ -789,60 +877,62 @@ class EconomyCog(commands.Cog):
         await interaction.response.defer()
         user_id = interaction.user.id
         
-        # Check cooldown & streak calculation
-        p = await database.get_db()
-        row = await p.fetchrow('SELECT last_daily, daily_streak FROM users WHERE user_id = $1', user_id)
-        last_daily = row['last_daily'] if row and row['last_daily'] else 0
-        current_streak = row['daily_streak'] if row and row['daily_streak'] else 0
-                
-        current_time = int(time.time())
-        cooldown = 86400  # 24 hours
-        if last_daily:
-            time_diff = current_time - last_daily
-            if time_diff < cooldown:
-                remaining = cooldown - time_diff
-                hours, rem = divmod(remaining, 3600)
-                mins, secs = divmod(rem, 60)
-                return await interaction.followup.send(f"⏳ You already claimed your daily reward! Come back in **{int(hours)}h {int(mins)}m**.")
-            elif time_diff <= (cooldown * 2):
-                # Within 48 hours -> streak increments!
-                new_streak = (current_streak % 7) + 1
+        async with _get_quest_lock(user_id):
+            # Check cooldown & streak calculation
+            p = await database.get_db()
+            row = await p.fetchrow('SELECT last_daily, daily_streak FROM users WHERE user_id = $1', user_id)
+            last_daily = row['last_daily'] if row and row['last_daily'] else 0
+            current_streak = row['daily_streak'] if row and row['daily_streak'] else 0
+                    
+            current_time = int(time.time())
+            cooldown = 86400  # 24 hours
+            if last_daily:
+                time_diff = current_time - last_daily
+                if time_diff < cooldown:
+                    remaining = cooldown - time_diff
+                    hours, rem = divmod(remaining, 3600)
+                    mins, secs = divmod(rem, 60)
+                    return await interaction.followup.send(f"⏳ You already claimed your daily reward! Come back in **{int(hours)}h {int(mins)}m**.")
+                elif time_diff <= (cooldown * 2):
+                    # Within 48 hours -> streak increments!
+                    new_streak = (current_streak % 7) + 1
+                else:
+                    # Missed more than 48 hours -> reset streak
+                    new_streak = 1
             else:
-                # Missed more than 48 hours -> reset streak
                 new_streak = 1
-        else:
-            new_streak = 1
 
-        # 7-Day Tiered Streak Table
-        STREAK_REWARDS = {
-            1: {"coins": 5_000_000, "vouchers": 2, "gems": 10, "walkout": False},
-            2: {"coins": 10_000_000, "vouchers": 3, "gems": 25, "walkout": False},
-            3: {"coins": 15_000_000, "vouchers": 5, "gems": 50, "walkout": False},
-            4: {"coins": 20_000_000, "vouchers": 7, "gems": 75, "walkout": False},
-            5: {"coins": 30_000_000, "vouchers": 10, "gems": 100, "walkout": False},
-            6: {"coins": 40_000_000, "vouchers": 15, "gems": 150, "walkout": False},
-            7: {"coins": 60_000_000, "vouchers": 25, "gems": 300, "walkout": True},
-        }
+            # 7-Day Tiered Streak Table
+            STREAK_REWARDS = {
+                1: {"coins": 5_000_000, "vouchers": 2, "gems": 10, "walkout": False},
+                2: {"coins": 10_000_000, "vouchers": 3, "gems": 25, "walkout": False},
+                3: {"coins": 15_000_000, "vouchers": 5, "gems": 50, "walkout": False},
+                4: {"coins": 20_000_000, "vouchers": 7, "gems": 75, "walkout": False},
+                5: {"coins": 30_000_000, "vouchers": 10, "gems": 100, "walkout": False},
+                6: {"coins": 40_000_000, "vouchers": 15, "gems": 150, "walkout": False},
+                7: {"coins": 60_000_000, "vouchers": 25, "gems": 300, "walkout": True},
+            }
 
-        tier = STREAK_REWARDS.get(new_streak, STREAK_REWARDS[1])
-        coins_won = tier["coins"]
-        vouchers_won = tier["vouchers"]
-        gems_won = tier["gems"]
-        guaranteed_walkout = tier["walkout"]
+            tier = STREAK_REWARDS.get(new_streak, STREAK_REWARDS[1])
+            coins_won = tier["coins"]
+            vouchers_won = tier["vouchers"]
+            gems_won = tier["gems"]
+            guaranteed_walkout = tier["walkout"]
 
-        await p.execute('''
-            INSERT INTO users (user_id, coins, vouchers, gems, last_daily, daily_streak)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (user_id) DO UPDATE SET
-                coins = COALESCE(users.coins, 0) + $2,
-                vouchers = COALESCE(users.vouchers, 0) + $3,
-                gems = COALESCE(users.gems, 0) + $4,
-                last_daily = $5,
-                daily_streak = $6
-        ''', user_id, coins_won, vouchers_won, gems_won, current_time, new_streak)
-        
-        # Invalidate cached user record
-        database._USER_CACHE.pop(user_id, None)
+            await p.execute('''
+                INSERT INTO users (user_id, coins, vouchers, gems, last_daily, daily_streak)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (user_id) DO UPDATE SET
+                    coins = COALESCE(users.coins, 0) + $2,
+                    vouchers = COALESCE(users.vouchers, 0) + $3,
+                    gems = COALESCE(users.gems, 0) + $4,
+                    last_daily = $5,
+                    daily_streak = $6
+                WHERE ($5 - COALESCE(users.last_daily, 0) >= 86400) OR users.last_daily IS NULL
+            ''', user_id, coins_won, vouchers_won, gems_won, current_time, new_streak)
+            
+            # Invalidate cached user record
+            database._USER_CACHE.pop(user_id, None)
 
         # Build visual progress bar
         bar = " ".join(["🟩" if i <= new_streak else "⬜" for i in range(1, 8)])
