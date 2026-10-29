@@ -105,9 +105,11 @@ class SeasonCog(commands.Cog):
 
     @tasks.loop(hours=1)
     async def season_reset_loop(self):
-        """Check if any user's season has expired (15 days) and reset them."""
+        """Check if any user's season has expired and reset them."""
+        config = await fetch_season_config()
+        duration_days = int(config.get("duration_days", 10) or 10)
         p = await database.get_db()
-        cutoff = int(time.time()) - (15 * 86400)  # 15 days ago
+        cutoff = int(time.time()) - (duration_days * 86400)
         await p.execute('UPDATE season_pass SET xp = 0, claimed_tiers = $1, season_id = season_id + 1, started_at = $2 WHERE started_at < $3 AND started_at > 0',
                          '[]', int(time.time()), cutoff)
 
@@ -130,7 +132,8 @@ class SeasonCog(commands.Cog):
 
         # Calculate time remaining
         elapsed = int(time.time()) - data["started_at"]
-        remaining_secs = max(0, (15 * 86400) - elapsed)
+        duration_days = int(config.get("duration_days", 10) or 10)
+        remaining_secs = max(0, (duration_days * 86400) - elapsed)
         days_left = remaining_secs // 86400
         hours_left = (remaining_secs % 86400) // 3600
 
