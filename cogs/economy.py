@@ -402,7 +402,8 @@ class EconomyCog(commands.Cog):
 
             p = await database.get_db()
             await p.execute("INSERT INTO users (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", user_id)
-            last_daily = await p.fetchval('SELECT last_quest_daily FROM users WHERE user_id = $1', user_id) or 0
+            row = await p.fetchrow('SELECT last_quest_daily, last_daily FROM users WHERE user_id = $1', user_id)
+            last_daily = max(row['last_quest_daily'] or 0, row['last_daily'] or 0) if row else 0
 
             if cooldown > 0 and (current_time - last_daily < cooldown):
                 remaining = cooldown - (current_time - last_daily)
@@ -418,8 +419,8 @@ class EconomyCog(commands.Cog):
             res = await p.execute(
                 """
                 UPDATE users 
-                SET vouchers = vouchers + $1, coins = coins + $2, last_quest_daily = $3 
-                WHERE user_id = $4 AND ($3 - COALESCE(last_quest_daily, 0) >= $5)
+                SET vouchers = vouchers + $1, coins = coins + $2, last_quest_daily = $3, last_daily = $3 
+                WHERE user_id = $4 AND ($3 - GREATEST(COALESCE(last_quest_daily, 0), COALESCE(last_daily, 0)) >= $5)
                 """,
                 daily_vouchers, daily_coins, current_time, user_id, cooldown
             )
@@ -878,10 +879,10 @@ class EconomyCog(commands.Cog):
         user_id = interaction.user.id
         
         async with _get_quest_lock(user_id):
-            # Check cooldown & streak calculation
+            # Check cooldown & streak calculation (shared globally with quest_daily)
             p = await database.get_db()
-            row = await p.fetchrow('SELECT last_daily, daily_streak FROM users WHERE user_id = $1', user_id)
-            last_daily = row['last_daily'] if row and row['last_daily'] else 0
+            row = await p.fetchrow('SELECT last_daily, last_quest_daily, daily_streak FROM users WHERE user_id = $1', user_id)
+            last_daily = max(row['last_daily'] or 0, row['last_quest_daily'] or 0) if row else 0
             current_streak = row['daily_streak'] if row and row['daily_streak'] else 0
                     
             current_time = int(time.time())
@@ -920,15 +921,17 @@ class EconomyCog(commands.Cog):
             guaranteed_walkout = tier["walkout"]
 
             await p.execute('''
-                INSERT INTO users (user_id, coins, vouchers, gems, last_daily, daily_streak)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO users (user_id, coins, vouchers, gems, last_daily, last_quest_daily, daily_streak)
+                VALUES ($1, $2, $3, $4, $5, $5, $6)
                 ON CONFLICT (user_id) DO UPDATE SET
                     coins = COALESCE(users.coins, 0) + $2,
                     vouchers = COALESCE(users.vouchers, 0) + $3,
                     gems = COALESCE(users.gems, 0) + $4,
                     last_daily = $5,
+                    last_quest_daily = $5,
                     daily_streak = $6
-                WHERE ($5 - COALESCE(users.last_daily, 0) >= 86400) OR users.last_daily IS NULL
+                WHERE ($5 - GREATEST(COALESCE(users.last_daily, 0), COALESCE(users.last_quest_daily, 0)) >= 86400) 
+                   OR (users.last_daily IS NULL AND users.last_quest_daily IS NULL)
             ''', user_id, coins_won, vouchers_won, gems_won, current_time, new_streak)
             
             # Invalidate cached user record
