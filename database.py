@@ -186,28 +186,73 @@ async def get_db():
             ssl=ctx,
             min_size=1,
             max_size=5, # Reduced from 10 to leave room for Vercel functions
-            command_timeout=20,
-            timeout=20,
+            command_timeout=30,
+            timeout=30,
             max_inactive_connection_lifetime=60.0,
             statement_cache_size=0
         )
     return _pool
 
 async def execute(query_str: str, *args):
-    p = await get_db()
-    return await p.execute(query_str, *args)
+    try:
+        p = await get_db()
+        return await p.execute(query_str, *args)
+    except (asyncpg.PostgresConnectionError, asyncio.TimeoutError, ConnectionResetError) as e:
+        # Auto-reconnect on broken pool connection
+        global _pool
+        try:
+            if _pool:
+                await _pool.close()
+        except Exception:
+            pass
+        _pool = None
+        p = await get_db()
+        return await p.execute(query_str, *args)
 
 async def fetch_all(query_str: str, *args):
-    p = await get_db()
-    return await p.fetch(query_str, *args)
+    try:
+        p = await get_db()
+        return await p.fetch(query_str, *args)
+    except (asyncpg.PostgresConnectionError, asyncio.TimeoutError, ConnectionResetError) as e:
+        global _pool
+        try:
+            if _pool:
+                await _pool.close()
+        except Exception:
+            pass
+        _pool = None
+        p = await get_db()
+        return await p.fetch(query_str, *args)
 
 async def fetch_one(query_str: str, *args):
-    p = await get_db()
-    return await p.fetchrow(query_str, *args)
+    try:
+        p = await get_db()
+        return await p.fetchrow(query_str, *args)
+    except (asyncpg.PostgresConnectionError, asyncio.TimeoutError, ConnectionResetError) as e:
+        global _pool
+        try:
+            if _pool:
+                await _pool.close()
+        except Exception:
+            pass
+        _pool = None
+        p = await get_db()
+        return await p.fetchrow(query_str, *args)
 
 async def fetch_val(query_str: str, *args):
-    p = await get_db()
-    return await p.fetchval(query_str, *args)
+    try:
+        p = await get_db()
+        return await p.fetchval(query_str, *args)
+    except (asyncpg.PostgresConnectionError, asyncio.TimeoutError, ConnectionResetError) as e:
+        global _pool
+        try:
+            if _pool:
+                await _pool.close()
+        except Exception:
+            pass
+        _pool = None
+        p = await get_db()
+        return await p.fetchval(query_str, *args)
 
 async def setup():
     """Initializes the database pool and verifies schema."""
@@ -1672,14 +1717,14 @@ async def check_and_auto_adjust_prices_for_new_ovr(current_max_ovr: int):
 # & Economy Functions =================
 
 DEFAULT_OVR_PRICES = {
-    125: {"min_price": 16000000000, "max_price": 32000000000, "quicksell": 11200000000},
-    124: {"min_price": 8000000000, "max_price": 16000000000, "quicksell": 5600000000},
-    123: {"min_price": 4000000000, "max_price": 8000000000, "quicksell": 2800000000},
-    122: {"min_price": 2000000000, "max_price": 4000000000, "quicksell": 1400000000},
-    121: {"min_price": 900000000, "max_price": 1800000000, "quicksell": 630000000},
-    120: {"min_price": 400000000, "max_price": 800000000, "quicksell": 280000000},
-    119: {"min_price": 70000000, "max_price": 140000000, "quicksell": 49000000},
-    118: {"min_price": 65000000, "max_price": 130000000, "quicksell": 45500000},
+    125: {"min_price": 4000000000, "max_price": 8000000000, "quicksell": 2800000000},
+    124: {"min_price": 2000000000, "max_price": 4000000000, "quicksell": 1400000000},
+    123: {"min_price": 900000000, "max_price": 1800000000, "quicksell": 630000000},
+    122: {"min_price": 400000000, "max_price": 800000000, "quicksell": 280000000},
+    121: {"min_price": 70000000, "max_price": 140000000, "quicksell": 49000000},
+    120: {"min_price": 65000000, "max_price": 130000000, "quicksell": 45500000},
+    119: {"min_price": 60000000, "max_price": 120000000, "quicksell": 42000000},
+    118: {"min_price": 10000000, "max_price": 20000000, "quicksell": 7000000},
     117: {"min_price": 60000000, "max_price": 120000000, "quicksell": 42000000},
     116: {"min_price": 10000000, "max_price": 20000000, "quicksell": 7000000},
     115: {"min_price": 9000000, "max_price": 18000000, "quicksell": 6300000},
@@ -1801,39 +1846,39 @@ async def save_ovr_price_settings(prices_dict: dict) -> bool:
 DEFAULT_ECONOMY_CONFIG = {
     "daily_coins_min": 5_000_000,
     "daily_coins_max": 20_000_000,
-    "daily_vouchers": 2,
+    "daily_vouchers": 20,
     "daily_cooldown_hours": 24,
     "daily_streak_multiplier": 0.10,
     "daily_walkout_chance": 0.15,
-    "work_coins_min": 2_000_000,
-    "work_coins_max": 10_000_000,
+    "work_coins_min": 50_000_000,
+    "work_coins_max": 300_000_000,
     "work_cooldown_mins": 30,
-    "voucher_coin_price": 10_000_000,
+    "voucher_coin_price": 40_000_000,
     "voucher_daily_limit": 70,
     "market_tax_percent": 10.0,
     "trade_tax_percent": 5.0,
     "max_market_listings": 10,
     "starter_coins": 50_000_000,
     "starter_vouchers": 10,
-    "dribble_reward_vouchers": 2,
+    "dribble_reward_vouchers": 20,
     "dribble_reward_coins": 5_000_000,
     "dribble_cooldown_mins": 120,
-    "trivia_reward_vouchers": 1,
+    "trivia_reward_vouchers": 10,
     "trivia_reward_coins": 5_000_000,
     "trivia_cooldown_mins": 60,
-    "freekick_reward_vouchers": 1,
+    "freekick_reward_vouchers": 10,
     "freekick_reward_coins": 4_000_000,
     "freekick_cooldown_mins": 90,
-    "gk_reward_vouchers": 1,
+    "gk_reward_vouchers": 10,
     "gk_reward_coins": 4_000_000,
     "gk_cooldown_mins": 90,
-    "volley_reward_vouchers": 1,
+    "volley_reward_vouchers": 10,
     "volley_reward_coins": 4_000_000,
     "volley_cooldown_mins": 90,
-    "h2h_ai_reward_vouchers": 2,
+    "h2h_ai_reward_vouchers": 20,
     "h2h_ai_reward_coins": 10_000_000,
     "h2h_ai_cooldown_mins": 120,
-    "penalty_reward_vouchers": 1,
+    "penalty_reward_vouchers": 10,
     "penalty_reward_coins": 3_000_000,
     "penalty_cooldown_mins": 60
 }

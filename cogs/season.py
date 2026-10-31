@@ -106,12 +106,16 @@ class SeasonCog(commands.Cog):
     @tasks.loop(hours=1)
     async def season_reset_loop(self):
         """Check if any user's season has expired and reset them."""
-        config = await fetch_season_config()
-        duration_days = int(config.get("duration_days", 10) or 10)
-        p = await database.get_db()
-        cutoff = int(time.time()) - (duration_days * 86400)
-        await p.execute('UPDATE season_pass SET xp = 0, claimed_tiers = $1, season_id = season_id + 1, started_at = $2 WHERE started_at < $3 AND started_at > 0',
-                         '[]', int(time.time()), cutoff)
+        try:
+            config = await fetch_season_config()
+            duration_days = int(config.get("duration_days", 10) or 10)
+            cutoff = int(time.time()) - (duration_days * 86400)
+            await database.execute(
+                'UPDATE season_pass SET xp = 0, claimed_tiers = $1, season_id = season_id + 1, started_at = $2 WHERE started_at < $3 AND started_at > 0',
+                '[]', int(time.time()), cutoff
+            )
+        except Exception as e:
+            print(f"[Season Reset Error] {e}")
 
     @season_reset_loop.before_loop
     async def before_reset(self):
